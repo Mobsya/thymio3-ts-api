@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Button Click Events</title>
+  <script src="./dist/thymio.global.js"></script>
+  <script>
+
+    function showHideActuatorForm() {
+      const form = document.getElementById('actuatorForm');
+      if (form.style.display === 'none') {
+        form.style.display = 'block';
+        toggleBtn.textContent = 'Hide Actuator Form';
+      } else {
+        form.style.display = 'none';
+        toggleBtn.textContent = 'Show Actuator Form';
+      }
+    };
+
+
+    function connectClick() {
+      thymio.requestAndConnect();
+    }
+
+    async function executeClick() {
+      const code = document.getElementById('code-input').value;
+      await thymio.sendPythonScript(code);
+      await thymio.executeLoadedScript();
+    }
+
+    async function stopClick() {
+      await thymio.stopScriptExecution();
+    }
+
+    function getRGB(prefix) {
+      return {
+        r: parseInt((document.getElementById(prefix + "R")).value),
+        g: parseInt((document.getElementById(prefix + "G")).value),
+        b: parseInt((document.getElementById(prefix + "B")).value)
+      };
+    }
+
+    function getArrayInputs(prefix) {
+      return [...Array(8)].map((_, i) => {
+        return parseInt((document.getElementById(`${prefix}${i}`)).value);
+      });
+    }
+
+    async function submitActuatorData() {
+      const data = {
+        circleLEDs: getArrayInputs("circleLED"),
+        frontLegoLEDs: getArrayInputs("frontLED"),
+        rearLegoLEDs: getArrayInputs("rearLED"),
+        flRGB: getRGB("fl"),
+        frRGB: getRGB("fr"),
+        blRGB: getRGB("bl"),
+        brRGB: getRGB("br"),
+        motorLeft: parseInt((document.getElementById("motorLeft")).value),
+        motorRight: parseInt((document.getElementById("motorRight")).value),
+        sound: parseInt((document.getElementById("sound")).value)
+      };
+
+      //console.log("Collected Actuator Data:", data);
+      await thymio.setActuatorState(data);
+    }
+  </script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 50px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    form {
+      background-color: white;
+      padding: 20px;
+      max-width: 800px;
+      margin: auto;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    h3 {
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 5px;
+      margin-top: 30px;
+    }
+
+    fieldset {
+      border: 1px solid #ddd;
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 5px;
+    }
+
+    legend {
+      font-weight: bold;
+    }
+
+    input[type="number"] {
+      width: 60px;
+      margin: 5px;
+      padding: 5px;
+      font-size: 14px;
+    }
+
+    #circleLEDs,
+    #frontLegoLEDs,
+    #rearLegoLEDs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    label {
+      display: inline-block;
+      margin-right: 10px;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #1565c0;
+    }
+
+    .rgb-inputs {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 5px;
+    }
+
+    textarea#code-input {
+      width: 100%;
+      max-width: 700px;
+      height: 250px;
+      padding: 15px;
+      font-family: 'Source Code Pro', monospace, monospace;
+      font-size: 14px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      box-sizing: border-box;
+      resize: vertical;
+      background-color: #1e1e1e;
+      color: #d4d4d4;
+      line-height: 1.4;
+    }
+
+    textarea#code-input:focus {
+      border-color: #1976d2;
+      outline: none;
+      box-shadow: 0 0 5px #1976d2;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Thymio 3 Test</h1>
+
+  <button onclick="connectClick()">Connect</button>
+  <div>
+    <textarea id="code-input">
+import thymio
+import time
+mot = thymio.MOTORS()
+mot.set_speed(200, -200)
+rgb_fl = thymio.LEDS_RGB(0)
+while 1:
+    rgb_fl.set_intensity(1, 0, 0)
+    time.sleep(0.2)
+    rgb_fl.set_intensity(0, 1, 0)
+    time.sleep(0.2)
+    rgb_fl.set_intensity(0, 0, 1)
+    time.sleep(0.2)
+    </textarea>
+    <button onclick="executeClick()">Execute code</button>
+    <button onclick="stopClick()">Stop code execution</button>
+
+  </div>
+
+  <div>
+    <button id="toggleBtn" onclick="showHideActuatorForm()">Hide actuator Form</button>
+    <form id="actuatorForm">
+      <h3>Circle LEDs (0-15)</h3>
+      <div class="array-group" id="circleLEDs">
+        <input type="number" id="circleLED0" min="0" max="15" />
+        <input type="number" id="circleLED1" min="0" max="15" />
+        <input type="number" id="circleLED2" min="0" max="15" />
+        <input type="number" id="circleLED3" min="0" max="15" />
+        <input type="number" id="circleLED4" min="0" max="15" />
+        <input type="number" id="circleLED5" min="0" max="15" />
+        <input type="number" id="circleLED6" min="0" max="15" />
+        <input type="number" id="circleLED7" min="0" max="15" />
+      </div>
+
+      <h3>Front LEGO LEDs (0-15)</h3>
+      <div class="array-group" id="frontLegoLEDs">
+        <input type="number" id="frontLED0" min="0" max="15" />
+        <input type="number" id="frontLED1" min="0" max="15" />
+        <input type="number" id="frontLED2" min="0" max="15" />
+        <input type="number" id="frontLED3" min="0" max="15" />
+        <input type="number" id="frontLED4" min="0" max="15" />
+        <input type="number" id="frontLED5" min="0" max="15" />
+        <input type="number" id="frontLED6" min="0" max="15" />
+        <input type="number" id="frontLED7" min="0" max="15" />
+      </div>
+
+      <h3>Rear LEGO LEDs (0-15)</h3>
+      <div class="array-group" id="rearLegoLEDs">
+        <input type="number" id="rearLED0" min="0" max="15" />
+        <input type="number" id="rearLED1" min="0" max="15" />
+        <input type="number" id="rearLED2" min="0" max="15" />
+        <input type="number" id="rearLED3" min="0" max="15" />
+        <input type="number" id="rearLED4" min="0" max="15" />
+        <input type="number" id="rearLED5" min="0" max="15" />
+        <input type="number" id="rearLED6" min="0" max="15" />
+        <input type="number" id="rearLED7" min="0" max="15" />
+      </div>
+
+      <h3>RGB LEDs (0-15)</h3>
+
+      <fieldset>
+        <legend>FL RGB</legend>
+        <div class="rgb-inputs">
+          R: <input type="number" id="flR" min="0" max="15" />
+          G: <input type="number" id="flG" min="0" max="15" />
+          B: <input type="number" id="flB" min="0" max="15" />
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>FR RGB</legend>
+        <div class="rgb-inputs">
+          R: <input type="number" id="frR" min="0" max="15" />
+          G: <input type="number" id="frG" min="0" max="15" />
+          B: <input type="number" id="frB" min="0" max="15" />
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>BL RGB</legend>
+        <div class="rgb-inputs">
+          R: <input type="number" id="blR" min="0" max="15" />
+          G: <input type="number" id="blG" min="0" max="15" />
+          B: <input type="number" id="blB" min="0" max="15" />
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>BR RGB</legend>
+        <div class="rgb-inputs">
+          R: <input type="number" id="brR" min="0" max="15" />
+          G: <input type="number" id="brG" min="0" max="15" />
+          B: <input type="number" id="brB" min="0" max="15" />
+        </div>
+      </fieldset>
+
+      <h3>Motors</h3>
+      <div>
+        Left: <input type="number" id="motorLeft" min="-1000" max="1000" />
+      </div>
+      <div>
+        Right: <input type="number" id="motorRight" min="-1000" max="1000" />
+      </div>
+
+      <h3>Sound (0-19)</h3>
+      <input type="number" id="sound" min="0" max="19" />
+
+      <br /><br />
+      <button type="button" onclick="submitActuatorData()">Submit</button>
+    </form>
+  </div>
+
+</body>
+</html>
