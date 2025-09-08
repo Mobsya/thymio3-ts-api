@@ -41,6 +41,7 @@ var thymio = (() => {
   // thymio.ts
   var thymio_exports = {};
   __export(thymio_exports, {
+    enableSensorStreaming: () => enableSensorStreaming,
     executeLoadedScript: () => executeLoadedScript,
     requestAndConnect: () => requestAndConnect,
     sendPythonScript: () => sendPythonScript,
@@ -52,6 +53,7 @@ var thymio = (() => {
   var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
   var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
   var MTU = 500;
+  var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-values";
   var commandCharacteristic;
   var sensorStreamcharacteristic;
   var pythonCharacteristic;
@@ -77,6 +79,8 @@ var thymio = (() => {
           const service = yield server.getPrimaryService(MAIN_SERVICE_UUID);
           commandCharacteristic = yield service.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
           sensorStreamcharacteristic = yield service.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
+          yield sensorStreamcharacteristic.startNotifications();
+          sensorStreamcharacteristic.addEventListener("characteristicvaluechanged", handleStreamResponse);
           pythonCharacteristic = yield service.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
           yield pythonCharacteristic.startNotifications();
           pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
@@ -274,6 +278,110 @@ var thymio = (() => {
       seqId++;
     }
     return packets;
+  }
+  function enableSensorStreaming(other = false) {
+    return __async(this, null, function* () {
+      const id = 1;
+      let body;
+      if (!other) {
+        body = 0;
+      } else {
+        body = 1;
+      }
+      const payload = new Uint8Array([id, body]);
+      return yield sensorStreamcharacteristic.writeValueWithoutResponse(payload);
+    });
+  }
+  function handleStreamResponse(event) {
+    return __async(this, null, function* () {
+      const value = event.target.value;
+      console.log(value);
+      if (value) {
+        const id = value.getUint8(0);
+        const data = new Uint8Array(value.buffer.slice(1));
+        console.log(data);
+        if (id === 1) {
+          const sensorsData = parseSensorsData(data);
+          const mostValuesEvent = new CustomEvent(THYMIO_SENSOR_VALUES_EVENT_ID, {
+            detail: sensorsData
+          });
+          console.log(sensorsData);
+          document.dispatchEvent(mostValuesEvent);
+        }
+      }
+    });
+  }
+  function parseSensorsData(bytes) {
+    const dv = new DataView(bytes.buffer);
+    let offset = 0;
+    const h = dv.getUint16(offset, true);
+    offset += 2;
+    const s = dv.getUint8(offset);
+    offset += 1;
+    const v = dv.getUint8(offset);
+    offset += 1;
+    const groundLeft = dv.getUint16(offset, true);
+    offset += 2;
+    const groundRight = dv.getUint16(offset, true);
+    offset += 2;
+    const accelX = dv.getInt16(offset, true);
+    offset += 2;
+    const accelY = dv.getInt16(offset, true);
+    offset += 2;
+    const accelZ = dv.getInt16(offset, true);
+    offset += 2;
+    const gyroX = dv.getInt16(offset, true);
+    offset += 2;
+    const gyroY = dv.getInt16(offset, true);
+    offset += 2;
+    const gyroZ = dv.getInt16(offset, true);
+    offset += 2;
+    const buttonsByte = dv.getUint8(offset);
+    offset += 1;
+    const micVolume = dv.getUint16(offset, true);
+    offset += 2;
+    const proximity = {
+      left: dv.getUint16(offset, true),
+      offset1: offset += 2,
+      frontLeft: dv.getUint16(offset, true),
+      offset2: offset += 2,
+      center: dv.getUint16(offset, true),
+      offset3: offset += 2,
+      frontRight: dv.getUint16(offset, true),
+      offset4: offset += 2,
+      right: dv.getUint16(offset, true),
+      offset5: offset += 2,
+      backLeft: dv.getUint16(offset, true),
+      offset6: offset += 2,
+      backRight: dv.getUint16(offset, true),
+      offset7: offset += 2
+    };
+    const tvRemote = dv.getUint8(offset);
+    offset += 1;
+    return {
+      colorSensor: { h, s, v },
+      groundSensors: { left: groundLeft, right: groundRight },
+      accelerationRaw: { x: accelX, y: accelY, z: accelZ },
+      gyroRaw: { x: gyroX, y: gyroY, z: gyroZ },
+      buttons: {
+        back: !!(buttonsByte & 1 << 0),
+        left: !!(buttonsByte & 1 << 1),
+        center: !!(buttonsByte & 1 << 2),
+        forward: !!(buttonsByte & 1 << 3),
+        right: !!(buttonsByte & 1 << 4)
+      },
+      microphoneVolume: micVolume,
+      proximitySensors: {
+        left: proximity.left,
+        frontLeft: proximity.frontLeft,
+        center: proximity.center,
+        frontRight: proximity.frontRight,
+        right: proximity.right,
+        backLeft: proximity.backLeft,
+        backRight: proximity.backRight
+      },
+      tvRemote
+    };
   }
   function numberToBytes(value, byteLength) {
     const bytes = new Uint8Array(byteLength);

@@ -19,6 +19,46 @@ export type ActuatorData = {
   sound: number               // Integer 0 to 19
 }
 
+export type SensorsData = {
+  colorSensor: {
+    h: number; // 2 bytes
+    s: number; // 1 byte
+    v: number; // 1 byte
+  };
+  groundSensors: {
+    left: number;  // 2 bytes
+    right: number; // 2 bytes
+  };
+  accelerationRaw: {
+    x: number; // 2 bytes
+    y: number;
+    z: number;
+  };
+  gyroRaw: {
+    x: number; // 2 bytes
+    y: number;
+    z: number;
+  };
+  buttons: {
+    back: boolean;
+    left: boolean;
+    center: boolean;
+    forward: boolean;
+    right: boolean;
+  };
+  microphoneVolume: number; // 2 bytes
+  proximitySensors: {
+    left: number;
+    frontLeft: number;
+    center: number;
+    frontRight: number;
+    right: number;
+    backLeft: number;
+    backRight: number;
+  };
+  tvRemote: number; // 1 byte
+};
+
 const MAIN_SERVICE_UUID = '0000abf0-0000-1000-8000-00805f9b34fb';
 
 const COMMAND_CHARACTERISTIC_UUID = '0000abf1-0000-1000-8000-00805f9b34fb';
@@ -26,6 +66,8 @@ const SENSOR_STREAM_CHARACTERISTIC_UUID = '0000abf2-0000-1000-8000-00805f9b34fb'
 const PYTHON_CHARACTERISTIC_UUID = '0000abf3-0000-1000-8000-00805f9b34fb';
 
 const MTU = 500;
+
+const THYMIO_SENSOR_VALUES_EVENT_ID = 'thymio-values';
 
 let commandCharacteristic: BluetoothRemoteGATTCharacteristic;
 let sensorStreamcharacteristic: BluetoothRemoteGATTCharacteristic;
@@ -61,10 +103,15 @@ async function connect() {
       const service = await server.getPrimaryService(MAIN_SERVICE_UUID);
 
       commandCharacteristic = await service.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
+
       sensorStreamcharacteristic = await service.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
+      await sensorStreamcharacteristic.startNotifications();
+      sensorStreamcharacteristic.addEventListener('characteristicvaluechanged', handleStreamResponse);
+
       pythonCharacteristic = await service.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
       await pythonCharacteristic.startNotifications();
       pythonCharacteristic.addEventListener('characteristicvaluechanged', handlePythonResponse);
+
     } catch (e) {
       console.error(`Could not connect to Thymio 3.`, e)
     }
@@ -307,6 +354,106 @@ function createScriptPackets(scriptBytes: Uint8Array) {
 
   return packets;
 }
+
+//// SENSOR STREAM CHARACTERISTIC
+
+export async function enableSensorStreaming(other = false) {
+  const id = 0x01;
+
+  let body;
+  if (!other) {
+    body = 0x00;
+  } else {
+    body = 0x01;
+  }
+
+  const payload = new Uint8Array([id, body]);
+
+  return await sensorStreamcharacteristic.writeValueWithoutResponse(payload);
+}
+
+async function handleStreamResponse(event: Event) {
+	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
+  console.log(value)
+
+  if (value) {
+    const id = value.getUint8(0);
+    const data = new Uint8Array(value.buffer.slice(1));
+    console.log(data)
+
+    if (id === 0x01) {
+      const sensorsData = parseSensorsData(data);
+
+      const mostValuesEvent = new CustomEvent(THYMIO_SENSOR_VALUES_EVENT_ID, {
+        detail: sensorsData
+      });
+      console.log(sensorsData)
+      document.dispatchEvent(mostValuesEvent);
+    }
+  }
+}
+
+function parseSensorsData(bytes: Uint8Array): SensorsData {
+  const dv = new DataView(bytes.buffer);
+  let offset = 0;
+
+  const h = dv.getUint16(offset, true); offset += 2;
+  const s = dv.getUint8(offset); offset += 1;
+  const v = dv.getUint8(offset); offset += 1;
+
+  const groundLeft = dv.getUint16(offset, true); offset += 2;
+  const groundRight = dv.getUint16(offset, true); offset += 2;
+
+  const accelX = dv.getInt16(offset, true); offset += 2;
+  const accelY = dv.getInt16(offset, true); offset += 2;
+  const accelZ = dv.getInt16(offset, true); offset += 2;
+
+  const gyroX = dv.getInt16(offset, true); offset += 2;
+  const gyroY = dv.getInt16(offset, true); offset += 2;
+  const gyroZ = dv.getInt16(offset, true); offset += 2;
+
+  const buttonsByte = dv.getUint8(offset); offset += 1;
+
+  const micVolume = dv.getUint16(offset, true); offset += 2;
+
+  const proximity = {
+    left: dv.getUint16(offset, true), offset1: offset += 2,
+    frontLeft: dv.getUint16(offset, true), offset2: offset += 2,
+    center: dv.getUint16(offset, true), offset3: offset += 2,
+    frontRight: dv.getUint16(offset, true), offset4: offset += 2,
+    right: dv.getUint16(offset, true), offset5: offset += 2,
+    backLeft: dv.getUint16(offset, true), offset6: offset += 2,
+    backRight: dv.getUint16(offset, true), offset7: offset += 2,
+  };
+
+  const tvRemote = dv.getUint8(offset); offset += 1;
+
+  return {
+    colorSensor: { h, s, v },
+    groundSensors: { left: groundLeft, right: groundRight },
+    accelerationRaw: { x: accelX, y: accelY, z: accelZ },
+    gyroRaw: { x: gyroX, y: gyroY, z: gyroZ },
+    buttons: {
+      back: !!(buttonsByte & (1 << 0)),
+      left: !!(buttonsByte & (1 << 1)),
+      center: !!(buttonsByte & (1 << 2)),
+      forward: !!(buttonsByte & (1 << 3)),
+      right: !!(buttonsByte & (1 << 4)),
+    },
+    microphoneVolume: micVolume,
+    proximitySensors: {
+      left: proximity.left,
+      frontLeft: proximity.frontLeft,
+      center: proximity.center,
+      frontRight: proximity.frontRight,
+      right: proximity.right,
+      backLeft: proximity.backLeft,
+      backRight: proximity.backRight,
+    },
+    tvRemote
+  };
+}
+
 
 /**
  * Converts a number to a big-endian byte array
