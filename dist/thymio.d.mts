@@ -54,6 +54,36 @@ type SensorsData = {
     };
     tvRemote: number;
 };
+type OtherSensorData = {
+    colorRaw: {
+        red: number;
+        green: number;
+        blue: number;
+        clear: number;
+    };
+    colorDetected: number;
+    groundAmbient: {
+        left: number;
+        right: number;
+    };
+    groundReflected: {
+        left: number;
+        right: number;
+    };
+    angleDegrees: number;
+    eventFlags: {
+        tapDetected: boolean;
+        freefallDetected: boolean;
+        clapDetected: boolean;
+    };
+    motor: {
+        leftSpeed: number;
+        rightSpeed: number;
+        leftPwmDuty: number;
+        rightPwmDuty: number;
+    };
+    batteryVoltage: number;
+};
 /**
  * Request a bluetooth device and connect to it.
  */
@@ -68,4 +98,4 @@ declare function executeLoadedScript(): Promise<void>;
 declare function stopScriptExecution(): Promise<void>;
 declare function enableSensorStreaming(other?: boolean): Promise<void>;
 
-export { type ActuatorData, type RGB, type SensorsData, enableSensorStreaming, executeLoadedScript, requestAndConnect, sendPythonScript, setActuatorState, stopScriptExecution };
+export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, enableSensorStreaming, executeLoadedScript, requestAndConnect, sendPythonScript, setActuatorState, stopScriptExecution };

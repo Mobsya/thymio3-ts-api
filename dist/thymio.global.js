@@ -54,6 +54,7 @@ var thymio = (() => {
   var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
   var MTU = 500;
   var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-values";
+  var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-other-values";
   var commandCharacteristic;
   var sensorStreamcharacteristic;
   var pythonCharacteristic;
@@ -282,13 +283,13 @@ var thymio = (() => {
   function enableSensorStreaming(other = false) {
     return __async(this, null, function* () {
       const id = 1;
-      let body;
+      let body = 0;
       if (!other) {
-        body = 0;
+        body |= 1;
       } else {
-        body = 1;
+        body |= 2;
       }
-      const payload = new Uint8Array([id, body]);
+      const payload = new Uint8Array([id, 0]);
       return yield sensorStreamcharacteristic.writeValueWithoutResponse(payload);
     });
   }
@@ -307,11 +308,21 @@ var thymio = (() => {
           });
           console.log(sensorsData);
           document.dispatchEvent(mostValuesEvent);
+        } else if (id === 2) {
+          const otherSensorData = parseOtherSensorData(data);
+          const otherValueEvent = new CustomEvent(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, {
+            detail: otherSensorData
+          });
+          console.log(otherSensorData);
+          document.dispatchEvent(otherValueEvent);
         }
       }
     });
   }
   function parseSensorsData(bytes) {
+    if (bytes.length !== 38) {
+      throw new Error("Invalid byte array length. Expected 38 bytes.");
+    }
     const dv = new DataView(bytes.buffer);
     let offset = 0;
     const h = dv.getUint16(offset, true);
@@ -381,6 +392,64 @@ var thymio = (() => {
         backRight: proximity.backRight
       },
       tvRemote
+    };
+  }
+  function parseOtherSensorData(bytes) {
+    if (bytes.length !== 30) {
+      throw new Error("Invalid byte array length. Expected 30 bytes.");
+    }
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let offset = 0;
+    const red = view.getUint16(offset, true);
+    offset += 2;
+    const green = view.getUint16(offset, true);
+    offset += 2;
+    const blue = view.getUint16(offset, true);
+    offset += 2;
+    const clear = view.getUint16(offset, true);
+    offset += 2;
+    const colorDetected = bytes[offset];
+    offset += 1;
+    const groundAmbientLeft = view.getUint16(offset, true);
+    offset += 2;
+    const groundAmbientRight = view.getUint16(offset, true);
+    offset += 2;
+    const groundReflectedLeft = view.getUint16(offset, true);
+    offset += 2;
+    const groundReflectedRight = view.getUint16(offset, true);
+    offset += 2;
+    const angleDegrees = view.getInt16(offset, true);
+    offset += 2;
+    const eventByte = bytes[offset];
+    offset += 1;
+    const leftSpeed = view.getInt16(offset, true);
+    offset += 2;
+    const rightSpeed = view.getInt16(offset, true);
+    offset += 2;
+    const leftPwmDuty = view.getInt16(offset, true);
+    offset += 2;
+    const rightPwmDuty = view.getInt16(offset, true);
+    offset += 2;
+    const batteryVoltage = view.getUint16(offset, true);
+    offset += 2;
+    return {
+      colorRaw: { red, green, blue, clear },
+      colorDetected,
+      groundAmbient: { left: groundAmbientLeft, right: groundAmbientRight },
+      groundReflected: { left: groundReflectedLeft, right: groundReflectedRight },
+      angleDegrees,
+      eventFlags: {
+        tapDetected: (eventByte & 1) !== 0,
+        freefallDetected: (eventByte & 2) !== 0,
+        clapDetected: (eventByte & 4) !== 0
+      },
+      motor: {
+        leftSpeed,
+        rightSpeed,
+        leftPwmDuty,
+        rightPwmDuty
+      },
+      batteryVoltage
     };
   }
   function numberToBytes(value, byteLength) {

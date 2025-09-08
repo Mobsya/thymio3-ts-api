@@ -59,6 +59,38 @@ export type SensorsData = {
   tvRemote: number; // 1 byte
 };
 
+export type OtherSensorData = {
+  colorRaw: {
+    red: number;
+    green: number;
+    blue: number;
+    clear: number;
+  };
+  colorDetected: number;
+  groundAmbient: {
+    left: number;
+    right: number;
+  };
+  groundReflected: {
+    left: number;
+    right: number;
+  };
+  angleDegrees: number;
+  eventFlags: {
+    tapDetected: boolean;
+    freefallDetected: boolean;
+    clapDetected: boolean;
+  };
+  motor: {
+    leftSpeed: number;
+    rightSpeed: number;
+    leftPwmDuty: number;
+    rightPwmDuty: number;
+  };
+  batteryVoltage: number;
+};
+
+
 const MAIN_SERVICE_UUID = '0000abf0-0000-1000-8000-00805f9b34fb';
 
 const COMMAND_CHARACTERISTIC_UUID = '0000abf1-0000-1000-8000-00805f9b34fb';
@@ -67,7 +99,8 @@ const PYTHON_CHARACTERISTIC_UUID = '0000abf3-0000-1000-8000-00805f9b34fb';
 
 const MTU = 500;
 
-const THYMIO_SENSOR_VALUES_EVENT_ID = 'thymio-values';
+const THYMIO_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-values';
+const THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-other-values';
 
 let commandCharacteristic: BluetoothRemoteGATTCharacteristic;
 let sensorStreamcharacteristic: BluetoothRemoteGATTCharacteristic;
@@ -357,14 +390,18 @@ function createScriptPackets(scriptBytes: Uint8Array) {
 
 //// SENSOR STREAM CHARACTERISTIC
 
-export async function enableSensorStreaming(other = false) {
+/**
+ * Start and stop the sensor streaming. By default, only the main sensors are enabled/disabled.
+ * @param other Enable/disable other sensors
+ */
+export async function toggleSensorStreaming(other = false) {
   const id = 0x01;
 
-  let body;
+  let body = 0;
   if (!other) {
-    body = 0x00;
+    body |= 0b00000001;
   } else {
-    body = 0x01;
+    body |= 0b00000010;
   }
 
   const payload = new Uint8Array([id, body]);
@@ -372,6 +409,10 @@ export async function enableSensorStreaming(other = false) {
   return await sensorStreamcharacteristic.writeValueWithoutResponse(payload);
 }
 
+/**
+ * Handler for the stream response. Captures the event data, transforms it into the appropriate
+ * object and fires the appropriate event with the transformed data.
+ */
 async function handleStreamResponse(event: Event) {
 	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
   console.log(value)
@@ -389,11 +430,28 @@ async function handleStreamResponse(event: Event) {
       });
       console.log(sensorsData)
       document.dispatchEvent(mostValuesEvent);
+    } else if(id === 0x02) {
+      const otherSensorData = parseOtherSensorData(data);
+
+      const otherValueEvent = new CustomEvent(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, {
+        detail: otherSensorData
+      });
+      console.log(otherSensorData);
+      document.dispatchEvent(otherValueEvent);
     }
   }
 }
 
+/**
+ * Parses the main sensor data.
+ * @param bytes Raw main sensor data
+ * @returns A typed sensor data object
+ */
 function parseSensorsData(bytes: Uint8Array): SensorsData {
+  if (bytes.length !== 38) {
+    throw new Error("Invalid byte array length. Expected 38 bytes.");
+  }
+
   const dv = new DataView(bytes.buffer);
   let offset = 0;
 
@@ -451,6 +509,64 @@ function parseSensorsData(bytes: Uint8Array): SensorsData {
       backRight: proximity.backRight,
     },
     tvRemote
+  };
+}
+
+/**
+ * Parses the additional sensor data.
+ * @param bytes Raw extra sensor data
+ * @returns A typed other sensor data object
+ */
+function parseOtherSensorData(bytes: Uint8Array): OtherSensorData {
+  if (bytes.length !== 30) {
+    throw new Error("Invalid byte array length. Expected 30 bytes.");
+  }
+
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 0;
+
+  const red = view.getUint16(offset, true); offset += 2;
+  const green = view.getUint16(offset, true); offset += 2;
+  const blue = view.getUint16(offset, true); offset += 2;
+  const clear = view.getUint16(offset, true); offset += 2;
+
+  const colorDetected = bytes[offset]; offset += 1;
+
+  const groundAmbientLeft = view.getUint16(offset, true); offset += 2;
+  const groundAmbientRight = view.getUint16(offset, true); offset += 2;
+
+  const groundReflectedLeft = view.getUint16(offset, true); offset += 2;
+  const groundReflectedRight = view.getUint16(offset, true); offset += 2;
+
+  const angleDegrees = view.getInt16(offset, true); offset += 2;
+
+  const eventByte = bytes[offset]; offset += 1;
+
+  const leftSpeed = view.getInt16(offset, true); offset += 2;
+  const rightSpeed = view.getInt16(offset, true); offset += 2;
+  const leftPwmDuty = view.getInt16(offset, true); offset += 2;
+  const rightPwmDuty = view.getInt16(offset, true); offset += 2;
+
+  const batteryVoltage = view.getUint16(offset, true); offset += 2;
+
+  return {
+    colorRaw: { red, green, blue, clear },
+    colorDetected,
+    groundAmbient: { left: groundAmbientLeft, right: groundAmbientRight },
+    groundReflected: { left: groundReflectedLeft, right: groundReflectedRight },
+    angleDegrees,
+    eventFlags: {
+      tapDetected: (eventByte & 0b00000001) !== 0,
+      freefallDetected: (eventByte & 0b00000010) !== 0,
+      clapDetected: (eventByte & 0b00000100) !== 0,
+    },
+    motor: {
+      leftSpeed,
+      rightSpeed,
+      leftPwmDuty,
+      rightPwmDuty,
+    },
+    batteryVoltage,
   };
 }
 
