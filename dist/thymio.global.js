@@ -41,20 +41,20 @@ var thymio = (() => {
   // thymio.ts
   var thymio_exports = {};
   __export(thymio_exports, {
-    enableSensorStreaming: () => enableSensorStreaming,
     executeLoadedScript: () => executeLoadedScript,
     requestAndConnect: () => requestAndConnect,
     sendPythonScript: () => sendPythonScript,
     setActuatorState: () => setActuatorState,
-    stopScriptExecution: () => stopScriptExecution
+    stopScriptExecution: () => stopScriptExecution,
+    toggleSensorStreaming: () => toggleSensorStreaming
   });
   var MAIN_SERVICE_UUID = "0000abf0-0000-1000-8000-00805f9b34fb";
   var COMMAND_CHARACTERISTIC_UUID = "0000abf1-0000-1000-8000-00805f9b34fb";
   var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
   var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
   var MTU = 500;
-  var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-values";
-  var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-other-values";
+  var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
+  var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
   var commandCharacteristic;
   var sensorStreamcharacteristic;
   var pythonCharacteristic;
@@ -280,7 +280,7 @@ var thymio = (() => {
     }
     return packets;
   }
-  function enableSensorStreaming(other = false) {
+  function toggleSensorStreaming(other = false) {
     return __async(this, null, function* () {
       const id = 1;
       let body = 0;
@@ -289,31 +289,27 @@ var thymio = (() => {
       } else {
         body |= 2;
       }
-      const payload = new Uint8Array([id, 0]);
+      const payload = new Uint8Array([id, body]);
       return yield sensorStreamcharacteristic.writeValueWithoutResponse(payload);
     });
   }
   function handleStreamResponse(event) {
     return __async(this, null, function* () {
       const value = event.target.value;
-      console.log(value);
       if (value) {
         const id = value.getUint8(0);
         const data = new Uint8Array(value.buffer.slice(1));
-        console.log(data);
         if (id === 1) {
           const sensorsData = parseSensorsData(data);
           const mostValuesEvent = new CustomEvent(THYMIO_SENSOR_VALUES_EVENT_ID, {
             detail: sensorsData
           });
-          console.log(sensorsData);
           document.dispatchEvent(mostValuesEvent);
         } else if (id === 2) {
           const otherSensorData = parseOtherSensorData(data);
           const otherValueEvent = new CustomEvent(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, {
             detail: otherSensorData
           });
-          console.log(otherSensorData);
           document.dispatchEvent(otherValueEvent);
         }
       }

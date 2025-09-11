@@ -96,6 +96,10 @@ declare function setActuatorState(actuatorData: ActuatorData): Promise<void>;
 declare function sendPythonScript(script: string): Promise<void>;
 declare function executeLoadedScript(): Promise<void>;
 declare function stopScriptExecution(): Promise<void>;
-declare function enableSensorStreaming(other?: boolean): Promise<void>;
+/**
+ * Start and stop the sensor streaming. By default, only the main sensors are enabled/disabled.
+ * @param other Enable/disable other sensors
+ */
+declare function toggleSensorStreaming(other?: boolean): Promise<void>;
 
-export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, enableSensorStreaming, executeLoadedScript, requestAndConnect, sendPythonScript, setActuatorState, stopScriptExecution };
+export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, executeLoadedScript, requestAndConnect, sendPythonScript, setActuatorState, stopScriptExecution, toggleSensorStreaming };

@@ -415,12 +415,10 @@ export async function toggleSensorStreaming(other = false) {
  */
 async function handleStreamResponse(event: Event) {
 	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
-  console.log(value)
 
   if (value) {
     const id = value.getUint8(0);
     const data = new Uint8Array(value.buffer.slice(1));
-    console.log(data)
 
     if (id === 0x01) {
       const sensorsData = parseSensorsData(data);
@@ -428,7 +426,6 @@ async function handleStreamResponse(event: Event) {
       const mostValuesEvent = new CustomEvent(THYMIO_SENSOR_VALUES_EVENT_ID, {
         detail: sensorsData
       });
-      console.log(sensorsData)
       document.dispatchEvent(mostValuesEvent);
     } else if(id === 0x02) {
       const otherSensorData = parseOtherSensorData(data);
@@ -436,7 +433,6 @@ async function handleStreamResponse(event: Event) {
       const otherValueEvent = new CustomEvent(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, {
         detail: otherSensorData
       });
-      console.log(otherSensorData);
       document.dispatchEvent(otherValueEvent);
     }
   }

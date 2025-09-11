@@ -64,6 +64,18 @@
       //console.log("Collected Actuator Data:", data);
       await thymio.setActuatorState(data);
     }
+
+    // Listener for a custom event "thymio-sensor-values"
+    document.addEventListener("thymio-sensor-values", (event) => {
+      const sensorStreamOutput = document.getElementById("sensor-stream-output");
+      sensorStreamOutput.textContent = JSON.stringify(event.detail, null, 2);
+    });
+
+    // Listener for a custom event "thymio-sensor-other-values"
+    document.addEventListener("thymio-sensor-other-values", (event) => {
+      const otherSensorStreamOutput = document.getElementById("sensor-stream-other-output");
+      otherSensorStreamOutput.textContent = JSON.stringify(event.detail, null, 2);
+    });
   </script>
   <style>
     body {
@@ -283,6 +295,20 @@ while 1:
       <br /><br />
       <button type="button" onclick="submitActuatorData()">Submit</button>
     </form>
+  </div>
+
+  <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
+    <div>
+      <h3>Main Sensor Data</h1>
+      <button onclick="thymio.toggleSensorStreaming()">Toggle main sensor streaming</button>
+      <pre id="sensor-stream-output">Waiting for main sensor data...</pre>
+    </div>
+
+    <div>
+      <h3>Other Sensor Data</h3>
+      <button onclick="thymio.toggleSensorStreaming(true)">Toggle other sensor streaming</button>
+      <pre id="sensor-stream-other-output">Waiting for other sensor data...</pre>
+    </div>
   </div>
 
 </body>
