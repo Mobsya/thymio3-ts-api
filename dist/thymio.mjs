@@ -24,6 +24,15 @@ var MAIN_SERVICE_UUID = "0000abf0-0000-1000-8000-00805f9b34fb";
 var COMMAND_CHARACTERISTIC_UUID = "0000abf1-0000-1000-8000-00805f9b34fb";
 var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
 var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
+var OTA_SERVICE_UUID = 32792;
+var OTA_RECV_FW_CHARACTERISTIC_UUID = 32800;
+var OTA_PROGRESS_BAR_CHARACTERISTIC_UUID = 32801;
+var OTA_COMMAND_CHARACTERISTIC_UUID = 32802;
+var OTA_CUSTOMER_CHARACATERISTIC_UUID = 32803;
+var ota_recv_fwCharacteristic;
+var otaProgressBarCharacteristic;
+var otaCommandCharacteristic;
+var otaCustomerCharacteristic;
 var MTU = 500;
 var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
 var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
@@ -37,7 +46,8 @@ function requestAndConnect() {
     device = yield navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: "THYMIO" }],
       optionalServices: [
-        MAIN_SERVICE_UUID
+        MAIN_SERVICE_UUID,
+        OTA_SERVICE_UUID
       ]
     });
     device.addEventListener("gattserverdisconnected", onDisconnected);
@@ -49,14 +59,19 @@ function connect() {
     if (device.gatt) {
       try {
         const server = yield device.gatt.connect();
-        const service = yield server.getPrimaryService(MAIN_SERVICE_UUID);
-        commandCharacteristic = yield service.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
-        sensorStreamcharacteristic = yield service.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
+        const mainService = yield server.getPrimaryService(MAIN_SERVICE_UUID);
+        commandCharacteristic = yield mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
+        sensorStreamcharacteristic = yield mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
         yield sensorStreamcharacteristic.startNotifications();
         sensorStreamcharacteristic.addEventListener("characteristicvaluechanged", handleStreamResponse);
-        pythonCharacteristic = yield service.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
+        pythonCharacteristic = yield mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
         yield pythonCharacteristic.startNotifications();
         pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
+        const otaService = yield server.getPrimaryService(OTA_SERVICE_UUID);
+        ota_recv_fwCharacteristic = yield otaService.getCharacteristic(OTA_RECV_FW_CHARACTERISTIC_UUID);
+        otaProgressBarCharacteristic = yield otaService.getCharacteristic(OTA_PROGRESS_BAR_CHARACTERISTIC_UUID);
+        otaCommandCharacteristic = yield otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
+        otaCustomerCharacteristic = yield otaService.getCharacteristic(OTA_CUSTOMER_CHARACATERISTIC_UUID);
       } catch (e) {
         console.error(`Could not connect to Thymio 3.`, e);
       }

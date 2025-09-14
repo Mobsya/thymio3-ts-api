@@ -97,6 +97,17 @@ const COMMAND_CHARACTERISTIC_UUID = '0000abf1-0000-1000-8000-00805f9b34fb';
 const SENSOR_STREAM_CHARACTERISTIC_UUID = '0000abf2-0000-1000-8000-00805f9b34fb';
 const PYTHON_CHARACTERISTIC_UUID = '0000abf3-0000-1000-8000-00805f9b34fb';
 
+const OTA_SERVICE_UUID = 0x8018;
+const OTA_RECV_FW_CHARACTERISTIC_UUID = 0x8020;
+const OTA_PROGRESS_BAR_CHARACTERISTIC_UUID = 0x8021;
+const OTA_COMMAND_CHARACTERISTIC_UUID = 0x8022;
+const OTA_CUSTOMER_CHARACATERISTIC_UUID = 0x8023;
+
+let ota_recv_fwCharacteristic: BluetoothRemoteGATTCharacteristic;
+let otaProgressBarCharacteristic: BluetoothRemoteGATTCharacteristic;
+let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic;
+let otaCustomerCharacteristic: BluetoothRemoteGATTCharacteristic;
+
 const MTU = 500;
 
 const THYMIO_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-values';
@@ -116,7 +127,8 @@ export async function requestAndConnect() {
   device = await navigator.bluetooth.requestDevice({
     filters: [{ namePrefix: 'THYMIO' }],
     optionalServices: [
-      MAIN_SERVICE_UUID
+      MAIN_SERVICE_UUID,
+      OTA_SERVICE_UUID
     ]
   });
 
@@ -133,17 +145,23 @@ async function connect() {
   if (device.gatt) {
     try {
       const server = await device.gatt.connect();
-      const service = await server.getPrimaryService(MAIN_SERVICE_UUID);
+      const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
 
-      commandCharacteristic = await service.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
+      commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
 
-      sensorStreamcharacteristic = await service.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
+      sensorStreamcharacteristic = await mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
       await sensorStreamcharacteristic.startNotifications();
       sensorStreamcharacteristic.addEventListener('characteristicvaluechanged', handleStreamResponse);
 
-      pythonCharacteristic = await service.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
+      pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
       await pythonCharacteristic.startNotifications();
       pythonCharacteristic.addEventListener('characteristicvaluechanged', handlePythonResponse);
+
+      const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
+      ota_recv_fwCharacteristic = await otaService.getCharacteristic(OTA_RECV_FW_CHARACTERISTIC_UUID);
+      otaProgressBarCharacteristic = await otaService.getCharacteristic(OTA_PROGRESS_BAR_CHARACTERISTIC_UUID);
+      otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
+      otaCustomerCharacteristic = await otaService.getCharacteristic(OTA_CUSTOMER_CHARACATERISTIC_UUID);
 
     } catch (e) {
       console.error(`Could not connect to Thymio 3.`, e)
@@ -568,6 +586,72 @@ function parseOtherSensorData(bytes: Uint8Array): OtherSensorData {
 }
 
 
+//// OTA CHARACTERISTIC
+
+async function startOTA(firmwareLength: number): Promise<void> {
+  const buffer = new ArrayBuffer(20);
+  const view = new DataView(buffer);
+
+  // Command ID - 2 bytes
+  view.setUint16(0, 0x0001, true);
+
+  // FirmwareLength - 4 bytes
+  view.setUint32(2, firmwareLength, true);
+
+  // CRC16 - 2 bytes
+  const crcInput = new Uint8Array(buffer, 0, 18);
+  const crc = crc16CcittFalse(crcInput);
+  view.setUint16(18, crc, true);
+
+  // Send packet
+  const packet = new Uint8Array(buffer);
+  return await otaCommandCharacteristic.writeValueWithoutResponse(packet);
+}
+
+async function stopOTA(): Promise<void> {
+  const buffer = new ArrayBuffer(20);
+  const view = new DataView(buffer);
+
+  // Command ID - 2 bytes
+  view.setUint16(0, 0x0002, true);
+
+  // Payload can be left at 0
+
+  // CRC16 - 2 bytes
+  const crcInput = new Uint8Array(buffer, 0, 18);
+  const crc = crc16CcittFalse(crcInput);
+  view.setUint16(18, crc, true);
+
+  const packet = new Uint8Array(buffer);
+  return await otaCommandCharacteristic.writeValueWithoutResponse(packet);
+}
+
+async function responseCommandOTA(
+  commandId: number,
+  responseStatus: 0x0000 | 0x0001
+): Promise<void> {
+  const buffer = new ArrayBuffer(20);
+  const view = new DataView(buffer);
+
+  // Command ID - 2 bytes
+  view.setInt16(0, 0x0003, true);
+
+  // Payload bytes 2-3: command ID
+  view.setUint16(2, commandId, true);
+
+  // Payload bytes 4-5: responseStatus
+  view.setUint16(4, responseStatus, true);
+
+  // CRC16 - 2 bytes
+  const crcInput = new Uint8Array(buffer, 0, 18);
+  const crc = crc16CcittFalse(crcInput);
+  view.setUint16(18, crc, true);
+
+  const packet = new Uint8Array(buffer);
+  return await otaCommandCharacteristic.writeValueWithoutResponse(packet);
+}
+
+
 /**
  * Converts a number to a big-endian byte array
  */
@@ -578,6 +662,18 @@ function numberToBytes(value: number, byteLength: number) {
     value >>= 8;
   }
   return bytes;
+}
+
+function crc16CcittFalse(data: Uint8Array): number {
+  let crc = 0xFFFF;
+  for (const b of data) {
+    crc ^= b << 8;
+    for (let i = 0; i < 8; i++) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
+  }
+  return crc;
 }
 
 /**
