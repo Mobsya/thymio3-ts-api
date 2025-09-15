@@ -227,9 +227,9 @@ function createCommandByteArray({
             const val = arr[i] & 0x0F;
             const byteIndex = Math.floor(i / 2);
             if (i % 2 === 0) {
-                packed[byteIndex] |= val << 4;
-            } else {
                 packed[byteIndex] |= val;
+            } else {
+                packed[byteIndex] |= val << 4;
             }
         }
         return packed;
@@ -251,16 +251,17 @@ function createCommandByteArray({
     }
 
     // FL RGB (2 bytes)
-    view.setUint16(offset, packRGB(flRGB)); offset += 2;
+    // Little-endian (explicite) for RGB values
+    view.setUint16(offset, packRGB(flRGB),true); offset += 2;
 
     // FR RGB (2 bytes)
-    view.setUint16(offset, packRGB(frRGB)); offset += 2;
+    view.setUint16(offset, packRGB(frRGB),true); offset += 2;
 
     // BL RGB (2 bytes)
-    view.setUint16(offset, packRGB(blRGB)); offset += 2;
+    view.setUint16(offset, packRGB(blRGB),true); offset += 2;
 
     // BR RGB (2 bytes)
-    view.setUint16(offset, packRGB(brRGB)); offset += 2;
+    view.setUint16(offset, packRGB(brRGB),true); offset += 2;
 
     // Motor left (2 bytes - signed 16-bit)
     view.setInt16(offset, motorLeft); offset += 2;
