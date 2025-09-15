@@ -1,5 +1,11 @@
 # Thymio 3 TS API
 
+## Build
+
+Requires the latest stable version of `node`.
+
+To generate the `dist` folder, run `npm run build`.
+
 ## Use
 
 1. For use directly in the browser: `dist/thymio.global.js`
