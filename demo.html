@@ -76,6 +76,15 @@
       const otherSensorStreamOutput = document.getElementById("sensor-stream-other-output");
       otherSensorStreamOutput.textContent = JSON.stringify(event.detail, null, 2);
     });
+
+    async function uploadOTA() {
+      const fileInput = document.getElementById('firmware');
+      const file = fileInput.files[0];
+      const arrayBuffer = await file.arrayBuffer();
+      const firmware = new Uint8Array(arrayBuffer);
+      await thymio.startOTA(firmware.length);
+      await thymio.uploadFirmware(firmware);
+    }
   </script>
   <style>
     body {
@@ -309,6 +318,12 @@ while 1:
       <button onclick="thymio.toggleSensorStreaming(true)">Toggle other sensor streaming</button>
       <pre id="sensor-stream-other-output">Waiting for other sensor data...</pre>
     </div>
+  </div>
+
+  <div>
+    <h3>Upload an OTA update file</h3>
+    <input type="file" id="firmware" />
+    <button onclick="uploadOTA()">Start OTA</button>
   </div>
 
 </body>

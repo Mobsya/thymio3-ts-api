@@ -45,22 +45,22 @@ var thymio = (() => {
     requestAndConnect: () => requestAndConnect,
     sendPythonScript: () => sendPythonScript,
     setActuatorState: () => setActuatorState,
+    startOTA: () => startOTA,
     stopScriptExecution: () => stopScriptExecution,
-    toggleSensorStreaming: () => toggleSensorStreaming
+    toggleSensorStreaming: () => toggleSensorStreaming,
+    uploadFirmware: () => uploadFirmware
   });
   var MAIN_SERVICE_UUID = "0000abf0-0000-1000-8000-00805f9b34fb";
   var COMMAND_CHARACTERISTIC_UUID = "0000abf1-0000-1000-8000-00805f9b34fb";
   var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
   var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
   var OTA_SERVICE_UUID = 32792;
-  var OTA_RECV_FW_CHARACTERISTIC_UUID = 32800;
+  var OTA_FIRMWARE_CHARACTERISTIC_UUID = 32800;
   var OTA_PROGRESS_BAR_CHARACTERISTIC_UUID = 32801;
   var OTA_COMMAND_CHARACTERISTIC_UUID = 32802;
-  var OTA_CUSTOMER_CHARACATERISTIC_UUID = 32803;
-  var ota_recv_fwCharacteristic;
+  var otaFirmwareCharacteristic;
   var otaProgressBarCharacteristic;
   var otaCommandCharacteristic;
-  var otaCustomerCharacteristic;
   var MTU = 500;
   var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
   var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
@@ -96,10 +96,13 @@ var thymio = (() => {
           yield pythonCharacteristic.startNotifications();
           pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
           const otaService = yield server.getPrimaryService(OTA_SERVICE_UUID);
-          ota_recv_fwCharacteristic = yield otaService.getCharacteristic(OTA_RECV_FW_CHARACTERISTIC_UUID);
+          otaFirmwareCharacteristic = yield otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
+          otaFirmwareCharacteristic.startNotifications();
+          otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
           otaProgressBarCharacteristic = yield otaService.getCharacteristic(OTA_PROGRESS_BAR_CHARACTERISTIC_UUID);
           otaCommandCharacteristic = yield otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
-          otaCustomerCharacteristic = yield otaService.getCharacteristic(OTA_CUSTOMER_CHARACATERISTIC_UUID);
+          otaCommandCharacteristic.startNotifications();
+          otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
         } catch (e) {
           console.error(`Could not connect to Thymio 3.`, e);
         }
@@ -463,6 +466,163 @@ var thymio = (() => {
       batteryVoltage
     };
   }
+  function startOTA(firmwareLength) {
+    return __async(this, null, function* () {
+      const buffer = new ArrayBuffer(20);
+      const view = new DataView(buffer);
+      view.setUint16(0, 1, true);
+      view.setUint32(2, firmwareLength, true);
+      const crcInput = new Uint8Array(buffer, 0, 18);
+      const crc = crc16_ccitt(crcInput);
+      view.setUint16(18, crc, true);
+      const packet = new Uint8Array(buffer);
+      return yield otaCommandCharacteristic.writeValueWithResponse(packet);
+    });
+  }
+  function otaCommandNotificationHandler(event) {
+    const value = event.target.value;
+    if (value && value.buffer.byteLength === 20) {
+      const buffer = value.buffer;
+      const view = new DataView(buffer);
+      const ack = view.getUint16(0, true);
+      const cmd = view.getUint16(2, true);
+      const response = view.getUint16(4, true);
+      const crc = view.getUint16(18, true);
+      const crcInput = new Uint8Array(buffer, 0, 18);
+      const calculatedCRC = crc16_ccitt(crcInput);
+      if (calculatedCRC !== crc) {
+        console.log("Command response CRC error");
+      }
+      if (response === 0) {
+        console.log("Command accepted.");
+      } else if (response === 1) {
+        console.log("Command rejected");
+      } else {
+        throw new Error("Unknown command response");
+      }
+    }
+  }
+  function otaFirmwareNotificationHandler(event) {
+    const value = event.target.value;
+    if (value && value.buffer.byteLength === 20) {
+      const buffer = value.buffer;
+      const view = new DataView(buffer);
+      const sentSectorIndex = view.getUint16(0, true);
+      const status = view.getUint16(2, true);
+      const currentSector = view.getUint16(4, true);
+      const crc = view.getUint16(18, true);
+      const crcInput = new Uint8Array(buffer, 0, 18);
+      const calculatedCRC = crc16_ccitt(crcInput);
+      if (calculatedCRC !== crc) {
+        console.log("Command response CRC error");
+      }
+      switch (status) {
+        case 0:
+          console.log("Success");
+          break;
+        case 1:
+          console.log("CRC Error");
+          break;
+        case 2:
+          console.log("Sector Index error");
+          break;
+        case 3:
+          console.log("Payload length error");
+          break;
+        default:
+          throw new Error("Unknown response status");
+      }
+    }
+  }
+  var PAYLOAD_SIZE = MTU - 4;
+  var SECTOR_SIZE = 4096;
+  var resolveAck = null;
+  function waitForAck() {
+    return __async(this, null, function* () {
+      return new Promise((resolve) => {
+        resolveAck = resolve;
+      });
+    });
+  }
+  function buildPacket(sectorIndex, seq, payload) {
+    const packetLength = 3 + payload.length;
+    const buffer = new ArrayBuffer(packetLength);
+    const view = new DataView(buffer);
+    view.setUint16(0, sectorIndex, true);
+    view.setUint8(2, seq);
+    const payloadView = new Uint8Array(buffer, 3);
+    payloadView.set(payload);
+    return new Uint8Array(buffer);
+  }
+  function buildFinalPacket(sectorIndex, data) {
+    const buffer = new ArrayBuffer(3 + PAYLOAD_SIZE);
+    const view = new DataView(buffer);
+    view.setUint16(0, sectorIndex, true);
+    view.setUint8(2, 255);
+    const payloadView = new Uint8Array(buffer, 3);
+    payloadView.fill(0);
+    const crc = crc16_ccitt(data);
+    view.setUint16(3 + PAYLOAD_SIZE - 2, crc, true);
+    return new Uint8Array(buffer);
+  }
+  function uploadFirmware(firmware) {
+    return __async(this, null, function* () {
+      const firmwareBytes = new Uint8Array(firmware);
+      const totalSectors = Math.ceil(firmwareBytes.length / SECTOR_SIZE);
+      console.log(
+        `Uploading firmware: ${firmwareBytes.length} bytes, ${totalSectors} sectors`
+      );
+      for (let sector = 0; sector < totalSectors; sector++) {
+        const start = sector * SECTOR_SIZE;
+        const end = Math.min(start + SECTOR_SIZE, firmwareBytes.length);
+        const sectorData = firmwareBytes.slice(start, end);
+        console.log(`Sending sector ${sector}`);
+        let seq = 0;
+        while (seq * PAYLOAD_SIZE < sectorData.length) {
+          const slice = sectorData.slice(
+            seq * PAYLOAD_SIZE,
+            (seq + 1) * PAYLOAD_SIZE
+          );
+          const packet = buildPacket(sector, seq, slice);
+          yield otaFirmwareCharacteristic.writeValueWithResponse(packet);
+          seq++;
+          yield delay(10);
+        }
+        const finalPacket = buildFinalPacket(sector, sectorData);
+        yield otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
+        const ack = yield waitForAck();
+        const ackSector = ack.getUint16(0, true);
+        const ackStatus = ack.getUint16(2, true);
+        if (ackSector !== sector) {
+          console.error(
+            `Sector mismatch in ACK. Expected: ${sector}, Received: ${ackSector}`
+          );
+          throw new Error("ACK sector mismatch");
+        }
+        switch (ackStatus) {
+          case 0:
+            console.log(`Sector ${sector} uploaded successfully.`);
+            break;
+          case 1:
+            console.warn("CRC error, retrying sector");
+            sector--;
+            break;
+          case 2:
+            const requestedSector = ack.getUint16(4, true);
+            console.warn(`Sector index error, requested: ${requestedSector}`);
+            sector = requestedSector - 1;
+            break;
+          case 3:
+            console.warn("Payload length error, retrying sector");
+            sector--;
+            break;
+          default:
+            throw new Error(`Unknown ACK status: 0x${ackStatus.toString(16)}`);
+        }
+      }
+      console.log("Firmware upload complete.");
+    });
+  }
   function numberToBytes(value, byteLength) {
     const bytes = new Uint8Array(byteLength);
     for (let i = 0; i < byteLength; i++) {
@@ -470,6 +630,17 @@ var thymio = (() => {
       value >>= 8;
     }
     return bytes;
+  }
+  function crc16_ccitt(buffer) {
+    let crc = 0;
+    for (let b of buffer) {
+      crc ^= b << 8;
+      for (let i = 0; i < 8; i++) {
+        crc = crc & 32768 ? crc << 1 ^ 4129 : crc << 1;
+      }
+      crc &= 65535;
+    }
+    return crc;
   }
   function computeCRC32(buf, crc = 4294967295) {
     for (let i = 0; i < buf.length; i++) {

@@ -98,12 +98,12 @@ const SENSOR_STREAM_CHARACTERISTIC_UUID = '0000abf2-0000-1000-8000-00805f9b34fb'
 const PYTHON_CHARACTERISTIC_UUID = '0000abf3-0000-1000-8000-00805f9b34fb';
 
 const OTA_SERVICE_UUID = 0x8018;
-const OTA_RECV_FW_CHARACTERISTIC_UUID = 0x8020;
+const OTA_FIRMWARE_CHARACTERISTIC_UUID = 0x8020;
 const OTA_PROGRESS_BAR_CHARACTERISTIC_UUID = 0x8021;
 const OTA_COMMAND_CHARACTERISTIC_UUID = 0x8022;
 const OTA_CUSTOMER_CHARACATERISTIC_UUID = 0x8023;
 
-let ota_recv_fwCharacteristic: BluetoothRemoteGATTCharacteristic;
+let otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic;
 let otaProgressBarCharacteristic: BluetoothRemoteGATTCharacteristic;
 let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic;
 let otaCustomerCharacteristic: BluetoothRemoteGATTCharacteristic;
@@ -158,10 +158,15 @@ async function connect() {
       pythonCharacteristic.addEventListener('characteristicvaluechanged', handlePythonResponse);
 
       const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
-      ota_recv_fwCharacteristic = await otaService.getCharacteristic(OTA_RECV_FW_CHARACTERISTIC_UUID);
+
+      otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
+      otaFirmwareCharacteristic.startNotifications();
+      otaFirmwareCharacteristic.addEventListener('characteristicvaluechanged', otaFirmwareNotificationHandler);
+
       otaProgressBarCharacteristic = await otaService.getCharacteristic(OTA_PROGRESS_BAR_CHARACTERISTIC_UUID);
       otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
-      otaCustomerCharacteristic = await otaService.getCharacteristic(OTA_CUSTOMER_CHARACATERISTIC_UUID);
+      otaCommandCharacteristic.startNotifications();
+      otaCommandCharacteristic.addEventListener('characteristicvaluechanged', otaCommandNotificationHandler);
 
     } catch (e) {
       console.error(`Could not connect to Thymio 3.`, e)
@@ -588,7 +593,7 @@ function parseOtherSensorData(bytes: Uint8Array): OtherSensorData {
 
 //// OTA CHARACTERISTIC
 
-async function startOTA(firmwareLength: number): Promise<void> {
+export async function startOTA(firmwareLength: number): Promise<void> {
   const buffer = new ArrayBuffer(20);
   const view = new DataView(buffer);
 
@@ -600,12 +605,12 @@ async function startOTA(firmwareLength: number): Promise<void> {
 
   // CRC16 - 2 bytes
   const crcInput = new Uint8Array(buffer, 0, 18);
-  const crc = crc16CcittFalse(crcInput);
+  const crc = crc16_ccitt(crcInput);
   view.setUint16(18, crc, true);
 
   // Send packet
   const packet = new Uint8Array(buffer);
-  return await otaCommandCharacteristic.writeValueWithoutResponse(packet);
+  return await otaCommandCharacteristic.writeValueWithResponse(packet);
 }
 
 async function stopOTA(): Promise<void> {
@@ -619,11 +624,11 @@ async function stopOTA(): Promise<void> {
 
   // CRC16 - 2 bytes
   const crcInput = new Uint8Array(buffer, 0, 18);
-  const crc = crc16CcittFalse(crcInput);
+  const crc = crc16_ccitt(crcInput);
   view.setUint16(18, crc, true);
 
   const packet = new Uint8Array(buffer);
-  return await otaCommandCharacteristic.writeValueWithoutResponse(packet);
+  return await otaCommandCharacteristic.writeValueWithResponse(packet);
 }
 
 async function responseCommandOTA(
@@ -634,7 +639,7 @@ async function responseCommandOTA(
   const view = new DataView(buffer);
 
   // Command ID - 2 bytes
-  view.setInt16(0, 0x0003, true);
+  view.setUint16(0, 0x0003, true);
 
   // Payload bytes 2-3: command ID
   view.setUint16(2, commandId, true);
@@ -644,11 +649,217 @@ async function responseCommandOTA(
 
   // CRC16 - 2 bytes
   const crcInput = new Uint8Array(buffer, 0, 18);
-  const crc = crc16CcittFalse(crcInput);
+  const crc = crc16_ccitt(crcInput);
   view.setUint16(18, crc, true);
 
   const packet = new Uint8Array(buffer);
-  return await otaCommandCharacteristic.writeValueWithoutResponse(packet);
+  return await otaCommandCharacteristic.writeValueWithResponse(packet);
+}
+
+function otaCommandNotificationHandler(event: Event) {
+	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
+
+  if (value && value.buffer.byteLength === 20) {
+    const buffer = value.buffer;
+    const view = new DataView(buffer);
+
+    const ack = view.getUint16(0, true);
+    const cmd = view.getUint16(2, true);
+    const response = view.getUint16(4, true);
+    const crc = view.getUint16(18, true);
+
+    // Check CRC error
+    const crcInput = new Uint8Array(buffer, 0, 18);
+    const calculatedCRC = crc16_ccitt(crcInput);
+    if (calculatedCRC !== crc) {
+        console.log("Command response CRC error");
+    }
+
+    if(response === 0x0000) {
+      console.log("Command accepted.");
+    } else if (response === 0x0001) {
+      console.log("Command rejected");
+    } else {
+      throw new Error("Unknown command response");
+    }
+  }
+}
+
+function otaFirmwareNotificationHandler(event: Event) {
+	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
+
+  if (value && value.buffer.byteLength === 20) {
+    const buffer = value.buffer;
+    const view = new DataView(buffer);
+
+    const sentSectorIndex = view.getUint16(0, true);
+    const status = view.getUint16(2, true);
+    const currentSector = view.getUint16(4, true);
+    const crc = view.getUint16(18, true);
+
+    // Check CRC error
+    const crcInput = new Uint8Array(buffer, 0, 18);
+    const calculatedCRC = crc16_ccitt(crcInput);
+    if (calculatedCRC !== crc) {
+        console.log("Command response CRC error");
+    }
+
+    switch(status) {
+      case 0x0000:
+        console.log("Success");
+        break;
+      case 0x0001:
+        console.log("CRC Error");
+        break;
+      case 0x0002:
+        console.log("Sector Index error");
+        break;
+      case 0x0003:
+        console.log("Payload length error");
+        break;
+      default:
+        throw new Error('Unknown response status');
+    }
+  }
+}
+
+
+const PAYLOAD_SIZE = MTU - 4;
+const SECTOR_SIZE = 4096; // 4KB;
+let sectorIndex = 0;
+
+let resolveAck: ((value: DataView) => void) | null = null;
+
+function handleAck(event: Event) {
+  const value = (event.target as BluetoothRemoteGATTCharacteristic).value!;
+  console.log(value)
+  if (resolveAck) {
+    resolveAck(value);
+    resolveAck = null;
+  }
+}
+
+async function waitForAck(): Promise<DataView> {
+  return new Promise((resolve) => {
+    resolveAck = resolve;
+  });
+}
+
+function buildPacket(
+  sectorIndex: number,
+  seq: number,
+  payload: Uint8Array
+): Uint8Array<ArrayBuffer> {
+  const packetLength = 3 + payload.length;
+  const buffer = new ArrayBuffer(packetLength);
+  const view = new DataView(buffer);
+
+  // Sector_Index: bytes 0-1 (little endian)
+  view.setUint16(0, sectorIndex, true);
+
+  // Packet_Seq: byte 2
+  view.setUint8(2, seq);
+
+  // Payload: bytes 3 ~ (3 + payload.length - 1)
+  const payloadView = new Uint8Array(buffer, 3);
+  payloadView.set(payload);
+
+  return new Uint8Array(buffer);
+}
+
+function buildFinalPacket(
+  sectorIndex: number,
+  data: Uint8Array
+): Uint8Array<ArrayBuffer> {
+  const buffer = new ArrayBuffer(3 + PAYLOAD_SIZE);
+  const view = new DataView(buffer);
+
+  // Sector_Index: bytes 0-1 (little endian)
+  view.setUint16(0, sectorIndex, true);
+
+  // Packet_Seq: byte 2 = 0xFF (last packet indicator)
+  view.setUint8(2, 0xFF);
+
+  // Payload: initialize all 0x00 first
+  const payloadView = new Uint8Array(buffer, 3);
+  payloadView.fill(0);
+
+  // Calculate CRC16 of sector data
+  const crc = crc16_ccitt(data);
+
+  // Set last 2 bytes of payload to CRC16 (little endian)
+  view.setUint16(3 + PAYLOAD_SIZE - 2, crc, true);
+
+  return new Uint8Array(buffer);
+}
+
+export async function uploadFirmware(firmware: ArrayBuffer): Promise<void> {
+  const firmwareBytes = new Uint8Array(firmware);
+  const totalSectors = Math.ceil(firmwareBytes.length / SECTOR_SIZE);
+
+  console.log(
+    `Uploading firmware: ${firmwareBytes.length} bytes, ${totalSectors} sectors`
+  );
+
+  for (let sector = 0; sector < totalSectors; sector++) {
+    const start = sector * SECTOR_SIZE;
+    const end = Math.min(start + SECTOR_SIZE, firmwareBytes.length);
+    const sectorData = firmwareBytes.slice(start, end);
+
+    console.log(`Sending sector ${sector}`);
+
+    // Send packets
+    let seq = 0;
+    while (seq * PAYLOAD_SIZE < sectorData.length) {
+      const slice = sectorData.slice(
+        seq * PAYLOAD_SIZE,
+        (seq + 1) * PAYLOAD_SIZE
+      );
+      const packet = buildPacket(sector, seq, slice);
+      await otaFirmwareCharacteristic.writeValueWithResponse(packet);
+      seq++;
+      await delay(10); // pacing
+    }
+
+    // Send final packet with CRC
+    const finalPacket = buildFinalPacket(sector, sectorData);
+    await otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
+
+    // Wait for ACK
+    const ack = await waitForAck();
+    const ackSector = ack.getUint16(0, true);
+    const ackStatus = ack.getUint16(2, true);
+
+    if (ackSector !== sector) {
+      console.error(
+        `Sector mismatch in ACK. Expected: ${sector}, Received: ${ackSector}`
+      );
+      throw new Error("ACK sector mismatch");
+    }
+
+    switch (ackStatus) {
+      case 0x0000:
+        console.log(`Sector ${sector} uploaded successfully.`);
+        break;
+      case 0x0001:
+        console.warn("CRC error, retrying sector");
+        sector--; // Retry
+        break;
+      case 0x0002:
+        const requestedSector = ack.getUint16(4, true);
+        console.warn(`Sector index error, requested: ${requestedSector}`);
+        sector = requestedSector - 1; // Retry from requested sector
+        break;
+      case 0x0003:
+        console.warn("Payload length error, retrying sector");
+        sector--; // Retry
+        break;
+      default:
+        throw new Error(`Unknown ACK status: 0x${ackStatus.toString(16)}`);
+    }
+  }
+
+  console.log("Firmware upload complete.");
 }
 
 
@@ -664,14 +875,14 @@ function numberToBytes(value: number, byteLength: number) {
   return bytes;
 }
 
-function crc16CcittFalse(data: Uint8Array): number {
-  let crc = 0xFFFF;
-  for (const b of data) {
-    crc ^= b << 8;
-    for (let i = 0; i < 8; i++) {
-      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+function crc16_ccitt(buffer: Uint8Array): number {
+  let crc = 0x0000;
+  for (let b of buffer) {
+      crc ^= b << 8;
+      for (let i = 0; i < 8; i++) {
+          crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      }
       crc &= 0xFFFF;
-    }
   }
   return crc;
 }

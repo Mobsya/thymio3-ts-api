@@ -101,5 +101,7 @@ declare function stopScriptExecution(): Promise<void>;
  * @param other Enable/disable other sensors
  */
 declare function toggleSensorStreaming(other?: boolean): Promise<void>;
+declare function startOTA(firmwareLength: number): Promise<void>;
+declare function uploadFirmware(firmware: ArrayBuffer): Promise<void>;
 
-export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, executeLoadedScript, requestAndConnect, sendPythonScript, setActuatorState, stopScriptExecution, toggleSensorStreaming };
+export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, executeLoadedScript, requestAndConnect, sendPythonScript, setActuatorState, startOTA, stopScriptExecution, toggleSensorStreaming, uploadFirmware };
