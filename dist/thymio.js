@@ -44,7 +44,7 @@ __export(thymio_exports, {
   requestAndConnect: () => requestAndConnect,
   sendPythonScript: () => sendPythonScript,
   setActuatorState: () => setActuatorState,
-  startOTA: () => startOTA,
+  stopFirmwareUpload: () => stopFirmwareUpload,
   stopScriptExecution: () => stopScriptExecution,
   toggleSensorStreaming: () => toggleSensorStreaming,
   uploadFirmware: () => uploadFirmware
@@ -62,6 +62,8 @@ var otaFirmwareCharacteristic;
 var otaProgressBarCharacteristic;
 var otaCommandCharacteristic;
 var MTU = 500;
+var FIRMWARE_PAYLOAD_SIZE = MTU - 4;
+var FIRMWARE_SECTOR_SIZE = 4096;
 var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
 var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
 var commandCharacteristic;
@@ -466,6 +468,17 @@ function parseOtherSensorData(bytes) {
     batteryVoltage
   };
 }
+function uploadFirmware(firmware) {
+  return __async(this, null, function* () {
+    yield startOTA(firmware.byteLength);
+    return yield uploadFirmwareData(firmware);
+  });
+}
+function stopFirmwareUpload() {
+  return __async(this, null, function* () {
+    return yield stopOTA();
+  });
+}
 function startOTA(firmwareLength) {
   return __async(this, null, function* () {
     const buffer = new ArrayBuffer(20);
@@ -477,6 +490,46 @@ function startOTA(firmwareLength) {
     view.setUint16(18, crc, true);
     const packet = new Uint8Array(buffer);
     return yield otaCommandCharacteristic.writeValueWithResponse(packet);
+  });
+}
+function stopOTA() {
+  return __async(this, null, function* () {
+    const buffer = new ArrayBuffer(20);
+    const view = new DataView(buffer);
+    view.setUint16(0, 2, true);
+    const crcInput = new Uint8Array(buffer, 0, 18);
+    const crc = crc16_ccitt(crcInput);
+    view.setUint16(18, crc, true);
+    const packet = new Uint8Array(buffer);
+    return yield otaCommandCharacteristic.writeValueWithResponse(packet);
+  });
+}
+function uploadFirmwareData(firmware) {
+  return __async(this, null, function* () {
+    const firmwareBytes = new Uint8Array(firmware);
+    const totalSectors = Math.ceil(firmwareBytes.length / FIRMWARE_SECTOR_SIZE);
+    console.log(
+      `Uploading firmware: ${firmwareBytes.length} bytes, ${totalSectors} sectors`
+    );
+    for (let sector = 0; sector < totalSectors; sector++) {
+      const start = sector * FIRMWARE_SECTOR_SIZE;
+      const end = Math.min(start + FIRMWARE_SECTOR_SIZE, firmwareBytes.length);
+      const sectorData = firmwareBytes.slice(start, end);
+      console.log(`Sending sector ${sector}`);
+      let seq = 0;
+      while (seq * FIRMWARE_PAYLOAD_SIZE < sectorData.length) {
+        const slice = sectorData.slice(
+          seq * FIRMWARE_PAYLOAD_SIZE,
+          (seq + 1) * FIRMWARE_PAYLOAD_SIZE
+        );
+        const packet = buildPacket(sector, seq, slice);
+        yield otaFirmwareCharacteristic.writeValueWithResponse(packet);
+        seq++;
+      }
+      const finalPacket = buildFinalPacket(sector, sectorData);
+      yield otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
+    }
+    console.log("Firmware upload complete.");
   });
 }
 function otaCommandNotificationHandler(event) {
@@ -534,8 +587,6 @@ function otaFirmwareNotificationHandler(event) {
     }
   }
 }
-var FIRMWARE_PAYLOAD_SIZE = MTU - 4;
-var FIRMWARE_SECTOR_SIZE = 4096;
 function buildPacket(sectorIndex, seq, payload) {
   const packetLength = 3 + payload.length;
   const buffer = new ArrayBuffer(packetLength);
@@ -556,34 +607,6 @@ function buildFinalPacket(sectorIndex, data) {
   const crc = crc16_ccitt(data);
   view.setUint16(3 + FIRMWARE_PAYLOAD_SIZE - 2, crc, true);
   return new Uint8Array(buffer);
-}
-function uploadFirmware(firmware) {
-  return __async(this, null, function* () {
-    const firmwareBytes = new Uint8Array(firmware);
-    const totalSectors = Math.ceil(firmwareBytes.length / FIRMWARE_SECTOR_SIZE);
-    console.log(
-      `Uploading firmware: ${firmwareBytes.length} bytes, ${totalSectors} sectors`
-    );
-    for (let sector = 0; sector < totalSectors; sector++) {
-      const start = sector * FIRMWARE_SECTOR_SIZE;
-      const end = Math.min(start + FIRMWARE_SECTOR_SIZE, firmwareBytes.length);
-      const sectorData = firmwareBytes.slice(start, end);
-      console.log(`Sending sector ${sector}`);
-      let seq = 0;
-      while (seq * FIRMWARE_PAYLOAD_SIZE < sectorData.length) {
-        const slice = sectorData.slice(
-          seq * FIRMWARE_PAYLOAD_SIZE,
-          (seq + 1) * FIRMWARE_PAYLOAD_SIZE
-        );
-        const packet = buildPacket(sector, seq, slice);
-        yield otaFirmwareCharacteristic.writeValueWithResponse(packet);
-        seq++;
-      }
-      const finalPacket = buildFinalPacket(sector, sectorData);
-      yield otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
-    }
-    console.log("Firmware upload complete.");
-  });
 }
 function numberToBytes(value, byteLength) {
   const bytes = new Uint8Array(byteLength);
@@ -628,7 +651,7 @@ function delay(timeout) {
   requestAndConnect,
   sendPythonScript,
   setActuatorState,
-  startOTA,
+  stopFirmwareUpload,
   stopScriptExecution,
   toggleSensorStreaming,
   uploadFirmware

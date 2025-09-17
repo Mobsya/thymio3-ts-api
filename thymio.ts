@@ -106,9 +106,11 @@ const OTA_CUSTOMER_CHARACATERISTIC_UUID = 0x8023;
 let otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic;
 let otaProgressBarCharacteristic: BluetoothRemoteGATTCharacteristic;
 let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic;
-let otaCustomerCharacteristic: BluetoothRemoteGATTCharacteristic;
 
 const MTU = 500;
+
+const FIRMWARE_PAYLOAD_SIZE = MTU - 4;
+const FIRMWARE_SECTOR_SIZE = 4096; // 4KB;
 
 const THYMIO_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-values';
 const THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-other-values';
@@ -593,7 +595,21 @@ function parseOtherSensorData(bytes: Uint8Array): OtherSensorData {
 
 //// OTA CHARACTERISTIC
 
-export async function startOTA(firmwareLength: number): Promise<void> {
+export async function uploadFirmware(firmware: ArrayBuffer): Promise<void> {
+  // Start the OTA
+  await startOTA(firmware.byteLength);
+
+  // Send the firmware
+  return await uploadFirmwareData(firmware);
+}
+
+export async function stopFirmwareUpload(): Promise<void> {
+  return await stopOTA();
+}
+
+// OTA Commands
+
+async function startOTA(firmwareLength: number): Promise<void> {
   const buffer = new ArrayBuffer(20);
   const view = new DataView(buffer);
 
@@ -656,6 +672,44 @@ async function responseCommandOTA(
   return await otaCommandCharacteristic.writeValueWithResponse(packet);
 }
 
+// OTA File transfer
+
+async function uploadFirmwareData(firmware: ArrayBuffer): Promise<void> {
+  const firmwareBytes = new Uint8Array(firmware);
+  const totalSectors = Math.ceil(firmwareBytes.length / FIRMWARE_SECTOR_SIZE);
+
+  console.log(
+    `Uploading firmware: ${firmwareBytes.length} bytes, ${totalSectors} sectors`
+  );
+
+  for (let sector = 0; sector < totalSectors; sector++) {
+    const start = sector * FIRMWARE_SECTOR_SIZE;
+    const end = Math.min(start + FIRMWARE_SECTOR_SIZE, firmwareBytes.length);
+    const sectorData = firmwareBytes.slice(start, end);
+
+    console.log(`Sending sector ${sector}`);
+
+    // Send packets
+    let seq = 0;
+    while (seq * FIRMWARE_PAYLOAD_SIZE < sectorData.length) {
+      const slice = sectorData.slice(
+        seq * FIRMWARE_PAYLOAD_SIZE,
+        (seq + 1) * FIRMWARE_PAYLOAD_SIZE
+      );
+      const packet = buildPacket(sector, seq, slice);
+      await otaFirmwareCharacteristic.writeValueWithResponse(packet);
+      seq++;
+      //await delay(10); // pacing
+    }
+
+    // Send final packet with CRC
+    const finalPacket = buildFinalPacket(sector, sectorData);
+    await otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
+  }
+
+  console.log("Firmware upload complete.");
+}
+
 function otaCommandNotificationHandler(event: Event) {
 	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
 
@@ -684,6 +738,8 @@ function otaCommandNotificationHandler(event: Event) {
     }
   }
 }
+
+// OTA Notification handlers
 
 function otaFirmwareNotificationHandler(event: Event) {
 	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
@@ -723,10 +779,7 @@ function otaFirmwareNotificationHandler(event: Event) {
   }
 }
 
-
-const FIRMWARE_PAYLOAD_SIZE = MTU - 4;
-const FIRMWARE_SECTOR_SIZE = 4096; // 4KB;
-let currentSectorIndex = 0;
+// OTA Helper functions
 
 function buildPacket(
   sectorIndex: number,
@@ -776,42 +829,7 @@ function buildFinalPacket(
   return new Uint8Array(buffer);
 }
 
-export async function uploadFirmware(firmware: ArrayBuffer): Promise<void> {
-  const firmwareBytes = new Uint8Array(firmware);
-  const totalSectors = Math.ceil(firmwareBytes.length / FIRMWARE_SECTOR_SIZE);
-
-  console.log(
-    `Uploading firmware: ${firmwareBytes.length} bytes, ${totalSectors} sectors`
-  );
-
-  for (let sector = 0; sector < totalSectors; sector++) {
-    const start = sector * FIRMWARE_SECTOR_SIZE;
-    const end = Math.min(start + FIRMWARE_SECTOR_SIZE, firmwareBytes.length);
-    const sectorData = firmwareBytes.slice(start, end);
-
-    console.log(`Sending sector ${sector}`);
-
-    // Send packets
-    let seq = 0;
-    while (seq * FIRMWARE_PAYLOAD_SIZE < sectorData.length) {
-      const slice = sectorData.slice(
-        seq * FIRMWARE_PAYLOAD_SIZE,
-        (seq + 1) * FIRMWARE_PAYLOAD_SIZE
-      );
-      const packet = buildPacket(sector, seq, slice);
-      await otaFirmwareCharacteristic.writeValueWithResponse(packet);
-      seq++;
-      //await delay(10); // pacing
-    }
-
-    // Send final packet with CRC
-    const finalPacket = buildFinalPacket(sector, sectorData);
-    await otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
-  }
-
-  console.log("Firmware upload complete.");
-}
-
+//// HELPER FUNCTIONS
 
 /**
  * Converts a number to a big-endian byte array
@@ -861,15 +879,3 @@ function delay(timeout: number) {
     setTimeout(() => resolve(), timeout);
   });
 }
-
-/*
-async function sendFileData(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const base64String = btoa(
-    new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-  );
-
-  await sendData(base64String);
-  console.log('✅ File sent');
-}
-*/

@@ -82,8 +82,10 @@
       const file = fileInput.files[0];
       const arrayBuffer = await file.arrayBuffer();
       const firmware = new Uint8Array(arrayBuffer);
-      await thymio.startOTA(firmware.length);
       await thymio.uploadFirmware(firmware);
+    }
+    async function stopOTA() {
+      await thymio.stopFirmwareUpload();
     }
   </script>
   <style>
@@ -324,6 +326,7 @@ while 1:
     <h3>Upload an OTA update file</h3>
     <input type="file" id="firmware" />
     <button onclick="uploadOTA()">Start OTA</button>
+    <button onclick="stopOTA()">Stop OTA Upload</button>
   </div>
 
 </body>
