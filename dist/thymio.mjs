@@ -151,9 +151,9 @@ function createCommandByteArray({
       const val = arr[i] & 15;
       const byteIndex = Math.floor(i / 2);
       if (i % 2 === 0) {
-        packed[byteIndex] |= val << 4;
-      } else {
         packed[byteIndex] |= val;
+      } else {
+        packed[byteIndex] |= val << 4;
       }
     }
     return packed;
@@ -165,13 +165,13 @@ function createCommandByteArray({
     let rgb = (b & 15) << 8 | (g & 15) << 4 | r & 15;
     return rgb;
   }
-  view.setUint16(offset, packRGB(flRGB));
+  view.setUint16(offset, packRGB(flRGB), true);
   offset += 2;
-  view.setUint16(offset, packRGB(frRGB));
+  view.setUint16(offset, packRGB(frRGB), true);
   offset += 2;
-  view.setUint16(offset, packRGB(blRGB));
+  view.setUint16(offset, packRGB(blRGB), true);
   offset += 2;
-  view.setUint16(offset, packRGB(brRGB));
+  view.setUint16(offset, packRGB(brRGB), true);
   offset += 2;
   view.setInt16(offset, motorLeft);
   offset += 2;
