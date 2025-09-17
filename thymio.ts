@@ -692,9 +692,9 @@ function otaFirmwareNotificationHandler(event: Event) {
     const buffer = value.buffer;
     const view = new DataView(buffer);
 
-    const sentSectorIndex = view.getUint16(0, true);
+    const sectorIndex = view.getUint16(0, true);
     const status = view.getUint16(2, true);
-    const currentSector = view.getUint16(4, true);
+    const desiredSector = view.getUint16(4, true);
     const crc = view.getUint16(18, true);
 
     // Check CRC error
@@ -712,7 +712,7 @@ function otaFirmwareNotificationHandler(event: Event) {
         console.log("CRC Error");
         break;
       case 0x0002:
-        console.log("Sector Index error");
+        console.log(`Sector Index error. Desired sector: ${desiredSector}`);
         break;
       case 0x0003:
         console.log("Payload length error");
@@ -724,26 +724,9 @@ function otaFirmwareNotificationHandler(event: Event) {
 }
 
 
-const PAYLOAD_SIZE = MTU - 4;
-const SECTOR_SIZE = 4096; // 4KB;
-let sectorIndex = 0;
-
-let resolveAck: ((value: DataView) => void) | null = null;
-
-function handleAck(event: Event) {
-  const value = (event.target as BluetoothRemoteGATTCharacteristic).value!;
-  console.log(value)
-  if (resolveAck) {
-    resolveAck(value);
-    resolveAck = null;
-  }
-}
-
-async function waitForAck(): Promise<DataView> {
-  return new Promise((resolve) => {
-    resolveAck = resolve;
-  });
-}
+const FIRMWARE_PAYLOAD_SIZE = MTU - 4;
+const FIRMWARE_SECTOR_SIZE = 4096; // 4KB;
+let currentSectorIndex = 0;
 
 function buildPacket(
   sectorIndex: number,
@@ -771,7 +754,7 @@ function buildFinalPacket(
   sectorIndex: number,
   data: Uint8Array
 ): Uint8Array<ArrayBuffer> {
-  const buffer = new ArrayBuffer(3 + PAYLOAD_SIZE);
+  const buffer = new ArrayBuffer(3 + FIRMWARE_PAYLOAD_SIZE);
   const view = new DataView(buffer);
 
   // Sector_Index: bytes 0-1 (little endian)
@@ -788,75 +771,42 @@ function buildFinalPacket(
   const crc = crc16_ccitt(data);
 
   // Set last 2 bytes of payload to CRC16 (little endian)
-  view.setUint16(3 + PAYLOAD_SIZE - 2, crc, true);
+  view.setUint16(3 + FIRMWARE_PAYLOAD_SIZE - 2, crc, true);
 
   return new Uint8Array(buffer);
 }
 
 export async function uploadFirmware(firmware: ArrayBuffer): Promise<void> {
   const firmwareBytes = new Uint8Array(firmware);
-  const totalSectors = Math.ceil(firmwareBytes.length / SECTOR_SIZE);
+  const totalSectors = Math.ceil(firmwareBytes.length / FIRMWARE_SECTOR_SIZE);
 
   console.log(
     `Uploading firmware: ${firmwareBytes.length} bytes, ${totalSectors} sectors`
   );
 
   for (let sector = 0; sector < totalSectors; sector++) {
-    const start = sector * SECTOR_SIZE;
-    const end = Math.min(start + SECTOR_SIZE, firmwareBytes.length);
+    const start = sector * FIRMWARE_SECTOR_SIZE;
+    const end = Math.min(start + FIRMWARE_SECTOR_SIZE, firmwareBytes.length);
     const sectorData = firmwareBytes.slice(start, end);
 
     console.log(`Sending sector ${sector}`);
 
     // Send packets
     let seq = 0;
-    while (seq * PAYLOAD_SIZE < sectorData.length) {
+    while (seq * FIRMWARE_PAYLOAD_SIZE < sectorData.length) {
       const slice = sectorData.slice(
-        seq * PAYLOAD_SIZE,
-        (seq + 1) * PAYLOAD_SIZE
+        seq * FIRMWARE_PAYLOAD_SIZE,
+        (seq + 1) * FIRMWARE_PAYLOAD_SIZE
       );
       const packet = buildPacket(sector, seq, slice);
       await otaFirmwareCharacteristic.writeValueWithResponse(packet);
       seq++;
-      await delay(10); // pacing
+      //await delay(10); // pacing
     }
 
     // Send final packet with CRC
     const finalPacket = buildFinalPacket(sector, sectorData);
     await otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
-
-    // Wait for ACK
-    const ack = await waitForAck();
-    const ackSector = ack.getUint16(0, true);
-    const ackStatus = ack.getUint16(2, true);
-
-    if (ackSector !== sector) {
-      console.error(
-        `Sector mismatch in ACK. Expected: ${sector}, Received: ${ackSector}`
-      );
-      throw new Error("ACK sector mismatch");
-    }
-
-    switch (ackStatus) {
-      case 0x0000:
-        console.log(`Sector ${sector} uploaded successfully.`);
-        break;
-      case 0x0001:
-        console.warn("CRC error, retrying sector");
-        sector--; // Retry
-        break;
-      case 0x0002:
-        const requestedSector = ack.getUint16(4, true);
-        console.warn(`Sector index error, requested: ${requestedSector}`);
-        sector = requestedSector - 1; // Retry from requested sector
-        break;
-      case 0x0003:
-        console.warn("Payload length error, retrying sector");
-        sector--; // Retry
-        break;
-      default:
-        throw new Error(`Unknown ACK status: 0x${ackStatus.toString(16)}`);
-    }
   }
 
   console.log("Firmware upload complete.");

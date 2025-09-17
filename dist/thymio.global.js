@@ -507,9 +507,9 @@ var thymio = (() => {
     if (value && value.buffer.byteLength === 20) {
       const buffer = value.buffer;
       const view = new DataView(buffer);
-      const sentSectorIndex = view.getUint16(0, true);
+      const sectorIndex = view.getUint16(0, true);
       const status = view.getUint16(2, true);
-      const currentSector = view.getUint16(4, true);
+      const desiredSector = view.getUint16(4, true);
       const crc = view.getUint16(18, true);
       const crcInput = new Uint8Array(buffer, 0, 18);
       const calculatedCRC = crc16_ccitt(crcInput);
@@ -524,7 +524,7 @@ var thymio = (() => {
           console.log("CRC Error");
           break;
         case 2:
-          console.log("Sector Index error");
+          console.log(`Sector Index error. Desired sector: ${desiredSector}`);
           break;
         case 3:
           console.log("Payload length error");
@@ -534,16 +534,8 @@ var thymio = (() => {
       }
     }
   }
-  var PAYLOAD_SIZE = MTU - 4;
-  var SECTOR_SIZE = 4096;
-  var resolveAck = null;
-  function waitForAck() {
-    return __async(this, null, function* () {
-      return new Promise((resolve) => {
-        resolveAck = resolve;
-      });
-    });
-  }
+  var FIRMWARE_PAYLOAD_SIZE = MTU - 4;
+  var FIRMWARE_SECTOR_SIZE = 4096;
   function buildPacket(sectorIndex, seq, payload) {
     const packetLength = 3 + payload.length;
     const buffer = new ArrayBuffer(packetLength);
@@ -555,70 +547,40 @@ var thymio = (() => {
     return new Uint8Array(buffer);
   }
   function buildFinalPacket(sectorIndex, data) {
-    const buffer = new ArrayBuffer(3 + PAYLOAD_SIZE);
+    const buffer = new ArrayBuffer(3 + FIRMWARE_PAYLOAD_SIZE);
     const view = new DataView(buffer);
     view.setUint16(0, sectorIndex, true);
     view.setUint8(2, 255);
     const payloadView = new Uint8Array(buffer, 3);
     payloadView.fill(0);
     const crc = crc16_ccitt(data);
-    view.setUint16(3 + PAYLOAD_SIZE - 2, crc, true);
+    view.setUint16(3 + FIRMWARE_PAYLOAD_SIZE - 2, crc, true);
     return new Uint8Array(buffer);
   }
   function uploadFirmware(firmware) {
     return __async(this, null, function* () {
       const firmwareBytes = new Uint8Array(firmware);
-      const totalSectors = Math.ceil(firmwareBytes.length / SECTOR_SIZE);
+      const totalSectors = Math.ceil(firmwareBytes.length / FIRMWARE_SECTOR_SIZE);
       console.log(
         `Uploading firmware: ${firmwareBytes.length} bytes, ${totalSectors} sectors`
       );
       for (let sector = 0; sector < totalSectors; sector++) {
-        const start = sector * SECTOR_SIZE;
-        const end = Math.min(start + SECTOR_SIZE, firmwareBytes.length);
+        const start = sector * FIRMWARE_SECTOR_SIZE;
+        const end = Math.min(start + FIRMWARE_SECTOR_SIZE, firmwareBytes.length);
         const sectorData = firmwareBytes.slice(start, end);
         console.log(`Sending sector ${sector}`);
         let seq = 0;
-        while (seq * PAYLOAD_SIZE < sectorData.length) {
+        while (seq * FIRMWARE_PAYLOAD_SIZE < sectorData.length) {
           const slice = sectorData.slice(
-            seq * PAYLOAD_SIZE,
-            (seq + 1) * PAYLOAD_SIZE
+            seq * FIRMWARE_PAYLOAD_SIZE,
+            (seq + 1) * FIRMWARE_PAYLOAD_SIZE
           );
           const packet = buildPacket(sector, seq, slice);
           yield otaFirmwareCharacteristic.writeValueWithResponse(packet);
           seq++;
-          yield delay(10);
         }
         const finalPacket = buildFinalPacket(sector, sectorData);
         yield otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
-        const ack = yield waitForAck();
-        const ackSector = ack.getUint16(0, true);
-        const ackStatus = ack.getUint16(2, true);
-        if (ackSector !== sector) {
-          console.error(
-            `Sector mismatch in ACK. Expected: ${sector}, Received: ${ackSector}`
-          );
-          throw new Error("ACK sector mismatch");
-        }
-        switch (ackStatus) {
-          case 0:
-            console.log(`Sector ${sector} uploaded successfully.`);
-            break;
-          case 1:
-            console.warn("CRC error, retrying sector");
-            sector--;
-            break;
-          case 2:
-            const requestedSector = ack.getUint16(4, true);
-            console.warn(`Sector index error, requested: ${requestedSector}`);
-            sector = requestedSector - 1;
-            break;
-          case 3:
-            console.warn("Payload length error, retrying sector");
-            sector--;
-            break;
-          default:
-            throw new Error(`Unknown ACK status: 0x${ackStatus.toString(16)}`);
-        }
       }
       console.log("Firmware upload complete.");
     });
