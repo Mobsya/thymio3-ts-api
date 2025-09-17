@@ -101,7 +101,7 @@ const OTA_SERVICE_UUID = 0x8018;
 const OTA_FIRMWARE_CHARACTERISTIC_UUID = 0x8020;
 const OTA_PROGRESS_BAR_CHARACTERISTIC_UUID = 0x8021;
 const OTA_COMMAND_CHARACTERISTIC_UUID = 0x8022;
-const OTA_CUSTOMER_CHARACATERISTIC_UUID = 0x8023;
+const OTA_CUSTOMER_CHARACTERISTIC_UUID = 0x8023;
 
 let otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic;
 let otaProgressBarCharacteristic: BluetoothRemoteGATTCharacteristic;
@@ -114,6 +114,7 @@ const FIRMWARE_SECTOR_SIZE = 4096; // 4KB;
 
 const THYMIO_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-values';
 const THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-other-values';
+const THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = 'thymio-ota-upload-progress';
 
 let commandCharacteristic: BluetoothRemoteGATTCharacteristic;
 let sensorStreamcharacteristic: BluetoothRemoteGATTCharacteristic;
@@ -705,6 +706,16 @@ async function uploadFirmwareData(firmware: ArrayBuffer): Promise<void> {
     // Send final packet with CRC
     const finalPacket = buildFinalPacket(sector, sectorData);
     await otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
+
+    const uploadProgressData = {
+      sector,
+      totalSectors,
+      percentage: sector / totalSectors
+    };
+    const uploadProgressEvent = new CustomEvent(THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID, {
+      detail: uploadProgressData
+    });
+    document.dispatchEvent(uploadProgressEvent);
   }
 
   console.log("Firmware upload complete.");

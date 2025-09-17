@@ -66,6 +66,7 @@ var FIRMWARE_PAYLOAD_SIZE = MTU - 4;
 var FIRMWARE_SECTOR_SIZE = 4096;
 var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
 var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
+var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
 var commandCharacteristic;
 var sensorStreamcharacteristic;
 var pythonCharacteristic;
@@ -528,6 +529,15 @@ function uploadFirmwareData(firmware) {
       }
       const finalPacket = buildFinalPacket(sector, sectorData);
       yield otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
+      const uploadProgressData = {
+        sector,
+        totalSectors,
+        percentage: sector / totalSectors
+      };
+      const uploadProgressEvent = new CustomEvent(THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID, {
+        detail: uploadProgressData
+      });
+      document.dispatchEvent(uploadProgressEvent);
     }
     console.log("Firmware upload complete.");
   });

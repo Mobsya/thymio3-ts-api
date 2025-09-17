@@ -33,3 +33,12 @@ To generate the `dist` folder, run `npm run build`.
 
 `thymio-sensor-values` - event that exposes the main sensor values
 `thymio-sensor-other-values` - event that exposes the other sensor values
+
+### OTA updates
+
+`thymio.uploadFirmware(firmware)` - upload the OTA update file, which will install itself on the robot and reboot it upon completion
+`thymio.stopFirmwareUpload()` - Stops the current OTA update upload
+
+#### Events
+
+`thymio-ota-upload-progress` - event that exposes the current OTA update upload progress
