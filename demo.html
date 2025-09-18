@@ -308,18 +308,22 @@ while 1:
     </form>
   </div>
 
-  <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
-    <div>
-      <h3>Main Sensor Data</h1>
-      <button onclick="thymio.toggleSensorStreaming()">Toggle main sensor streaming</button>
-      <pre id="sensor-stream-output">Waiting for main sensor data...</pre>
+  <div style="display: flex; flex-direction: column; gap: 1rem;">
+    <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
+      <div>
+        <h3>Main Sensor Data</h1>
+        <button onclick="thymio.startSensorStreaming()">Start main sensor streaming</button>
+        <pre id="sensor-stream-output">Waiting for main sensor data...</pre>
+      </div>
+
+      <div>
+        <h3>Other Sensor Data</h3>
+        <button onclick="thymio.startSensorStreaming(true)">Start other sensor streaming</button>
+        <pre id="sensor-stream-other-output">Waiting for other sensor data...</pre>
+      </div>
     </div>
 
-    <div>
-      <h3>Other Sensor Data</h3>
-      <button onclick="thymio.toggleSensorStreaming(true)">Toggle other sensor streaming</button>
-      <pre id="sensor-stream-other-output">Waiting for other sensor data...</pre>
-    </div>
+    <button onclick="thymio.stopSensorStreaming()">Stop all sensor streaming</button>
   </div>
 
   <div>

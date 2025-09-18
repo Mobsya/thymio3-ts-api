@@ -27,7 +27,8 @@ To generate the `dist` folder, run `npm run build`.
 
 ### Sensor data streaming
 
-`thymio.toggleSensorStreaming(other)` - toggles the sensor streaming
+`thymio.startSensorStreaming(other)` - starts sensor streaming
+`thymio.stopSensorStreaming()` - stops sensor streaming
 
 #### Events
 

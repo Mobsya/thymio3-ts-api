@@ -104,7 +104,6 @@ const OTA_COMMAND_CHARACTERISTIC_UUID = 0x8022;
 const OTA_CUSTOMER_CHARACTERISTIC_UUID = 0x8023;
 
 let otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic;
-let otaProgressBarCharacteristic: BluetoothRemoteGATTCharacteristic;
 let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic;
 
 const MTU = 500;
@@ -166,7 +165,6 @@ async function connect() {
       otaFirmwareCharacteristic.startNotifications();
       otaFirmwareCharacteristic.addEventListener('characteristicvaluechanged', otaFirmwareNotificationHandler);
 
-      otaProgressBarCharacteristic = await otaService.getCharacteristic(OTA_PROGRESS_BAR_CHARACTERISTIC_UUID);
       otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
       otaCommandCharacteristic.startNotifications();
       otaCommandCharacteristic.addEventListener('characteristicvaluechanged', otaCommandNotificationHandler);
@@ -418,10 +416,10 @@ function createScriptPackets(scriptBytes: Uint8Array) {
 //// SENSOR STREAM CHARACTERISTIC
 
 /**
- * Start and stop the sensor streaming. By default, only the main sensors are enabled/disabled.
+ * Start the sensor streaming. By default, only the main sensors are enabled.
  * @param other Enable/disable other sensors
  */
-export async function toggleSensorStreaming(other = false) {
+export async function startSensorStreaming(other = false) {
   const id = 0x01;
 
   let body = 0;
@@ -433,7 +431,19 @@ export async function toggleSensorStreaming(other = false) {
 
   const payload = new Uint8Array([id, body]);
 
-  return await sensorStreamcharacteristic.writeValueWithoutResponse(payload);
+  return await sensorStreamcharacteristic.writeValueWithResponse(payload);
+}
+
+/**
+ * Stop all sensor streaming.
+ */
+export async function stopSensorStreaming() {
+  const id = 0x01;
+
+  const body = 0x00;
+  const payload = new Uint8Array([id, body]);
+
+  return await sensorStreamcharacteristic.writeValueWithResponse(payload);
 }
 
 /**

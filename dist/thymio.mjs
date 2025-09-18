@@ -26,10 +26,8 @@ var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
 var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
 var OTA_SERVICE_UUID = 32792;
 var OTA_FIRMWARE_CHARACTERISTIC_UUID = 32800;
-var OTA_PROGRESS_BAR_CHARACTERISTIC_UUID = 32801;
 var OTA_COMMAND_CHARACTERISTIC_UUID = 32802;
 var otaFirmwareCharacteristic;
-var otaProgressBarCharacteristic;
 var otaCommandCharacteristic;
 var MTU = 500;
 var FIRMWARE_PAYLOAD_SIZE = MTU - 4;
@@ -72,7 +70,6 @@ function connect() {
         otaFirmwareCharacteristic = yield otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
         otaFirmwareCharacteristic.startNotifications();
         otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
-        otaProgressBarCharacteristic = yield otaService.getCharacteristic(OTA_PROGRESS_BAR_CHARACTERISTIC_UUID);
         otaCommandCharacteristic = yield otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
         otaCommandCharacteristic.startNotifications();
         otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
@@ -271,7 +268,7 @@ function createScriptPackets(scriptBytes) {
   }
   return packets;
 }
-function toggleSensorStreaming(other = false) {
+function startSensorStreaming(other = false) {
   return __async(this, null, function* () {
     const id = 1;
     let body = 0;
@@ -281,7 +278,15 @@ function toggleSensorStreaming(other = false) {
       body |= 2;
     }
     const payload = new Uint8Array([id, body]);
-    return yield sensorStreamcharacteristic.writeValueWithoutResponse(payload);
+    return yield sensorStreamcharacteristic.writeValueWithResponse(payload);
+  });
+}
+function stopSensorStreaming() {
+  return __async(this, null, function* () {
+    const id = 1;
+    const body = 0;
+    const payload = new Uint8Array([id, body]);
+    return yield sensorStreamcharacteristic.writeValueWithResponse(payload);
   });
 }
 function handleStreamResponse(event) {
@@ -630,8 +635,9 @@ export {
   requestAndConnect,
   sendPythonScript,
   setActuatorState,
+  startSensorStreaming,
   stopFirmwareUpload,
   stopScriptExecution,
-  toggleSensorStreaming,
+  stopSensorStreaming,
   uploadFirmware
 };

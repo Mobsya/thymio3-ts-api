@@ -97,11 +97,15 @@ declare function sendPythonScript(script: string): Promise<void>;
 declare function executeLoadedScript(): Promise<void>;
 declare function stopScriptExecution(): Promise<void>;
 /**
- * Start and stop the sensor streaming. By default, only the main sensors are enabled/disabled.
+ * Start the sensor streaming. By default, only the main sensors are enabled.
  * @param other Enable/disable other sensors
  */
-declare function toggleSensorStreaming(other?: boolean): Promise<void>;
+declare function startSensorStreaming(other?: boolean): Promise<void>;
+/**
+ * Stop all sensor streaming.
+ */
+declare function stopSensorStreaming(): Promise<void>;
 declare function uploadFirmware(firmware: ArrayBuffer): Promise<void>;
 declare function stopFirmwareUpload(): Promise<void>;
 
-export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, executeLoadedScript, requestAndConnect, sendPythonScript, setActuatorState, stopFirmwareUpload, stopScriptExecution, toggleSensorStreaming, uploadFirmware };
+export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, executeLoadedScript, requestAndConnect, sendPythonScript, setActuatorState, startSensorStreaming, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadFirmware };
