@@ -84,9 +84,17 @@
       const firmware = new Uint8Array(arrayBuffer);
       await thymio.uploadFirmware(firmware);
     }
+
     async function stopOTA() {
       await thymio.stopFirmwareUpload();
     }
+
+    document.addEventListener('thymio-ota-upload-progress', function(e) {
+      const progress = e.detail.percentage;
+      const progressBar = document.getElementById('progress-bar');
+      progressBar.style.width = progress + '%';
+      progressBar.textContent = progress + '%';
+    });
   </script>
   <style>
     body {
@@ -187,6 +195,27 @@
       border-color: #1976d2;
       outline: none;
       box-shadow: 0 0 5px #1976d2;
+    }
+
+    #progress-container {
+      width: 100%;
+      background-color: #eee;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      height: 30px;
+      margin: 20px 0;
+      overflow: hidden;
+    }
+
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background-color: #4caf50;
+      transition: width 0.2s ease;
+      text-align: center;
+      color: white;
+      line-height: 30px;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -331,6 +360,11 @@ while 1:
     <input type="file" id="firmware" />
     <button onclick="uploadOTA()">Start OTA</button>
     <button onclick="stopOTA()">Stop OTA Upload</button>
+
+    <h4>Upload progress</h4>
+    <div id="progress-container">
+      <div id="progress-bar">0%</div>
+    </div>
   </div>
 
 </body>

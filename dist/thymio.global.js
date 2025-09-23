@@ -1222,9 +1222,9 @@ var thymio = (() => {
       var ObjectUnsubscribedError_1 = require_ObjectUnsubscribedError();
       var arrRemove_1 = require_arrRemove();
       var errorContext_1 = require_errorContext();
-      var Subject2 = (function(_super) {
-        __extends(Subject3, _super);
-        function Subject3() {
+      var Subject = (function(_super) {
+        __extends(Subject2, _super);
+        function Subject2() {
           var _this = _super.call(this) || this;
           _this.closed = false;
           _this.currentObservers = null;
@@ -1234,17 +1234,17 @@ var thymio = (() => {
           _this.thrownError = null;
           return _this;
         }
-        Subject3.prototype.lift = function(operator) {
+        Subject2.prototype.lift = function(operator) {
           var subject = new AnonymousSubject(this, this);
           subject.operator = operator;
           return subject;
         };
-        Subject3.prototype._throwIfClosed = function() {
+        Subject2.prototype._throwIfClosed = function() {
           if (this.closed) {
             throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
           }
         };
-        Subject3.prototype.next = function(value) {
+        Subject2.prototype.next = function(value) {
           var _this = this;
           errorContext_1.errorContext(function() {
             var e_1, _a;
@@ -1270,7 +1270,7 @@ var thymio = (() => {
             }
           });
         };
-        Subject3.prototype.error = function(err) {
+        Subject2.prototype.error = function(err) {
           var _this = this;
           errorContext_1.errorContext(function() {
             _this._throwIfClosed();
@@ -1284,7 +1284,7 @@ var thymio = (() => {
             }
           });
         };
-        Subject3.prototype.complete = function() {
+        Subject2.prototype.complete = function() {
           var _this = this;
           errorContext_1.errorContext(function() {
             _this._throwIfClosed();
@@ -1297,11 +1297,11 @@ var thymio = (() => {
             }
           });
         };
-        Subject3.prototype.unsubscribe = function() {
+        Subject2.prototype.unsubscribe = function() {
           this.isStopped = this.closed = true;
           this.observers = this.currentObservers = null;
         };
-        Object.defineProperty(Subject3.prototype, "observed", {
+        Object.defineProperty(Subject2.prototype, "observed", {
           get: function() {
             var _a;
             return ((_a = this.observers) === null || _a === void 0 ? void 0 : _a.length) > 0;
@@ -1309,16 +1309,16 @@ var thymio = (() => {
           enumerable: false,
           configurable: true
         });
-        Subject3.prototype._trySubscribe = function(subscriber) {
+        Subject2.prototype._trySubscribe = function(subscriber) {
           this._throwIfClosed();
           return _super.prototype._trySubscribe.call(this, subscriber);
         };
-        Subject3.prototype._subscribe = function(subscriber) {
+        Subject2.prototype._subscribe = function(subscriber) {
           this._throwIfClosed();
           this._checkFinalizedStatuses(subscriber);
           return this._innerSubscribe(subscriber);
         };
-        Subject3.prototype._innerSubscribe = function(subscriber) {
+        Subject2.prototype._innerSubscribe = function(subscriber) {
           var _this = this;
           var _a = this, hasError = _a.hasError, isStopped = _a.isStopped, observers = _a.observers;
           if (hasError || isStopped) {
@@ -1331,7 +1331,7 @@ var thymio = (() => {
             arrRemove_1.arrRemove(observers, subscriber);
           });
         };
-        Subject3.prototype._checkFinalizedStatuses = function(subscriber) {
+        Subject2.prototype._checkFinalizedStatuses = function(subscriber) {
           var _a = this, hasError = _a.hasError, thrownError = _a.thrownError, isStopped = _a.isStopped;
           if (hasError) {
             subscriber.error(thrownError);
@@ -1339,17 +1339,17 @@ var thymio = (() => {
             subscriber.complete();
           }
         };
-        Subject3.prototype.asObservable = function() {
+        Subject2.prototype.asObservable = function() {
           var observable = new Observable_1.Observable();
           observable.source = this;
           return observable;
         };
-        Subject3.create = function(destination, source) {
+        Subject2.create = function(destination, source) {
           return new AnonymousSubject(destination, source);
         };
-        return Subject3;
+        return Subject2;
       })(Observable_1.Observable);
-      exports.Subject = Subject2;
+      exports.Subject = Subject;
       var AnonymousSubject = (function(_super) {
         __extends(AnonymousSubject2, _super);
         function AnonymousSubject2(destination, source) {
@@ -1375,7 +1375,7 @@ var thymio = (() => {
           return (_b = (_a = this.source) === null || _a === void 0 ? void 0 : _a.subscribe(subscriber)) !== null && _b !== void 0 ? _b : Subscription_1.EMPTY_SUBSCRIPTION;
         };
         return AnonymousSubject2;
-      })(Subject2);
+      })(Subject);
       exports.AnonymousSubject = AnonymousSubject;
     }
   });
@@ -9918,7 +9918,7 @@ var thymio = (() => {
       const uploadProgressData = {
         sector,
         totalSectors,
-        percentage: sector / totalSectors
+        percentage: sector / totalSectors * 100
       };
       const uploadProgressEvent = new CustomEvent(THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID, {
         detail: uploadProgressData

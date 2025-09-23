@@ -741,7 +741,7 @@ async function uploadFirmwareData(firmware: ArrayBuffer): Promise<void> {
     const uploadProgressData = {
       sector,
       totalSectors,
-      percentage: sector / totalSectors
+      percentage: (sector / totalSectors) * 100
     };
     const uploadProgressEvent = new CustomEvent(THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID, {
       detail: uploadProgressData
