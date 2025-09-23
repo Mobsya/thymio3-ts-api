@@ -7,6 +7,6 @@ export default defineConfig({
   dts: true,               // generate .d.ts files
   sourcemap: true,         // helpful for debugging
   clean: true,             // clean dist folder before build
-//  external: ['rxjs'],      // don't bundle rxjs
-  target: 'es2020',        // or whatever target you prefer
+  external: ['rxjs'],      // don't bundle rxjs
+  target: 'esnext',        // or whatever target you prefer
 });

@@ -1,5 +1,7 @@
 /// <reference types="web-bluetooth" />
 
+import { BehaviorSubject, filter, firstValueFrom, timeout } from "rxjs";
+
 export type RGB = {
   r: number, // number 0-15
   g: number, // number 0-15
@@ -114,6 +116,9 @@ const FIRMWARE_SECTOR_SIZE = 4096; // 4KB;
 const THYMIO_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-values';
 const THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-other-values';
 const THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = 'thymio-ota-upload-progress';
+
+let otaCommandResponse$: BehaviorSubject<boolean>;
+let otaSectorUploadResponse$: BehaviorSubject<number>;
 
 let commandCharacteristic: BluetoothRemoteGATTCharacteristic;
 let sensorStreamcharacteristic: BluetoothRemoteGATTCharacteristic;
@@ -608,8 +613,10 @@ function parseOtherSensorData(bytes: Uint8Array): OtherSensorData {
 
 export async function uploadFirmware(firmware: ArrayBuffer): Promise<void> {
   // Start the OTA
+  otaCommandResponse$ = new BehaviorSubject<boolean>(false);
   await startOTA(firmware.byteLength);
 
+  otaSectorUploadResponse$ = new BehaviorSubject<number>(0);
   // Send the firmware
   return await uploadFirmwareData(firmware);
 }
@@ -637,7 +644,14 @@ async function startOTA(firmwareLength: number): Promise<void> {
 
   // Send packet
   const packet = new Uint8Array(buffer);
-  return await otaCommandCharacteristic.writeValueWithResponse(packet);
+  await otaCommandCharacteristic.writeValueWithResponse(packet);
+
+  await firstValueFrom(
+    otaCommandResponse$.pipe(
+      filter(res => res),
+      timeout(10000) // timeout of 3 seconds
+    )
+  );
 }
 
 async function stopOTA(): Promise<void> {
@@ -717,6 +731,13 @@ async function uploadFirmwareData(firmware: ArrayBuffer): Promise<void> {
     const finalPacket = buildFinalPacket(sector, sectorData);
     await otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
 
+    await firstValueFrom(
+      otaSectorUploadResponse$.pipe(
+        filter(res => res === sector),
+        timeout(10000) // timeout of 3 seconds
+      )
+    );
+
     const uploadProgressData = {
       sector,
       totalSectors,
@@ -747,15 +768,18 @@ function otaCommandNotificationHandler(event: Event) {
     const crcInput = new Uint8Array(buffer, 0, 18);
     const calculatedCRC = crc16_ccitt(crcInput);
     if (calculatedCRC !== crc) {
-        console.log("Command response CRC error");
+      otaCommandResponse$.error(new Error(`OTA CRC error: the transmitted crc is ${crc}, while the calculated crc is ${calculatedCRC}`));
     }
 
-    if(response === 0x0000) {
-      console.log("Command accepted.");
-    } else if (response === 0x0001) {
-      console.log("Command rejected");
-    } else {
-      throw new Error("Unknown command response");
+    switch(response) {
+      case 0x0000:
+        otaCommandResponse$.next(true);
+        break;
+      case 0x0001:
+        otaCommandResponse$.error(new Error(`Command rejected`));
+        break;
+      default:
+        otaCommandResponse$.error(new Error("Unknown command response"));
     }
   }
 }
@@ -778,7 +802,7 @@ function otaFirmwareNotificationHandler(event: Event) {
     const crcInput = new Uint8Array(buffer, 0, 18);
     const calculatedCRC = crc16_ccitt(crcInput);
     if (calculatedCRC !== crc) {
-        console.log("Command response CRC error");
+      otaSectorUploadResponse$.error(new Error(`OTA CRC error: the transmitted crc is ${crc}, while the calculated crc is ${calculatedCRC}`));
     }
 
     switch(status) {
@@ -786,17 +810,19 @@ function otaFirmwareNotificationHandler(event: Event) {
         console.log("Success");
         break;
       case 0x0001:
-        console.log("CRC Error");
+        otaSectorUploadResponse$.error(new Error(`CRC Error`));
         break;
       case 0x0002:
-        console.log(`Sector Index error. Desired sector: ${desiredSector}`);
+        otaSectorUploadResponse$.error(new Error(`Sector Index error. Desired sector: ${desiredSector}`));
         break;
       case 0x0003:
-        console.log("Payload length error");
+        otaSectorUploadResponse$.error(new Error(`Payload length error`));
         break;
       default:
-        throw new Error('Unknown response status');
+        otaSectorUploadResponse$.error(new Error('Unknown response status'));
     }
+
+    otaSectorUploadResponse$.next(sectorIndex);
   }
 }
 

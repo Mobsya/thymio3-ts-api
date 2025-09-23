@@ -31,6 +31,7 @@ __export(thymio_exports, {
   uploadFirmware: () => uploadFirmware
 });
 module.exports = __toCommonJS(thymio_exports);
+var import_rxjs = require("rxjs");
 var MAIN_SERVICE_UUID = "0000abf0-0000-1000-8000-00805f9b34fb";
 var COMMAND_CHARACTERISTIC_UUID = "0000abf1-0000-1000-8000-00805f9b34fb";
 var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
@@ -46,6 +47,8 @@ var FIRMWARE_SECTOR_SIZE = 4096;
 var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
 var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
 var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
+var otaCommandResponse$;
+var otaSectorUploadResponse$;
 var commandCharacteristic;
 var sensorStreamcharacteristic;
 var pythonCharacteristic;
@@ -436,7 +439,9 @@ function parseOtherSensorData(bytes) {
   };
 }
 async function uploadFirmware(firmware) {
+  otaCommandResponse$ = new import_rxjs.BehaviorSubject(false);
   await startOTA(firmware.byteLength);
+  otaSectorUploadResponse$ = new import_rxjs.BehaviorSubject(0);
   return await uploadFirmwareData(firmware);
 }
 async function stopFirmwareUpload() {
@@ -451,7 +456,14 @@ async function startOTA(firmwareLength) {
   const crc = crc16_ccitt(crcInput);
   view.setUint16(18, crc, true);
   const packet = new Uint8Array(buffer);
-  return await otaCommandCharacteristic.writeValueWithResponse(packet);
+  await otaCommandCharacteristic.writeValueWithResponse(packet);
+  await (0, import_rxjs.firstValueFrom)(
+    otaCommandResponse$.pipe(
+      (0, import_rxjs.filter)((res) => res),
+      (0, import_rxjs.timeout)(1e4)
+      // timeout of 3 seconds
+    )
+  );
 }
 async function stopOTA() {
   const buffer = new ArrayBuffer(20);
@@ -486,6 +498,13 @@ async function uploadFirmwareData(firmware) {
     }
     const finalPacket = buildFinalPacket(sector, sectorData);
     await otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
+    await (0, import_rxjs.firstValueFrom)(
+      otaSectorUploadResponse$.pipe(
+        (0, import_rxjs.filter)((res) => res === sector),
+        (0, import_rxjs.timeout)(1e4)
+        // timeout of 3 seconds
+      )
+    );
     const uploadProgressData = {
       sector,
       totalSectors,
@@ -510,14 +529,17 @@ function otaCommandNotificationHandler(event) {
     const crcInput = new Uint8Array(buffer, 0, 18);
     const calculatedCRC = crc16_ccitt(crcInput);
     if (calculatedCRC !== crc) {
-      console.log("Command response CRC error");
+      otaCommandResponse$.error(new Error(`OTA CRC error: the transmitted crc is ${crc}, while the calculated crc is ${calculatedCRC}`));
     }
-    if (response === 0) {
-      console.log("Command accepted.");
-    } else if (response === 1) {
-      console.log("Command rejected");
-    } else {
-      throw new Error("Unknown command response");
+    switch (response) {
+      case 0:
+        otaCommandResponse$.next(true);
+        break;
+      case 1:
+        otaCommandResponse$.error(new Error(`Command rejected`));
+        break;
+      default:
+        otaCommandResponse$.error(new Error("Unknown command response"));
     }
   }
 }
@@ -533,24 +555,25 @@ function otaFirmwareNotificationHandler(event) {
     const crcInput = new Uint8Array(buffer, 0, 18);
     const calculatedCRC = crc16_ccitt(crcInput);
     if (calculatedCRC !== crc) {
-      console.log("Command response CRC error");
+      otaSectorUploadResponse$.error(new Error(`OTA CRC error: the transmitted crc is ${crc}, while the calculated crc is ${calculatedCRC}`));
     }
     switch (status) {
       case 0:
         console.log("Success");
         break;
       case 1:
-        console.log("CRC Error");
+        otaSectorUploadResponse$.error(new Error(`CRC Error`));
         break;
       case 2:
-        console.log(`Sector Index error. Desired sector: ${desiredSector}`);
+        otaSectorUploadResponse$.error(new Error(`Sector Index error. Desired sector: ${desiredSector}`));
         break;
       case 3:
-        console.log("Payload length error");
+        otaSectorUploadResponse$.error(new Error(`Payload length error`));
         break;
       default:
-        throw new Error("Unknown response status");
+        otaSectorUploadResponse$.error(new Error("Unknown response status"));
     }
+    otaSectorUploadResponse$.next(sectorIndex);
   }
 }
 function buildPacket(sectorIndex, seq, payload) {
@@ -606,9 +629,9 @@ function computeCRC32(buf, crc = 4294967295) {
   }
   return crc & 4294967295;
 }
-function delay(timeout) {
+function delay(timeout2) {
   return new Promise((resolve) => {
-    setTimeout(() => resolve(), timeout);
+    setTimeout(() => resolve(), timeout2);
   });
 }
 // Annotate the CommonJS export names for ESM import in node:
