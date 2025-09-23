@@ -16,26 +16,6 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var __async = (__this, __arguments, generator) => {
-  return new Promise((resolve, reject) => {
-    var fulfilled = (value) => {
-      try {
-        step(generator.next(value));
-      } catch (e) {
-        reject(e);
-      }
-    };
-    var rejected = (value) => {
-      try {
-        step(generator.throw(value));
-      } catch (e) {
-        reject(e);
-      }
-    };
-    var step = (x) => x.done ? resolve(x.value) : Promise.resolve(x.value).then(fulfilled, rejected);
-    step((generator = generator.apply(__this, __arguments)).next());
-  });
-};
 
 // thymio.ts
 var thymio_exports = {};
@@ -71,47 +51,43 @@ var sensorStreamcharacteristic;
 var pythonCharacteristic;
 var reconnecting = false;
 var device;
-function requestAndConnect() {
-  return __async(this, null, function* () {
-    device = yield navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "THYMIO" }],
-      optionalServices: [
-        MAIN_SERVICE_UUID,
-        OTA_SERVICE_UUID
-      ]
-    });
-    device.addEventListener("gattserverdisconnected", onDisconnected);
-    yield connect();
+async function requestAndConnect() {
+  device = await navigator.bluetooth.requestDevice({
+    filters: [{ namePrefix: "THYMIO" }],
+    optionalServices: [
+      MAIN_SERVICE_UUID,
+      OTA_SERVICE_UUID
+    ]
   });
+  device.addEventListener("gattserverdisconnected", onDisconnected);
+  await connect();
 }
-function connect() {
-  return __async(this, null, function* () {
-    if (device.gatt) {
-      try {
-        const server = yield device.gatt.connect();
-        const mainService = yield server.getPrimaryService(MAIN_SERVICE_UUID);
-        commandCharacteristic = yield mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
-        sensorStreamcharacteristic = yield mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
-        yield sensorStreamcharacteristic.startNotifications();
-        sensorStreamcharacteristic.addEventListener("characteristicvaluechanged", handleStreamResponse);
-        pythonCharacteristic = yield mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
-        yield pythonCharacteristic.startNotifications();
-        pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
-        const otaService = yield server.getPrimaryService(OTA_SERVICE_UUID);
-        otaFirmwareCharacteristic = yield otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
-        otaFirmwareCharacteristic.startNotifications();
-        otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
-        otaCommandCharacteristic = yield otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
-        otaCommandCharacteristic.startNotifications();
-        otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
-      } catch (e) {
-        console.error(`Could not connect to Thymio 3.`, e);
-      }
-      console.log("\u2705 Connected to Thymio 3 !");
-    } else {
-      throw new Error("Bluetooth GATT is not available.");
+async function connect() {
+  if (device.gatt) {
+    try {
+      const server = await device.gatt.connect();
+      const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
+      commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
+      sensorStreamcharacteristic = await mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
+      await sensorStreamcharacteristic.startNotifications();
+      sensorStreamcharacteristic.addEventListener("characteristicvaluechanged", handleStreamResponse);
+      pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
+      await pythonCharacteristic.startNotifications();
+      pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
+      const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
+      otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
+      otaFirmwareCharacteristic.startNotifications();
+      otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
+      otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
+      otaCommandCharacteristic.startNotifications();
+      otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
+    } catch (e) {
+      console.error(`Could not connect to Thymio 3.`, e);
     }
-  });
+    console.log("\u2705 Connected to Thymio 3 !");
+  } else {
+    throw new Error("Bluetooth GATT is not available.");
+  }
 }
 function onDisconnected() {
   console.log("\u26A0\uFE0F Disconnected. Attempting to reconnect...");
@@ -120,31 +96,27 @@ function onDisconnected() {
     retryConnection();
   }
 }
-function retryConnection() {
-  return __async(this, null, function* () {
-    let attempts = 0;
-    const maxAttempts = 10;
-    while (attempts < maxAttempts) {
-      try {
-        yield delay(2e3);
-        if (!device.gatt.connected) {
-          yield connect();
-          reconnecting = false;
-          return;
-        }
-      } catch (e) {
-        console.warn(`Retry ${attempts + 1} failed:`, e);
+async function retryConnection() {
+  let attempts = 0;
+  const maxAttempts = 10;
+  while (attempts < maxAttempts) {
+    try {
+      await delay(2e3);
+      if (!device.gatt.connected) {
+        await connect();
+        reconnecting = false;
+        return;
       }
-      attempts++;
+    } catch (e) {
+      console.warn(`Retry ${attempts + 1} failed:`, e);
     }
-    console.log(`\u274C Failed to reconnect after ${attempts} attempts`);
-  });
+    attempts++;
+  }
+  console.log(`\u274C Failed to reconnect after ${attempts} attempts`);
 }
-function setActuatorState(actuatorData) {
-  return __async(this, null, function* () {
-    const commandArray = createCommandByteArray(actuatorData);
-    yield commandCharacteristic.writeValue(commandArray);
-  });
+async function setActuatorState(actuatorData) {
+  const commandArray = createCommandByteArray(actuatorData);
+  await commandCharacteristic.writeValue(commandArray);
 }
 function createCommandByteArray({
   circleLEDs,
@@ -209,27 +181,21 @@ function createCommandByteArray({
   offset++;
   return new Uint8Array(buffer);
 }
-function sendPythonScript(script) {
-  return __async(this, null, function* () {
-    const encoder = new TextEncoder();
-    const scriptDataArray = encoder.encode(script);
-    const packets = createScriptPackets(scriptDataArray);
-    for (const packet of packets) {
-      yield pythonCharacteristic.writeValueWithResponse(packet);
-    }
-  });
+async function sendPythonScript(script) {
+  const encoder = new TextEncoder();
+  const scriptDataArray = encoder.encode(script);
+  const packets = createScriptPackets(scriptDataArray);
+  for (const packet of packets) {
+    await pythonCharacteristic.writeValueWithResponse(packet);
+  }
 }
-function executeLoadedScript() {
-  return __async(this, null, function* () {
-    const packet = new Uint8Array([2]);
-    yield pythonCharacteristic.writeValueWithResponse(packet);
-  });
+async function executeLoadedScript() {
+  const packet = new Uint8Array([2]);
+  await pythonCharacteristic.writeValueWithResponse(packet);
 }
-function stopScriptExecution() {
-  return __async(this, null, function* () {
-    const packet = new Uint8Array([3]);
-    yield pythonCharacteristic.writeValueWithResponse(packet);
-  });
+async function stopScriptExecution() {
+  const packet = new Uint8Array([3]);
+  await pythonCharacteristic.writeValueWithResponse(packet);
 }
 function handlePythonResponse(event) {
   const value = event.target.value;
@@ -299,48 +265,42 @@ function createScriptPackets(scriptBytes) {
   }
   return packets;
 }
-function startSensorStreaming(other = false) {
-  return __async(this, null, function* () {
-    const id = 1;
-    let body = 0;
-    if (!other) {
-      body |= 1;
-    } else {
-      body |= 2;
-    }
-    const payload = new Uint8Array([id, body]);
-    return yield sensorStreamcharacteristic.writeValueWithResponse(payload);
-  });
+async function startSensorStreaming(other = false) {
+  const id = 1;
+  let body = 0;
+  if (!other) {
+    body |= 1;
+  } else {
+    body |= 2;
+  }
+  const payload = new Uint8Array([id, body]);
+  return await sensorStreamcharacteristic.writeValueWithResponse(payload);
 }
-function stopSensorStreaming() {
-  return __async(this, null, function* () {
-    const id = 1;
-    const body = 0;
-    const payload = new Uint8Array([id, body]);
-    return yield sensorStreamcharacteristic.writeValueWithResponse(payload);
-  });
+async function stopSensorStreaming() {
+  const id = 1;
+  const body = 0;
+  const payload = new Uint8Array([id, body]);
+  return await sensorStreamcharacteristic.writeValueWithResponse(payload);
 }
-function handleStreamResponse(event) {
-  return __async(this, null, function* () {
-    const value = event.target.value;
-    if (value) {
-      const id = value.getUint8(0);
-      const data = new Uint8Array(value.buffer.slice(1));
-      if (id === 1) {
-        const sensorsData = parseSensorsData(data);
-        const mostValuesEvent = new CustomEvent(THYMIO_SENSOR_VALUES_EVENT_ID, {
-          detail: sensorsData
-        });
-        document.dispatchEvent(mostValuesEvent);
-      } else if (id === 2) {
-        const otherSensorData = parseOtherSensorData(data);
-        const otherValueEvent = new CustomEvent(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, {
-          detail: otherSensorData
-        });
-        document.dispatchEvent(otherValueEvent);
-      }
+async function handleStreamResponse(event) {
+  const value = event.target.value;
+  if (value) {
+    const id = value.getUint8(0);
+    const data = new Uint8Array(value.buffer.slice(1));
+    if (id === 1) {
+      const sensorsData = parseSensorsData(data);
+      const mostValuesEvent = new CustomEvent(THYMIO_SENSOR_VALUES_EVENT_ID, {
+        detail: sensorsData
+      });
+      document.dispatchEvent(mostValuesEvent);
+    } else if (id === 2) {
+      const otherSensorData = parseOtherSensorData(data);
+      const otherValueEvent = new CustomEvent(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, {
+        detail: otherSensorData
+      });
+      document.dispatchEvent(otherValueEvent);
     }
-  });
+  }
 }
 function parseSensorsData(bytes) {
   if (bytes.length !== 38) {
@@ -475,78 +435,68 @@ function parseOtherSensorData(bytes) {
     batteryVoltage
   };
 }
-function uploadFirmware(firmware) {
-  return __async(this, null, function* () {
-    yield startOTA(firmware.byteLength);
-    return yield uploadFirmwareData(firmware);
-  });
+async function uploadFirmware(firmware) {
+  await startOTA(firmware.byteLength);
+  return await uploadFirmwareData(firmware);
 }
-function stopFirmwareUpload() {
-  return __async(this, null, function* () {
-    return yield stopOTA();
-  });
+async function stopFirmwareUpload() {
+  return await stopOTA();
 }
-function startOTA(firmwareLength) {
-  return __async(this, null, function* () {
-    const buffer = new ArrayBuffer(20);
-    const view = new DataView(buffer);
-    view.setUint16(0, 1, true);
-    view.setUint32(2, firmwareLength, true);
-    const crcInput = new Uint8Array(buffer, 0, 18);
-    const crc = crc16_ccitt(crcInput);
-    view.setUint16(18, crc, true);
-    const packet = new Uint8Array(buffer);
-    return yield otaCommandCharacteristic.writeValueWithResponse(packet);
-  });
+async function startOTA(firmwareLength) {
+  const buffer = new ArrayBuffer(20);
+  const view = new DataView(buffer);
+  view.setUint16(0, 1, true);
+  view.setUint32(2, firmwareLength, true);
+  const crcInput = new Uint8Array(buffer, 0, 18);
+  const crc = crc16_ccitt(crcInput);
+  view.setUint16(18, crc, true);
+  const packet = new Uint8Array(buffer);
+  return await otaCommandCharacteristic.writeValueWithResponse(packet);
 }
-function stopOTA() {
-  return __async(this, null, function* () {
-    const buffer = new ArrayBuffer(20);
-    const view = new DataView(buffer);
-    view.setUint16(0, 2, true);
-    const crcInput = new Uint8Array(buffer, 0, 18);
-    const crc = crc16_ccitt(crcInput);
-    view.setUint16(18, crc, true);
-    const packet = new Uint8Array(buffer);
-    return yield otaCommandCharacteristic.writeValueWithResponse(packet);
-  });
+async function stopOTA() {
+  const buffer = new ArrayBuffer(20);
+  const view = new DataView(buffer);
+  view.setUint16(0, 2, true);
+  const crcInput = new Uint8Array(buffer, 0, 18);
+  const crc = crc16_ccitt(crcInput);
+  view.setUint16(18, crc, true);
+  const packet = new Uint8Array(buffer);
+  return await otaCommandCharacteristic.writeValueWithResponse(packet);
 }
-function uploadFirmwareData(firmware) {
-  return __async(this, null, function* () {
-    const firmwareBytes = new Uint8Array(firmware);
-    const totalSectors = Math.ceil(firmwareBytes.length / FIRMWARE_SECTOR_SIZE);
-    console.log(
-      `Uploading firmware: ${firmwareBytes.length} bytes, ${totalSectors} sectors`
-    );
-    for (let sector = 0; sector < totalSectors; sector++) {
-      const start = sector * FIRMWARE_SECTOR_SIZE;
-      const end = Math.min(start + FIRMWARE_SECTOR_SIZE, firmwareBytes.length);
-      const sectorData = firmwareBytes.slice(start, end);
-      console.log(`Sending sector ${sector}`);
-      let seq = 0;
-      while (seq * FIRMWARE_PAYLOAD_SIZE < sectorData.length) {
-        const slice = sectorData.slice(
-          seq * FIRMWARE_PAYLOAD_SIZE,
-          (seq + 1) * FIRMWARE_PAYLOAD_SIZE
-        );
-        const packet = buildPacket(sector, seq, slice);
-        yield otaFirmwareCharacteristic.writeValueWithResponse(packet);
-        seq++;
-      }
-      const finalPacket = buildFinalPacket(sector, sectorData);
-      yield otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
-      const uploadProgressData = {
-        sector,
-        totalSectors,
-        percentage: sector / totalSectors
-      };
-      const uploadProgressEvent = new CustomEvent(THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID, {
-        detail: uploadProgressData
-      });
-      document.dispatchEvent(uploadProgressEvent);
+async function uploadFirmwareData(firmware) {
+  const firmwareBytes = new Uint8Array(firmware);
+  const totalSectors = Math.ceil(firmwareBytes.length / FIRMWARE_SECTOR_SIZE);
+  console.log(
+    `Uploading firmware: ${firmwareBytes.length} bytes, ${totalSectors} sectors`
+  );
+  for (let sector = 0; sector < totalSectors; sector++) {
+    const start = sector * FIRMWARE_SECTOR_SIZE;
+    const end = Math.min(start + FIRMWARE_SECTOR_SIZE, firmwareBytes.length);
+    const sectorData = firmwareBytes.slice(start, end);
+    console.log(`Sending sector ${sector}`);
+    let seq = 0;
+    while (seq * FIRMWARE_PAYLOAD_SIZE < sectorData.length) {
+      const slice = sectorData.slice(
+        seq * FIRMWARE_PAYLOAD_SIZE,
+        (seq + 1) * FIRMWARE_PAYLOAD_SIZE
+      );
+      const packet = buildPacket(sector, seq, slice);
+      await otaFirmwareCharacteristic.writeValueWithResponse(packet);
+      seq++;
     }
-    console.log("Firmware upload complete.");
-  });
+    const finalPacket = buildFinalPacket(sector, sectorData);
+    await otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
+    const uploadProgressData = {
+      sector,
+      totalSectors,
+      percentage: sector / totalSectors
+    };
+    const uploadProgressEvent = new CustomEvent(THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID, {
+      detail: uploadProgressData
+    });
+    document.dispatchEvent(uploadProgressEvent);
+  }
+  console.log("Firmware upload complete.");
 }
 function otaCommandNotificationHandler(event) {
   const value = event.target.value;
@@ -673,3 +623,4 @@ function delay(timeout) {
   stopSensorStreaming,
   uploadFirmware
 });
+//# sourceMappingURL=thymio.js.map
