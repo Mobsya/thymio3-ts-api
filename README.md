@@ -16,6 +16,8 @@ To generate the `dist` folder, run `npm run build`.
 
 ### Connection
 `thymio.requestAndConnect()` - requests the Thymio through Bluetooth and pairs it to the browser
+`thymio.isConnected()` - returns true if Thymio device is connected
+`thymio.disconnect()` - disconnects the Thymio device
 
 ### Actuators
 `thymio.setActuatorState(actuatorData)` - sets the actuator data on the Thymio
