@@ -120,17 +120,17 @@ const THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = 'thymio-ota-upload-progress';
 let otaCommandResponse$: BehaviorSubject<boolean>;
 let otaSectorUploadResponse$: BehaviorSubject<number>;
 
+let device: BluetoothDevice;
+let reconnecting = false;
 let commandCharacteristic: BluetoothRemoteGATTCharacteristic;
 let sensorStreamcharacteristic: BluetoothRemoteGATTCharacteristic;
 let pythonCharacteristic: BluetoothRemoteGATTCharacteristic;
 
-let reconnecting = false;
-let device: BluetoothDevice;
 
 /**
  * Request a bluetooth device and connect to it.
  */
-export async function requestAndConnect() {
+export async function requestAndConnect(): Promise<void> {
   device = await navigator.bluetooth.requestDevice({
     filters: [{ namePrefix: 'THYMIO' }],
     optionalServices: [
@@ -143,6 +143,19 @@ export async function requestAndConnect() {
   device.addEventListener('gattserverdisconnected', onDisconnected);
 
   await connect();
+}
+
+export function isConnected(): boolean {
+  if(device && device.gatt) {
+    return device.gatt.connected;
+  } else {
+    return false;
+  }
+}
+
+export async function disconnect(): Promise<void> {
+  device.removeEventListener('gattserverdisconnected', onDisconnected);
+  await device.gatt?.disconnect();
 }
 
 /**

@@ -88,6 +88,8 @@ type OtherSensorData = {
  * Request a bluetooth device and connect to it.
  */
 declare function requestAndConnect(): Promise<void>;
+declare function isConnected(): boolean;
+declare function disconnect(): Promise<void>;
 /**
  * Set the state of the Thymio 3 actuators.
  * @param {*} actuatorData
@@ -108,4 +110,4 @@ declare function stopSensorStreaming(): Promise<void>;
 declare function uploadFirmware(firmware: ArrayBuffer): Promise<void>;
 declare function stopFirmwareUpload(): Promise<void>;
 
-export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, executeLoadedScript, requestAndConnect, sendPythonScript, setActuatorState, startSensorStreaming, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadFirmware };
+export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, disconnect, executeLoadedScript, isConnected, requestAndConnect, sendPythonScript, setActuatorState, startSensorStreaming, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadFirmware };

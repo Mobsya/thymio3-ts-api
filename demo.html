@@ -19,10 +19,6 @@
     };
 
 
-    function connectClick() {
-      thymio.requestAndConnect();
-    }
-
     async function executeClick() {
       const code = document.getElementById('code-input').value;
       await thymio.sendPythonScript(code);
@@ -223,7 +219,11 @@
 
   <h1>Thymio 3 Test</h1>
 
-  <button onclick="connectClick()">Connect</button>
+  <div>
+    <button onclick="thymio.requestAndConnect()">Connect</button>
+    <button onclick="thymio.disconnect()">Disconnect</button>
+  </div>
+
   <div>
     <textarea id="code-input">
 import thymio

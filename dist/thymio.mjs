@@ -17,11 +17,11 @@ var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
 var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
 var otaCommandResponse$;
 var otaSectorUploadResponse$;
+var device;
+var reconnecting = false;
 var commandCharacteristic;
 var sensorStreamcharacteristic;
 var pythonCharacteristic;
-var reconnecting = false;
-var device;
 async function requestAndConnect() {
   device = await navigator.bluetooth.requestDevice({
     filters: [{ namePrefix: "THYMIO" }],
@@ -32,6 +32,17 @@ async function requestAndConnect() {
   });
   device.addEventListener("gattserverdisconnected", onDisconnected);
   await connect();
+}
+function isConnected() {
+  if (device && device.gatt) {
+    return device.gatt.connected;
+  } else {
+    return false;
+  }
+}
+async function disconnect() {
+  device.removeEventListener("gattserverdisconnected", onDisconnected);
+  await device.gatt?.disconnect();
 }
 async function connect() {
   if (device.gatt) {
@@ -603,7 +614,9 @@ function delay(timeout2) {
   });
 }
 export {
+  disconnect,
   executeLoadedScript,
+  isConnected,
   requestAndConnect,
   sendPythonScript,
   setActuatorState,
