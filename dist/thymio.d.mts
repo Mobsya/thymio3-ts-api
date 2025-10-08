@@ -84,6 +84,11 @@ type OtherSensorData = {
     };
     batteryVoltage: number;
 };
+type UploadProgress = {
+    uploadedPackets: number;
+    totalPackets: number;
+    percentage: number;
+};
 /**
  * Request a bluetooth device and connect to it.
  */
@@ -109,5 +114,23 @@ declare function startSensorStreaming(other?: boolean): Promise<void>;
 declare function stopSensorStreaming(): Promise<void>;
 declare function uploadFirmware(firmware: ArrayBuffer): Promise<void>;
 declare function stopFirmwareUpload(): Promise<void>;
+/**
+ * Upload a custom audio file.
+ * @param file The audio file to upload.
+ */
+declare function uploadAudioFile(file: File): Promise<void>;
+/**
+ * Play the audio file that is currently in memory.
+ */
+declare function playAudioFile(): Promise<void>;
+/**
+ * Stop the audio file that is currently playing.
+ */
+declare function stopAudioFile(): Promise<void>;
+/**
+ * Start recording audio to memory.
+ * @param duration The duration of the recording (maximum 10 seconds).
+ */
+declare function recordAudio(duration: number): Promise<void>;
 
-export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, disconnect, executeLoadedScript, isConnected, requestAndConnect, sendPythonScript, setActuatorState, startSensorStreaming, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadFirmware };
+export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, type UploadProgress, disconnect, executeLoadedScript, isConnected, playAudioFile, recordAudio, requestAndConnect, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFirmware };

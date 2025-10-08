@@ -9434,13 +9434,17 @@ var thymio = (() => {
     disconnect: () => disconnect,
     executeLoadedScript: () => executeLoadedScript,
     isConnected: () => isConnected,
+    playAudioFile: () => playAudioFile,
+    recordAudio: () => recordAudio,
     requestAndConnect: () => requestAndConnect,
     sendPythonScript: () => sendPythonScript,
     setActuatorState: () => setActuatorState,
     startSensorStreaming: () => startSensorStreaming,
+    stopAudioFile: () => stopAudioFile,
     stopFirmwareUpload: () => stopFirmwareUpload,
     stopScriptExecution: () => stopScriptExecution,
     stopSensorStreaming: () => stopSensorStreaming,
+    uploadAudioFile: () => uploadAudioFile,
     uploadFirmware: () => uploadFirmware
   });
   var import_rxjs = __toESM(require_cjs());
@@ -9448,6 +9452,7 @@ var thymio = (() => {
   var COMMAND_CHARACTERISTIC_UUID = "0000abf1-0000-1000-8000-00805f9b34fb";
   var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
   var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
+  var AUDIO_CHARACTERISTIC_UUID = "0000abf4-0000-1000-8000-00805f9b34fb";
   var OTA_SERVICE_UUID = 32792;
   var OTA_FIRMWARE_CHARACTERISTIC_UUID = 32800;
   var OTA_COMMAND_CHARACTERISTIC_UUID = 32802;
@@ -9459,6 +9464,7 @@ var thymio = (() => {
   var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
   var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
   var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
+  var THYMIO_AUDIO_UPLOAD_PROGRESS_EVENT_ID = "thymio-audio-upload-progress";
   var otaCommandResponse$;
   var otaSectorUploadResponse$;
   var device;
@@ -9466,6 +9472,7 @@ var thymio = (() => {
   var commandCharacteristic;
   var sensorStreamcharacteristic;
   var pythonCharacteristic;
+  var audioCharacteristic;
   async function requestAndConnect() {
     device = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: "THYMIO" }],
@@ -9500,6 +9507,9 @@ var thymio = (() => {
         pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
         await pythonCharacteristic.startNotifications();
         pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
+        audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
+        await audioCharacteristic.startNotifications();
+        audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);
         const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
         otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
         otaFirmwareCharacteristic.startNotifications();
@@ -9610,7 +9620,7 @@ var thymio = (() => {
   async function sendPythonScript(script) {
     const encoder = new TextEncoder();
     const scriptDataArray = encoder.encode(script);
-    const packets = createScriptPackets(scriptDataArray);
+    const packets = createPayloadPackets(scriptDataArray);
     for (const packet of packets) {
       await pythonCharacteristic.writeValueWithResponse(packet);
     }
@@ -9659,32 +9669,41 @@ var thymio = (() => {
       }
     }
   }
-  function createScriptPackets(scriptBytes) {
-    const FIRST_PACKET_HEADER_SIZE = 1 + 2 + 4 + 2;
+  function createPayloadPackets(payload, isAudio = false) {
+    let FIRST_PACKET_HEADER_SIZE = 1 + 2 + 4 + 2;
+    if (isAudio) {
+      FIRST_PACKET_HEADER_SIZE = 1 + 4 + 4 + 2;
+    }
     const SUBSEQUENT_PACKET_HEADER_SIZE = 2;
     const PAYLOAD_ID = 1;
     const packets = [];
-    const scriptLength = scriptBytes.length;
-    const crc = computeCRC32(scriptBytes);
+    const payloadLength = payload.length;
+    const crc = computeCRC32(payload);
     let seqId = 0;
     const header = new Uint8Array(FIRST_PACKET_HEADER_SIZE);
     header[0] = PAYLOAD_ID;
-    header.set(numberToBytes(scriptLength, 2), 1);
-    header.set(numberToBytes(crc, 4), 3);
-    header.set(numberToBytes(seqId, 2), 7);
+    if (isAudio) {
+      header.set(numberToBytes(payloadLength, 4), 1);
+      header.set(numberToBytes(crc, 4), 5);
+      header.set(numberToBytes(seqId, 2), 9);
+    } else {
+      header.set(numberToBytes(payloadLength, 2), 1);
+      header.set(numberToBytes(crc, 4), 3);
+      header.set(numberToBytes(seqId, 2), 7);
+    }
     const firstChunkSize = MTU - FIRST_PACKET_HEADER_SIZE;
-    const firstScriptChunk = scriptBytes.slice(0, firstChunkSize);
-    const firstPacket = new Uint8Array(header.length + firstScriptChunk.length);
+    const firstChunk = payload.slice(0, firstChunkSize);
+    const firstPacket = new Uint8Array(header.length + firstChunk.length);
     firstPacket.set(header, 0);
-    firstPacket.set(firstScriptChunk, header.length);
+    firstPacket.set(firstChunk, header.length);
     packets.push(firstPacket);
     seqId++;
     let offset = firstChunkSize;
-    while (offset < scriptBytes.length) {
-      const chunkSize = Math.min(MTU - SUBSEQUENT_PACKET_HEADER_SIZE, scriptLength - offset);
+    while (offset < payload.length) {
+      const chunkSize = Math.min(MTU - SUBSEQUENT_PACKET_HEADER_SIZE, payloadLength - offset);
       const packet = new Uint8Array(SUBSEQUENT_PACKET_HEADER_SIZE + chunkSize);
       packet.set(numberToBytes(seqId, 2), 0);
-      packet.set(scriptBytes.slice(offset, offset + chunkSize), SUBSEQUENT_PACKET_HEADER_SIZE);
+      packet.set(payload.slice(offset, offset + chunkSize), SUBSEQUENT_PACKET_HEADER_SIZE);
       packets.push(packet);
       offset += chunkSize;
       seqId++;
@@ -9929,8 +9948,8 @@ var thymio = (() => {
         )
       );
       const uploadProgressData = {
-        sector,
-        totalSectors,
+        uploadedPackets: sector,
+        totalPackets: totalSectors,
         percentage: sector / totalSectors * 100
       };
       const uploadProgressEvent = new CustomEvent(THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID, {
@@ -10019,6 +10038,127 @@ var thymio = (() => {
     const crc = crc16_ccitt(data);
     view.setUint16(3 + FIRMWARE_PAYLOAD_SIZE - 2, crc, true);
     return new Uint8Array(buffer);
+  }
+  async function uploadAudioFile(file) {
+    await isFileWavOrMp3(file);
+    await isMonoAndCorrectSampleRate(file);
+    const buffer = await file.arrayBuffer();
+    const payload = new Uint8Array(buffer);
+    const packets = createPayloadPackets(payload, true);
+    const totalPackets = packets.length;
+    let uploadedPackets = 0;
+    for (const packet of packets) {
+      await audioCharacteristic.writeValueWithResponse(packet);
+      const uploadProgressData = {
+        uploadedPackets,
+        totalPackets,
+        percentage: uploadedPackets / totalPackets * 100
+      };
+      const uploadProgressEvent = new CustomEvent(THYMIO_AUDIO_UPLOAD_PROGRESS_EVENT_ID, {
+        detail: uploadProgressData
+      });
+      document.dispatchEvent(uploadProgressEvent);
+      uploadedPackets++;
+    }
+  }
+  async function playAudioFile() {
+    const id = 2;
+    const body = new Array(20).fill(0);
+    const payload = new Uint8Array([id, ...body]);
+    return await audioCharacteristic.writeValueWithResponse(payload);
+  }
+  async function stopAudioFile() {
+    const id = 3;
+    const payload = new Uint8Array([id]);
+    return await audioCharacteristic.writeValueWithResponse(payload);
+  }
+  async function recordAudio(duration) {
+    if (duration > 10) {
+      throw new Error(`Can not record more than 10 seconds.`);
+    }
+    const id = 5;
+    const buffer = new ArrayBuffer(2);
+    const view = new DataView(buffer);
+    view.setUint8(0, id);
+    view.setUint8(1, duration);
+    const payload = new Uint8Array(buffer);
+    return await audioCharacteristic.writeValueWithResponse(payload);
+  }
+  function handleAudioResponse(event) {
+    const value = event.target.value;
+    if (value) {
+      const buffer = value.buffer;
+      const view = new DataView(buffer);
+      const id = view.getUint8(0);
+      const cmd = view.getUint8(1);
+      if (id === 1) {
+        if (cmd === 0) {
+          console.log(`Audio loaded correctly`);
+        } else if (cmd === 1) {
+          console.log(`Audio file CRC mismatch`);
+        } else if (cmd === 2) {
+          console.log(`Audio partial upload`);
+        } else if (cmd === 3) {
+          console.log(`Audio wrong sequence`);
+        } else if (cmd === 4) {
+          console.log(`Audio file too big`);
+        } else {
+          throw new Error(`Command ID unknown`);
+        }
+      } else if (id === 2) {
+        if (cmd === 0) {
+          console.log(`Audio command executed correctly`);
+        } else if (cmd === 1) {
+          console.log(`Audio play error`);
+        } else if (cmd === 2) {
+          console.log(`Audio file not found`);
+        } else if (cmd === 3) {
+          console.log(`Audio file not supported`);
+        } else {
+          throw new Error(`Command ID unknown`);
+        }
+      } else if (id === 3) {
+        if (cmd === 0) {
+          console.log(`Audio recording saved correctly`);
+        } else if (cmd === 1) {
+          console.log(`Audio recording error`);
+        } else if (cmd === 2) {
+          console.log(`Audio recording duration too long`);
+        } else {
+          throw new Error(`Command ID unknown`);
+        }
+      }
+    }
+  }
+  async function isFileWavOrMp3(file) {
+    const buffer = await file.slice(0, 12).arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    if (bytes[0] === 82 && bytes[1] === 73 && bytes[2] === 70 && bytes[3] === 70 && bytes[8] === 87 && bytes[9] === 65 && bytes[10] === 86 && bytes[11] === 69) {
+      return true;
+    }
+    if (bytes[0] === 73 && bytes[1] === 68 && bytes[2] === 51) {
+      return true;
+    }
+    if (bytes[0] === 255 && (bytes[1] & 224) === 224) {
+      return true;
+    }
+    throw new Error(`The audio file must be in WAV or MP3 format`);
+  }
+  async function isMonoAndCorrectSampleRate(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const audioContext = new AudioContext({ sampleRate: 12e3 });
+    try {
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      if (audioBuffer.numberOfChannels !== 1) {
+        throw new Error(`The audio file is not mono.`);
+      } else if (audioBuffer.sampleRate !== 12e3) {
+        throw new Error(`The audio file's sample rate is not 12kHz`);
+      } else {
+        return true;
+      }
+    } catch (error) {
+      throw new Error(`Error decoding audio: ${error}`);
+    }
   }
   function numberToBytes(value, byteLength) {
     const bytes = new Uint8Array(byteLength);

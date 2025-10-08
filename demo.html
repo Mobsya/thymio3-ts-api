@@ -73,6 +73,19 @@
       otherSensorStreamOutput.textContent = JSON.stringify(event.detail, null, 2);
     });
 
+    async function uploadAudioFile() {
+      const fileInput = document.getElementById('audio');
+      const audioFile = fileInput.files[0];
+      await thymio.uploadAudioFile(audioFile);
+    }
+
+    document.addEventListener('thymio-audio-upload-progress', function(e) {
+      const progress = e.detail.percentage;
+      const progressBar = document.getElementById('audio-progress-bar');
+      progressBar.style.width = progress + '%';
+      progressBar.textContent = progress + '%';
+    });
+
     async function uploadOTA() {
       const fileInput = document.getElementById('firmware');
       const file = fileInput.files[0];
@@ -87,7 +100,7 @@
 
     document.addEventListener('thymio-ota-upload-progress', function(e) {
       const progress = e.detail.percentage;
-      const progressBar = document.getElementById('progress-bar');
+      const progressBar = document.getElementById('ota-progress-bar');
       progressBar.style.width = progress + '%';
       progressBar.textContent = progress + '%';
     });
@@ -193,7 +206,7 @@
       box-shadow: 0 0 5px #1976d2;
     }
 
-    #progress-container {
+    .progress-container {
       width: 100%;
       background-color: #eee;
       border: 1px solid #ccc;
@@ -203,7 +216,7 @@
       overflow: hidden;
     }
 
-    #progress-bar {
+    .progress-bar {
       height: 100%;
       width: 0%;
       background-color: #4caf50;
@@ -356,14 +369,31 @@ while 1:
   </div>
 
   <div>
-    <h3>Upload an OTA update file</h3>
+    <h3>Audio</h3>
+    <input type="file" id="audio" />
+    <button onclick="uploadAudioFile()">Upload Audio file</button>
+
+    <h4>Upload progress</h4>
+    <div class="progress-container">
+      <div class="progress-bar" id="audio-progress-bar">0%</div>
+    </div>
+
+    <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
+      <button onclick="thymio.playAudioFile()">Play</button>
+      <button onclick="thymio.stopAudioFile()">Stop</button>
+      <button onclick="thymio.recordAudio(3)">Record</button>
+    </div>
+  </div>
+
+  <div>
+    <h3>OTA update</h3>
     <input type="file" id="firmware" />
     <button onclick="uploadOTA()">Start OTA</button>
     <button onclick="stopOTA()">Stop OTA Upload</button>
 
     <h4>Upload progress</h4>
-    <div id="progress-container">
-      <div id="progress-bar">0%</div>
+    <div class="progress-container">
+      <div class="progress-bar" id="ota-progress-bar">0%</div>
     </div>
   </div>
 
