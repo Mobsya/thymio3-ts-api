@@ -989,6 +989,24 @@ export async function recordAudio(duration: number) {
   return await audioCharacteristic.writeValueWithResponse(payload);
 }
 
+/**
+ * Play a frequency.
+ * @param frequency Frequency in Hz (up to 3kHz)
+ * @param duration Duration in tenths of a second, 0 means play forever
+ */
+export async function playFrequency(frequency: number, duration: number) {
+  const id = 0x06;
+
+  const buffer = new ArrayBuffer(5);
+  const view = new DataView(buffer);
+  view.setUint8(0, id);
+  view.setUint16(1, frequency);
+  view.setUint16(3, duration);
+  const payload = new Uint8Array(buffer);
+
+  return await audioCharacteristic.writeValueWithResponse(payload);
+}
+
 function handleAudioResponse(event: Event) {
 	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
 

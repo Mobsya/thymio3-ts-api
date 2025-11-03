@@ -104,6 +104,12 @@
       progressBar.style.width = progress + '%';
       progressBar.textContent = progress + '%';
     });
+
+    async function playFrequency() {
+      const freq = parseInt((document.getElementById("audio-frequency")).value);
+      const duration = parseInt((document.getElementById("audio-frequency-duration")).value);
+      await thymio.playFrequency(freq, duration);
+    }
   </script>
   <style>
     body {
@@ -376,6 +382,12 @@ while 1:
     <h4>Upload progress</h4>
     <div class="progress-container">
       <div class="progress-bar" id="audio-progress-bar">0%</div>
+    </div>
+
+    <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
+      <input type="number" id="audio-frequency" min="0" max="300" />
+      <input type="number" id="audio-frequency-duration" min="0" max="1000" />
+      <button onclick="playFrequency()">Play Frequency</button>
     </div>
 
     <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">

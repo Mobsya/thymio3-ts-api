@@ -636,6 +636,16 @@ async function recordAudio(duration) {
   const payload = new Uint8Array(buffer);
   return await audioCharacteristic.writeValueWithResponse(payload);
 }
+async function playFrequency(frequency, duration) {
+  const id = 6;
+  const buffer = new ArrayBuffer(5);
+  const view = new DataView(buffer);
+  view.setUint8(0, id);
+  view.setUint16(1, frequency);
+  view.setUint16(3, duration);
+  const payload = new Uint8Array(buffer);
+  return await audioCharacteristic.writeValueWithResponse(payload);
+}
 function handleAudioResponse(event) {
   const value = event.target.value;
   if (value) {
@@ -754,6 +764,7 @@ export {
   executeLoadedScript,
   isConnected,
   playAudioFile,
+  playFrequency,
   recordAudio,
   requestAndConnect,
   sendPythonScript,

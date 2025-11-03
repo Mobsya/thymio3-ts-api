@@ -132,5 +132,11 @@ declare function stopAudioFile(): Promise<void>;
  * @param duration The duration of the recording (maximum 10 seconds).
  */
 declare function recordAudio(duration: number): Promise<void>;
+/**
+ * Play a frequency.
+ * @param frequency Frequency in Hz (up to 3kHz)
+ * @param duration Duration in tenths of a second, 0 means play forever
+ */
+declare function playFrequency(frequency: number, duration: number): Promise<void>;
 
-export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, type UploadProgress, disconnect, executeLoadedScript, isConnected, playAudioFile, recordAudio, requestAndConnect, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFirmware };
+export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, type UploadProgress, disconnect, executeLoadedScript, isConnected, playAudioFile, playFrequency, recordAudio, requestAndConnect, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFirmware };
