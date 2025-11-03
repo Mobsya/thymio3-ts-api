@@ -17,6 +17,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "thymio.ts"],
+  "include": ["src"],
   "exclude": ["node_modules", "dist"]
 }

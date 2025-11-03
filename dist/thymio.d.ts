@@ -15,80 +15,7 @@ type ActuatorData = {
     motorRight: number;
     sound: number;
 };
-type SensorsData = {
-    colorSensor: {
-        h: number;
-        s: number;
-        v: number;
-    };
-    groundSensors: {
-        left: number;
-        right: number;
-    };
-    accelerationRaw: {
-        x: number;
-        y: number;
-        z: number;
-    };
-    gyroRaw: {
-        x: number;
-        y: number;
-        z: number;
-    };
-    buttons: {
-        back: boolean;
-        left: boolean;
-        center: boolean;
-        forward: boolean;
-        right: boolean;
-    };
-    microphoneVolume: number;
-    proximitySensors: {
-        left: number;
-        frontLeft: number;
-        center: number;
-        frontRight: number;
-        right: number;
-        backLeft: number;
-        backRight: number;
-    };
-    tvRemote: number;
-};
-type OtherSensorData = {
-    colorRaw: {
-        red: number;
-        green: number;
-        blue: number;
-        clear: number;
-    };
-    colorDetected: number;
-    groundAmbient: {
-        left: number;
-        right: number;
-    };
-    groundReflected: {
-        left: number;
-        right: number;
-    };
-    angleDegrees: number;
-    eventFlags: {
-        tapDetected: boolean;
-        freefallDetected: boolean;
-        clapDetected: boolean;
-    };
-    motor: {
-        leftSpeed: number;
-        rightSpeed: number;
-        leftPwmDuty: number;
-        rightPwmDuty: number;
-    };
-    batteryVoltage: number;
-};
-type UploadProgress = {
-    uploadedPackets: number;
-    totalPackets: number;
-    percentage: number;
-};
+
 /**
  * Request a bluetooth device and connect to it.
  */
@@ -139,4 +66,4 @@ declare function recordAudio(duration: number): Promise<void>;
  */
 declare function playFrequency(frequency: number, duration: number): Promise<void>;
 
-export { type ActuatorData, type OtherSensorData, type RGB, type SensorsData, type UploadProgress, disconnect, executeLoadedScript, isConnected, playAudioFile, playFrequency, recordAudio, requestAndConnect, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFirmware };
+export { disconnect, executeLoadedScript, isConnected, playAudioFile, playFrequency, recordAudio, requestAndConnect, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFirmware };

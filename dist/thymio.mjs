@@ -1,110 +1,7 @@
-// thymio.ts
-import { BehaviorSubject, filter, firstValueFrom, timeout } from "rxjs";
-var MAIN_SERVICE_UUID = "0000abf0-0000-1000-8000-00805f9b34fb";
-var COMMAND_CHARACTERISTIC_UUID = "0000abf1-0000-1000-8000-00805f9b34fb";
-var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
-var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
-var AUDIO_CHARACTERISTIC_UUID = "0000abf4-0000-1000-8000-00805f9b34fb";
-var OTA_SERVICE_UUID = 32792;
-var OTA_FIRMWARE_CHARACTERISTIC_UUID = 32800;
-var OTA_COMMAND_CHARACTERISTIC_UUID = 32802;
-var otaFirmwareCharacteristic;
-var otaCommandCharacteristic;
-var MTU = 500;
-var FIRMWARE_PAYLOAD_SIZE = MTU - 4;
-var FIRMWARE_SECTOR_SIZE = 4096;
-var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
-var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
-var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
-var THYMIO_AUDIO_UPLOAD_PROGRESS_EVENT_ID = "thymio-audio-upload-progress";
-var otaCommandResponse$;
-var otaSectorUploadResponse$;
-var device;
-var reconnecting = false;
-var commandCharacteristic;
-var sensorStreamcharacteristic;
-var pythonCharacteristic;
-var audioCharacteristic;
-async function requestAndConnect() {
-  device = await navigator.bluetooth.requestDevice({
-    filters: [{ namePrefix: "THYMIO" }],
-    optionalServices: [
-      MAIN_SERVICE_UUID,
-      OTA_SERVICE_UUID
-    ]
-  });
-  device.addEventListener("gattserverdisconnected", onDisconnected);
-  await connect();
-}
-function isConnected() {
-  if (device && device.gatt) {
-    return device.gatt.connected;
-  } else {
-    return false;
-  }
-}
-async function disconnect() {
-  device.removeEventListener("gattserverdisconnected", onDisconnected);
-  await device.gatt?.disconnect();
-}
-async function connect() {
-  if (device.gatt) {
-    try {
-      const server = await device.gatt.connect();
-      const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
-      commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
-      sensorStreamcharacteristic = await mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
-      await sensorStreamcharacteristic.startNotifications();
-      sensorStreamcharacteristic.addEventListener("characteristicvaluechanged", handleStreamResponse);
-      pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
-      await pythonCharacteristic.startNotifications();
-      pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
-      audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
-      await audioCharacteristic.startNotifications();
-      audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);
-      const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
-      otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
-      otaFirmwareCharacteristic.startNotifications();
-      otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
-      otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
-      otaCommandCharacteristic.startNotifications();
-      otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
-    } catch (e) {
-      console.error(`Could not connect to Thymio 3.`, e);
-    }
-    console.log("\u2705 Connected to Thymio 3 !");
-  } else {
-    throw new Error("Bluetooth GATT is not available.");
-  }
-}
-function onDisconnected() {
-  console.log("\u26A0\uFE0F Disconnected. Attempting to reconnect...");
-  if (!reconnecting) {
-    reconnecting = true;
-    retryConnection();
-  }
-}
-async function retryConnection() {
-  let attempts = 0;
-  const maxAttempts = 10;
-  while (attempts < maxAttempts) {
-    try {
-      await delay(2e3);
-      if (!device.gatt.connected) {
-        await connect();
-        reconnecting = false;
-        return;
-      }
-    } catch (e) {
-      console.warn(`Retry ${attempts + 1} failed:`, e);
-    }
-    attempts++;
-  }
-  console.log(`\u274C Failed to reconnect after ${attempts} attempts`);
-}
-async function setActuatorState(actuatorData) {
+// src/command.ts
+async function setActuatorState(commandCharacteristic2, actuatorData) {
   const commandArray = createCommandByteArray(actuatorData);
-  await commandCharacteristic.writeValue(commandArray);
+  await commandCharacteristic2.writeValue(commandArray);
 }
 function createCommandByteArray({
   circleLEDs,
@@ -169,58 +66,25 @@ function createCommandByteArray({
   offset++;
   return new Uint8Array(buffer);
 }
-async function sendPythonScript(script) {
-  const encoder = new TextEncoder();
-  const scriptDataArray = encoder.encode(script);
-  const packets = createPayloadPackets(scriptDataArray);
-  for (const packet of packets) {
-    await pythonCharacteristic.writeValueWithResponse(packet);
-  }
-}
-async function executeLoadedScript() {
-  const packet = new Uint8Array([2]);
-  await pythonCharacteristic.writeValueWithResponse(packet);
-}
-async function stopScriptExecution() {
-  const packet = new Uint8Array([3]);
-  await pythonCharacteristic.writeValueWithResponse(packet);
-}
-function handlePythonResponse(event) {
-  const value = event.target.value;
-  if (value) {
-    const id = value.getUint8(0);
-    if (id === 1) {
-      const loadResult = value.getUint8(1);
-      const resultMessages = {
-        0: "\u2705 Script loaded successfully.",
-        1: "\u274C CRC mismatch.",
-        2: "\u26A0\uFE0F Partial upload.",
-        3: "\u274C Wrong sequence.",
-        4: "\u274C Script too big (2 KB limit)."
-        // Add more error codes if needed
-      };
-      console.log(
-        `[Notification] Script Loaded: ${resultMessages[loadResult] || "Unknown error code: " + loadResult}`
-      );
-    } else if (id === 2) {
-      const result = value.getUint8(1);
-      const exception = (result & 1) !== 0;
-      const scriptRunning = (result & 2) !== 0;
-      console.log("[Notification] Script Terminated:");
-      if (!exception && !scriptRunning) {
-        console.log("\u2705 Script terminated normally.");
-      } else {
-        if (exception) console.log("\u274C Script terminated with exception.");
-        if (scriptRunning)
-          console.log("\u26A0\uFE0F Another script was already running.");
-      }
-    } else {
-      console.warn(
-        `[Notification] Unknown ID: 0x${id.toString(16).padStart(2, "0")}`
-      );
-    }
-  }
-}
+
+// src/constants.ts
+var MAIN_SERVICE_UUID = "0000abf0-0000-1000-8000-00805f9b34fb";
+var COMMAND_CHARACTERISTIC_UUID = "0000abf1-0000-1000-8000-00805f9b34fb";
+var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
+var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
+var AUDIO_CHARACTERISTIC_UUID = "0000abf4-0000-1000-8000-00805f9b34fb";
+var OTA_SERVICE_UUID = 32792;
+var OTA_FIRMWARE_CHARACTERISTIC_UUID = 32800;
+var OTA_COMMAND_CHARACTERISTIC_UUID = 32802;
+var MTU = 500;
+var FIRMWARE_PAYLOAD_SIZE = MTU - 4;
+var FIRMWARE_SECTOR_SIZE = 4096;
+var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
+var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
+var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
+var THYMIO_AUDIO_UPLOAD_PROGRESS_EVENT_ID = "thymio-audio-upload-progress";
+
+// src/utils.ts
 function createPayloadPackets(payload, isAudio = false) {
   let FIRST_PACKET_HEADER_SIZE = 1 + 2 + 4 + 2;
   if (isAudio) {
@@ -262,7 +126,100 @@ function createPayloadPackets(payload, isAudio = false) {
   }
   return packets;
 }
-async function startSensorStreaming(other = false) {
+function numberToBytes(value, byteLength) {
+  const bytes = new Uint8Array(byteLength);
+  for (let i = 0; i < byteLength; i++) {
+    bytes[byteLength - 1 - i] = value & 255;
+    value >>= 8;
+  }
+  return bytes;
+}
+function crc16_ccitt(buffer) {
+  let crc = 0;
+  for (let b of buffer) {
+    crc ^= b << 8;
+    for (let i = 0; i < 8; i++) {
+      crc = crc & 32768 ? crc << 1 ^ 4129 : crc << 1;
+    }
+    crc &= 65535;
+  }
+  return crc;
+}
+function computeCRC32(buf, crc = 4294967295) {
+  for (let i = 0; i < buf.length; i++) {
+    crc ^= buf[i] << 24;
+    for (let j = 0; j < 8; j++) {
+      if ((crc & 2147483648) === 0) {
+        crc <<= 1;
+      } else {
+        crc = crc << 1 ^ 79764919;
+      }
+    }
+  }
+  return crc & 4294967295;
+}
+function delay(timeout2) {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(), timeout2);
+  });
+}
+
+// src/python.ts
+async function sendPythonScript(pythonCharacteristic2, script) {
+  const encoder = new TextEncoder();
+  const scriptDataArray = encoder.encode(script);
+  const packets = createPayloadPackets(scriptDataArray);
+  for (const packet of packets) {
+    await pythonCharacteristic2.writeValueWithResponse(packet);
+  }
+}
+async function executeLoadedScript(pythonCharacteristic2) {
+  const packet = new Uint8Array([2]);
+  await pythonCharacteristic2.writeValueWithResponse(packet);
+}
+async function stopScriptExecution(pythonCharacteristic2) {
+  const packet = new Uint8Array([3]);
+  await pythonCharacteristic2.writeValueWithResponse(packet);
+}
+function handlePythonResponse(event) {
+  const value = event.target.value;
+  if (value) {
+    const id = value.getUint8(0);
+    if (id === 1) {
+      const loadResult = value.getUint8(1);
+      const resultMessages = {
+        0: "\u2705 Script loaded successfully.",
+        1: "\u274C CRC mismatch.",
+        2: "\u26A0\uFE0F Partial upload.",
+        3: "\u274C Wrong sequence.",
+        4: "\u274C Script too big (2 KB limit)."
+        // Add more error codes if needed
+      };
+      console.log(
+        `[Notification] Script Loaded: ${resultMessages[loadResult] || "Unknown error code: " + loadResult}`
+      );
+    } else if (id === 2) {
+      const result = value.getUint8(1);
+      const exception = (result & 1) !== 0;
+      const scriptRunning = (result & 2) !== 0;
+      console.log("[Notification] Script Terminated:");
+      if (!exception && !scriptRunning) {
+        console.log("\u2705 Script terminated normally.");
+      } else {
+        if (exception) console.log("\u274C Script terminated with exception.");
+        if (scriptRunning)
+          console.log("\u26A0\uFE0F Another script was already running.");
+      }
+    } else {
+      console.warn(
+        `[Notification] Unknown ID: 0x${id.toString(16).padStart(2, "0")}`
+      );
+    }
+  }
+}
+
+// src/sensor-stream.ts
+async function startSensorStreaming(sensorStreamCharacteristic2, other = false) {
   const id = 1;
   let body = 0;
   if (!other) {
@@ -271,13 +228,13 @@ async function startSensorStreaming(other = false) {
     body |= 2;
   }
   const payload = new Uint8Array([id, body]);
-  return await sensorStreamcharacteristic.writeValueWithResponse(payload);
+  return await sensorStreamCharacteristic2.writeValueWithResponse(payload);
 }
-async function stopSensorStreaming() {
+async function stopSensorStreaming(sensorStreamCharacteristic2) {
   const id = 1;
   const body = 0;
   const payload = new Uint8Array([id, body]);
-  return await sensorStreamcharacteristic.writeValueWithResponse(payload);
+  return await sensorStreamCharacteristic2.writeValueWithResponse(payload);
 }
 async function handleStreamResponse(event) {
   const value = event.target.value;
@@ -432,16 +389,21 @@ function parseOtherSensorData(bytes) {
     batteryVoltage
   };
 }
-async function uploadFirmware(firmware) {
+
+// src/ota.ts
+import { BehaviorSubject, filter, firstValueFrom, timeout } from "rxjs";
+var otaCommandResponse$;
+var otaSectorUploadResponse$;
+async function uploadFirmware(otaCommandCharacteristic2, otaFirmwareCharacteristic2, firmware) {
   otaCommandResponse$ = new BehaviorSubject(false);
-  await startOTA(firmware.byteLength);
+  await startOTA(otaCommandCharacteristic2, firmware.byteLength);
   otaSectorUploadResponse$ = new BehaviorSubject(0);
-  return await uploadFirmwareData(firmware);
+  return await uploadFirmwareData(otaFirmwareCharacteristic2, firmware);
 }
-async function stopFirmwareUpload() {
-  return await stopOTA();
+async function stopFirmwareUpload(otaCommandCharacteristic2) {
+  return await stopOTA(otaCommandCharacteristic2);
 }
-async function startOTA(firmwareLength) {
+async function startOTA(otaCommandCharacteristic2, firmwareLength) {
   const buffer = new ArrayBuffer(20);
   const view = new DataView(buffer);
   view.setUint16(0, 1, true);
@@ -450,7 +412,7 @@ async function startOTA(firmwareLength) {
   const crc = crc16_ccitt(crcInput);
   view.setUint16(18, crc, true);
   const packet = new Uint8Array(buffer);
-  await otaCommandCharacteristic.writeValueWithResponse(packet);
+  await otaCommandCharacteristic2.writeValueWithResponse(packet);
   await firstValueFrom(
     otaCommandResponse$.pipe(
       filter((res) => res),
@@ -459,7 +421,7 @@ async function startOTA(firmwareLength) {
     )
   );
 }
-async function stopOTA() {
+async function stopOTA(otaCommandCharacteristic2) {
   const buffer = new ArrayBuffer(20);
   const view = new DataView(buffer);
   view.setUint16(0, 2, true);
@@ -467,9 +429,9 @@ async function stopOTA() {
   const crc = crc16_ccitt(crcInput);
   view.setUint16(18, crc, true);
   const packet = new Uint8Array(buffer);
-  return await otaCommandCharacteristic.writeValueWithResponse(packet);
+  return await otaCommandCharacteristic2.writeValueWithResponse(packet);
 }
-async function uploadFirmwareData(firmware) {
+async function uploadFirmwareData(otaFirmwareCharacteristic2, firmware) {
   const firmwareBytes = new Uint8Array(firmware);
   const totalSectors = Math.ceil(firmwareBytes.length / FIRMWARE_SECTOR_SIZE);
   console.log(
@@ -487,11 +449,11 @@ async function uploadFirmwareData(firmware) {
         (seq + 1) * FIRMWARE_PAYLOAD_SIZE
       );
       const packet = buildPacket(sector, seq, slice);
-      await otaFirmwareCharacteristic.writeValueWithResponse(packet);
+      await otaFirmwareCharacteristic2.writeValueWithResponse(packet);
       seq++;
     }
     const finalPacket = buildFinalPacket(sector, sectorData);
-    await otaFirmwareCharacteristic.writeValueWithResponse(finalPacket);
+    await otaFirmwareCharacteristic2.writeValueWithResponse(finalPacket);
     await firstValueFrom(
       otaSectorUploadResponse$.pipe(
         filter((res) => res === sector),
@@ -591,7 +553,9 @@ function buildFinalPacket(sectorIndex, data) {
   view.setUint16(3 + FIRMWARE_PAYLOAD_SIZE - 2, crc, true);
   return new Uint8Array(buffer);
 }
-async function uploadAudioFile(file) {
+
+// src/audio.ts
+async function uploadAudioFile(audioCharacteristic2, file) {
   await isFileWavOrMp3(file);
   await isMonoAndCorrectSampleRate(file);
   const buffer = await file.arrayBuffer();
@@ -600,7 +564,7 @@ async function uploadAudioFile(file) {
   const totalPackets = packets.length;
   let uploadedPackets = 0;
   for (const packet of packets) {
-    await audioCharacteristic.writeValueWithResponse(packet);
+    await audioCharacteristic2.writeValueWithResponse(packet);
     const uploadProgressData = {
       uploadedPackets,
       totalPackets,
@@ -613,18 +577,18 @@ async function uploadAudioFile(file) {
     uploadedPackets++;
   }
 }
-async function playAudioFile() {
+async function playAudioFile(audioCharacteristic2) {
   const id = 2;
   const body = new Array(20).fill(0);
   const payload = new Uint8Array([id, ...body]);
-  return await audioCharacteristic.writeValueWithResponse(payload);
+  return await audioCharacteristic2.writeValueWithResponse(payload);
 }
-async function stopAudioFile() {
+async function stopAudioFile(audioCharacteristic2) {
   const id = 3;
   const payload = new Uint8Array([id]);
-  return await audioCharacteristic.writeValueWithResponse(payload);
+  return await audioCharacteristic2.writeValueWithResponse(payload);
 }
-async function recordAudio(duration) {
+async function recordAudio(audioCharacteristic2, duration) {
   if (duration > 10) {
     throw new Error(`Can not record more than 10 seconds.`);
   }
@@ -634,9 +598,9 @@ async function recordAudio(duration) {
   view.setUint8(0, id);
   view.setUint8(1, duration);
   const payload = new Uint8Array(buffer);
-  return await audioCharacteristic.writeValueWithResponse(payload);
+  return await audioCharacteristic2.writeValueWithResponse(payload);
 }
-async function playFrequency(frequency, duration) {
+async function playFrequency(audioCharacteristic2, frequency, duration) {
   const id = 6;
   const buffer = new ArrayBuffer(5);
   const view = new DataView(buffer);
@@ -644,7 +608,7 @@ async function playFrequency(frequency, duration) {
   view.setUint16(1, frequency);
   view.setUint16(3, duration);
   const payload = new Uint8Array(buffer);
-  return await audioCharacteristic.writeValueWithResponse(payload);
+  return await audioCharacteristic2.writeValueWithResponse(payload);
 }
 function handleAudioResponse(event) {
   const value = event.target.value;
@@ -722,59 +686,148 @@ async function isMonoAndCorrectSampleRate(file) {
     throw new Error(`Error decoding audio: ${error}`);
   }
 }
-function numberToBytes(value, byteLength) {
-  const bytes = new Uint8Array(byteLength);
-  for (let i = 0; i < byteLength; i++) {
-    bytes[byteLength - 1 - i] = value & 255;
-    value >>= 8;
-  }
-  return bytes;
-}
-function crc16_ccitt(buffer) {
-  let crc = 0;
-  for (let b of buffer) {
-    crc ^= b << 8;
-    for (let i = 0; i < 8; i++) {
-      crc = crc & 32768 ? crc << 1 ^ 4129 : crc << 1;
-    }
-    crc &= 65535;
-  }
-  return crc;
-}
-function computeCRC32(buf, crc = 4294967295) {
-  for (let i = 0; i < buf.length; i++) {
-    crc ^= buf[i] << 24;
-    for (let j = 0; j < 8; j++) {
-      if ((crc & 2147483648) === 0) {
-        crc <<= 1;
-      } else {
-        crc = crc << 1 ^ 79764919;
-      }
-    }
-  }
-  return crc & 4294967295;
-}
-function delay(timeout2) {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(), timeout2);
+
+// src/thymio.ts
+var otaFirmwareCharacteristic;
+var otaCommandCharacteristic;
+var device;
+var reconnecting = false;
+var commandCharacteristic;
+var sensorStreamCharacteristic;
+var pythonCharacteristic;
+var audioCharacteristic;
+async function requestAndConnect() {
+  device = await navigator.bluetooth.requestDevice({
+    filters: [{ namePrefix: "THYMIO" }],
+    optionalServices: [
+      MAIN_SERVICE_UUID,
+      OTA_SERVICE_UUID
+    ]
   });
+  device.addEventListener("gattserverdisconnected", onDisconnected);
+  await connect();
+}
+function isConnected() {
+  if (device && device.gatt) {
+    return device.gatt.connected;
+  } else {
+    return false;
+  }
+}
+async function disconnect() {
+  device.removeEventListener("gattserverdisconnected", onDisconnected);
+  await device.gatt?.disconnect();
+}
+async function connect() {
+  if (device.gatt) {
+    try {
+      const server = await device.gatt.connect();
+      const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
+      commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
+      sensorStreamCharacteristic = await mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
+      await sensorStreamCharacteristic.startNotifications();
+      sensorStreamCharacteristic.addEventListener("characteristicvaluechanged", handleStreamResponse);
+      pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
+      await pythonCharacteristic.startNotifications();
+      pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
+      audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
+      await audioCharacteristic.startNotifications();
+      audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);
+      const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
+      otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
+      otaFirmwareCharacteristic.startNotifications();
+      otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
+      otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
+      otaCommandCharacteristic.startNotifications();
+      otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
+    } catch (e) {
+      console.error(`Could not connect to Thymio 3.`, e);
+    }
+    console.log("\u2705 Connected to Thymio 3 !");
+  } else {
+    throw new Error("Bluetooth GATT is not available.");
+  }
+}
+function onDisconnected() {
+  console.log("\u26A0\uFE0F Disconnected. Attempting to reconnect...");
+  if (!reconnecting) {
+    reconnecting = true;
+    retryConnection();
+  }
+}
+async function retryConnection() {
+  let attempts = 0;
+  const maxAttempts = 10;
+  while (attempts < maxAttempts) {
+    try {
+      await delay(2e3);
+      if (!device.gatt.connected) {
+        await connect();
+        reconnecting = false;
+        return;
+      }
+    } catch (e) {
+      console.warn(`Retry ${attempts + 1} failed:`, e);
+    }
+    attempts++;
+  }
+  console.log(`\u274C Failed to reconnect after ${attempts} attempts`);
+}
+async function setActuatorState2(actuatorData) {
+  await setActuatorState(commandCharacteristic, actuatorData);
+}
+async function sendPythonScript2(script) {
+  await sendPythonScript(pythonCharacteristic, script);
+}
+async function executeLoadedScript2() {
+  await executeLoadedScript(pythonCharacteristic);
+}
+async function stopScriptExecution2() {
+  await stopScriptExecution(pythonCharacteristic);
+}
+async function startSensorStreaming2(other = false) {
+  return await startSensorStreaming(sensorStreamCharacteristic, other);
+}
+async function stopSensorStreaming2() {
+  return await stopSensorStreaming(sensorStreamCharacteristic);
+}
+async function uploadFirmware2(firmware) {
+  return await uploadFirmware(otaCommandCharacteristic, otaFirmwareCharacteristic, firmware);
+}
+async function stopFirmwareUpload2() {
+  return await stopFirmwareUpload(otaCommandCharacteristic);
+}
+async function uploadAudioFile2(file) {
+  return await uploadAudioFile(audioCharacteristic, file);
+}
+async function playAudioFile2() {
+  return await playAudioFile(audioCharacteristic);
+}
+async function stopAudioFile2() {
+  return await stopAudioFile(audioCharacteristic);
+}
+async function recordAudio2(duration) {
+  return await recordAudio(audioCharacteristic, duration);
+}
+async function playFrequency2(frequency, duration) {
+  return await playFrequency(audioCharacteristic, frequency, duration);
 }
 export {
   disconnect,
-  executeLoadedScript,
+  executeLoadedScript2 as executeLoadedScript,
   isConnected,
-  playAudioFile,
-  playFrequency,
-  recordAudio,
+  playAudioFile2 as playAudioFile,
+  playFrequency2 as playFrequency,
+  recordAudio2 as recordAudio,
   requestAndConnect,
-  sendPythonScript,
-  setActuatorState,
-  startSensorStreaming,
-  stopAudioFile,
-  stopFirmwareUpload,
-  stopScriptExecution,
-  stopSensorStreaming,
-  uploadAudioFile,
-  uploadFirmware
+  sendPythonScript2 as sendPythonScript,
+  setActuatorState2 as setActuatorState,
+  startSensorStreaming2 as startSensorStreaming,
+  stopAudioFile2 as stopAudioFile,
+  stopFirmwareUpload2 as stopFirmwareUpload,
+  stopScriptExecution2 as stopScriptExecution,
+  stopSensorStreaming2 as stopSensorStreaming,
+  uploadAudioFile2 as uploadAudioFile,
+  uploadFirmware2 as uploadFirmware
 };
 //# sourceMappingURL=thymio.mjs.map
