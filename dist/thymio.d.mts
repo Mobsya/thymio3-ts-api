@@ -70,9 +70,40 @@ declare function recordAudio(duration: number): Promise<void>;
  * @param duration Duration in tenths of a second, 0 means play forever
  */
 declare function playFrequency(frequency: number, duration: number): Promise<void>;
+/**
+ * Upload a file to the Thymio. It will be placed in RAM.
+ * @param file File to upload
+ */
 declare function uploadFile(file: File): Promise<void>;
+/**
+ * Save the file that is present in the RAM to the storage.
+ * @param filename Name of the file new file.
+ */
 declare function saveFile(filename: string): Promise<void>;
+/**
+ * Delete a file from the storage.
+ * @param filename Name of the file to delete.
+ * @returns
+ */
 declare function deleteFile(filename: string): Promise<void>;
+/**
+ * List files present in the Thymio storage.
+ * @returns A listing of files with their names and sizes.
+ */
 declare function listFiles(): Promise<FileListing[]>;
+/**
+ * Erase all files from the Thymio storage.
+ */
+declare function eraseAllFiles(): Promise<void>;
+/**
+ * Download a file from the robot.
+ * @param filename Name of the file to download.
+ * @returns An byte array of the downloaded file.
+ */
+declare function downloadFile(filename: string): Promise<Uint8Array<ArrayBuffer>>;
+/**
+ * Free the RAM from the uploaded files.
+ */
+declare function freeMemory(): Promise<void>;
 
-export { deleteFile, disconnect, executeLoadedScript, isConnected, listFiles, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFile, uploadFirmware };
+export { deleteFile, disconnect, downloadFile, eraseAllFiles, executeLoadedScript, freeMemory, isConnected, listFiles, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFile, uploadFirmware };

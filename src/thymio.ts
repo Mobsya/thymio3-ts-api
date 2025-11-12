@@ -226,18 +226,58 @@ export async function playFrequency(
 
 //// FILES CHARACTERISTIC
 
+/**
+ * Upload a file to the Thymio. It will be placed in RAM.
+ * @param file File to upload
+ */
 export async function uploadFile(file: File): Promise<void> {
   return await files.uploadFile(fileCharacteristic, file);
 }
 
+/**
+ * Save the file that is present in the RAM to the storage.
+ * @param filename Name of the file new file.
+ */
 export async function saveFile(filename: string): Promise<void> {
   return await files.saveFile(fileCharacteristic, filename);
 }
 
+/**
+ * Delete a file from the storage.
+ * @param filename Name of the file to delete.
+ * @returns
+ */
 export async function deleteFile(filename: string): Promise<void> {
   return await files.deleteFile(fileCharacteristic, filename);
 }
 
+/**
+ * List files present in the Thymio storage.
+ * @returns A listing of files with their names and sizes.
+ */
 export async function listFiles(): Promise<FileListing[]> {
   return await files.listFiles(fileCharacteristic);
+}
+
+/**
+ * Erase all files from the Thymio storage.
+ */
+export async function eraseAllFiles(): Promise<void> {
+  return await files.eraseAllFiles(fileCharacteristic);
+}
+
+/**
+ * Download a file from the robot.
+ * @param filename Name of the file to download.
+ * @returns An byte array of the downloaded file.
+ */
+export async function downloadFile(filename: string): Promise<Uint8Array<ArrayBuffer>> {
+  return await files.downloadFile(fileCharacteristic, filename);
+}
+
+/**
+ * Free the RAM from the uploaded files.
+ */
+export async function freeMemory(): Promise<void> {
+  return await files.freeMemory(fileCharacteristic);
 }

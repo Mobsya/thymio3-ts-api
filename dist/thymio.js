@@ -22,7 +22,10 @@ var thymio_exports = {};
 __export(thymio_exports, {
   deleteFile: () => deleteFile2,
   disconnect: () => disconnect,
+  downloadFile: () => downloadFile2,
+  eraseAllFiles: () => eraseAllFiles2,
   executeLoadedScript: () => executeLoadedScript2,
+  freeMemory: () => freeMemory2,
   isConnected: () => isConnected,
   listFiles: () => listFiles2,
   playAudioFile: () => playAudioFile2,
@@ -790,8 +793,8 @@ async function listFiles(fileCharacteristic2) {
       const value = event.target.value;
       if (!value) return;
       const view = new DataView(value.buffer);
-      const id = view.getUint8(0);
-      if (id !== 4 && receivedLength === 0) return;
+      const id2 = view.getUint8(0);
+      if (id2 !== 4 && receivedLength === 0) return;
       let offset = 0;
       if (receivedLength === 0) {
         offset = 1;
@@ -820,12 +823,26 @@ async function listFiles(fileCharacteristic2) {
       }
     };
     fileCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
-    const listCommand = new Uint8Array([4]);
-    fileCharacteristic2.writeValue(listCommand).catch((err) => {
+    const id = 4;
+    const payload = new Uint8Array([id]);
+    fileCharacteristic2.writeValueWithResponse(payload).catch((err) => {
       fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
       reject(err);
     });
   });
+}
+async function eraseAllFiles(fileCharacteristic2) {
+  const id = 5;
+  const payload = new Uint8Array([id]);
+  return await fileCharacteristic2.writeValueWithResponse(payload);
+}
+async function downloadFile(fileCharacteristic2, filename) {
+  throw new Error(`Not implemented yet`);
+}
+async function freeMemory(fileCharacteristic2) {
+  const id = 8;
+  const payload = new Uint8Array([id]);
+  return await fileCharacteristic2.writeValueWithResponse(payload);
 }
 function handleFileResponse(event) {
   const value = event.target.value;
@@ -990,11 +1007,23 @@ async function deleteFile2(filename) {
 async function listFiles2() {
   return await listFiles(fileCharacteristic);
 }
+async function eraseAllFiles2() {
+  return await eraseAllFiles(fileCharacteristic);
+}
+async function downloadFile2(filename) {
+  return await downloadFile(fileCharacteristic, filename);
+}
+async function freeMemory2() {
+  return await freeMemory(fileCharacteristic);
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   deleteFile,
   disconnect,
+  downloadFile,
+  eraseAllFiles,
   executeLoadedScript,
+  freeMemory,
   isConnected,
   listFiles,
   playAudioFile,

@@ -134,23 +134,37 @@ export async function listFiles(
     fileCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
 
     // Send the "list files" request to the device
-    // (You'll need to fill in the correct command for your device)
-    const listCommand = new Uint8Array([0x04]); // e.g., 0x04 = "list files"
-    fileCharacteristic.writeValue(listCommand).catch(err => {
+    const id = 0x04;
+    const payload = new Uint8Array([id]);
+    fileCharacteristic.writeValueWithResponse(payload).catch(err => {
       fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
       reject(err);
     });
   });
 }
 
-
-export async function eraseAllPythonFiles(
+export async function eraseAllFiles(
   fileCharacteristic: BluetoothRemoteGATTCharacteristic,
 ): Promise<void> {
   const id = 0x05;
 
   const payload = new Uint8Array([id]);
 
+  return await fileCharacteristic.writeValueWithResponse(payload);
+}
+
+export async function downloadFile(
+  fileCharacteristic: BluetoothRemoteGATTCharacteristic,
+  filename: string
+): Promise<Uint8Array<ArrayBuffer>> {
+  throw new Error(`Not implemented yet`);
+}
+
+export async function freeMemory(
+  fileCharacteristic: BluetoothRemoteGATTCharacteristic
+): Promise<void> {
+  const id = 0x08;
+  const payload = new Uint8Array([id]);
   return await fileCharacteristic.writeValueWithResponse(payload);
 }
 
@@ -176,7 +190,6 @@ export function handleFileResponse(event: Event) {
         break;
       case 0x04:
         // TODO file list response
-        //listFilesResponse.next(array);
         break;
       default:
         throw new Error(`Unknown file response ID`);
