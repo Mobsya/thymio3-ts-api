@@ -690,7 +690,6 @@ async function isMonoAndCorrectSampleRate(file) {
 }
 
 // src/files.ts
-import "rxjs";
 async function uploadFile(fileCharacteristic2, file) {
   const buffer = await file.arrayBuffer();
   const payload = new Uint8Array(buffer);
@@ -734,6 +733,54 @@ async function deleteFile(fileCharacteristic2, filename) {
   body.set(array.slice(0, 30));
   const payload = new Uint8Array([id, ...body]);
   return await fileCharacteristic2.writeValueWithResponse(payload);
+}
+async function listFiles(fileCharacteristic2) {
+  return new Promise((resolve, reject) => {
+    let totalLength = 0;
+    let receivedLength = 0;
+    let expectedCrc = 0;
+    let chunks = [];
+    let messageData = null;
+    const onResponse = (event) => {
+      const value = event.target.value;
+      if (!value) return;
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
+      if (id !== 4 && receivedLength === 0) return;
+      let offset = 0;
+      if (receivedLength === 0) {
+        offset = 1;
+        totalLength = view.getUint16(offset, true);
+        offset += 2;
+        expectedCrc = view.getUint32(offset, true);
+        offset += 4;
+      }
+      const seqId = view.getUint16(offset, true);
+      offset += 2;
+      const data = new Uint8Array(value.buffer, offset);
+      chunks.push(data);
+      receivedLength += data.length;
+      if (receivedLength >= totalLength) {
+        messageData = new Uint8Array(totalLength);
+        let pos = 0;
+        for (const chunk of chunks) {
+          messageData.set(chunk, pos);
+          pos += chunk.length;
+        }
+        fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        const decoder = new TextDecoder();
+        const listingString = decoder.decode(messageData);
+        const fileListings = JSON.parse(listingString);
+        resolve(fileListings);
+      }
+    };
+    fileCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+    const listCommand = new Uint8Array([4]);
+    fileCharacteristic2.writeValue(listCommand).catch((err) => {
+      fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+      reject(err);
+    });
+  });
 }
 function handleFileResponse(event) {
   const value = event.target.value;
@@ -895,11 +942,15 @@ async function saveFile2(filename) {
 async function deleteFile2(filename) {
   return await deleteFile(fileCharacteristic, filename);
 }
+async function listFiles2() {
+  return await listFiles(fileCharacteristic);
+}
 export {
   deleteFile2 as deleteFile,
   disconnect,
   executeLoadedScript2 as executeLoadedScript,
   isConnected,
+  listFiles2 as listFiles,
   playAudioFile2 as playAudioFile,
   playFrequency2 as playFrequency,
   recordAudio2 as recordAudio,

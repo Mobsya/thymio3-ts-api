@@ -1,4 +1,3 @@
-import { map, Observable, reduce, Subject, takeUntil } from "rxjs";
 import { THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID } from "./constants";
 import { createPayloadPackets, type UploadProgress } from "./utils";
 
@@ -6,14 +5,6 @@ export type FileListing = {
   name: string,
   size: number
 };
-
-/*
-let listingFiles = false;
-let listFilesResponse = new Subject<Uint8Array<ArrayBuffer>>();
-let listFilesResponse$: Observable<FileListing[]>;
-let listFilesMessageLength: number = 0;
-const listFilesMessageComplete$ = new Subject<void>();
-*/
 
 export async function uploadFile(
   fileCharacteristic: BluetoothRemoteGATTCharacteristic,
@@ -83,63 +74,75 @@ export async function deleteFile(
   return await fileCharacteristic.writeValueWithResponse(payload);
 }
 
-
-// TODO add the answer
-/*
 export async function listFiles(
-  fileCharacteristic: BluetoothRemoteGATTCharacteristic,
+  fileCharacteristic: BluetoothRemoteGATTCharacteristic
 ): Promise<FileListing[]> {
-  const id = 0x04;
+  return new Promise<FileListing[]>((resolve, reject) => {
+    let totalLength = 0;
+    let receivedLength = 0;
+    let expectedCrc = 0;
+    let chunks: Uint8Array[] = [];
+    let messageData: Uint8Array | null = null;
 
-  const payload = new Uint8Array([id]);
+    const onResponse = (event: Event) => {
+      const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
+      if (!value) return;
 
-  listFilesResponse$ = new Subject<Uint8Array<ArrayBuffer>>().pipe(
-    reduce((acc, packet) => {
-      const pack = new DataView(packet.buffer);
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
 
-      // First packet: accumulate the data, and set the expected message length
-      const id = pack.getUint8(0);
-      let seqId: number;
-      let message: Uint8Array<ArrayBuffer>;
-      if(id === 0x04) {
-        listingFiles = true;
-        listFilesMessageLength = pack.getUint16(1, true);
-        const crc = pack.getUint32(3, true);
-        seqId = pack.getUint16(7, true);
-        message = new Uint8Array(pack.buffer as ArrayBuffer, 9);
-      } else {
-        seqId = pack.getUint16(0, true);
-        message = new Uint8Array(pack.buffer as ArrayBuffer, 2);
+      // We only care about the file list response (0x04)
+      if (id !== 0x04 && receivedLength === 0) return;
+
+      let offset = 0;
+      if (receivedLength === 0) {
+        // First packet
+        offset = 1; // skip ID
+        totalLength = view.getUint16(offset, true); offset += 2;
+        expectedCrc = view.getUint32(offset, true); offset += 4;
       }
 
-      const newBuffer = new Uint8Array(acc.byteLength + message.byteLength);
-      newBuffer.set(new Uint8Array(acc.buffer), 0);
-      newBuffer.set(new Uint8Array(message.buffer), acc.byteLength);
+      const seqId = view.getUint16(offset, true); offset += 2;
+      const data = new Uint8Array(value.buffer, offset);
+      chunks.push(data);
+      receivedLength += data.length;
 
-      if(newBuffer.byteLength === listFilesMessageLength) {
-        listFilesMessageComplete$.next();
+      // Check if we got everything
+      if (receivedLength >= totalLength) {
+        // Concatenate all chunks
+        messageData = new Uint8Array(totalLength);
+        let pos = 0;
+        for (const chunk of chunks) {
+          messageData.set(chunk, pos);
+          pos += chunk.length;
+        }
+
+        // Optional: validate CRC if you have a CRC32 function
+        // const actualCrc = crc32(messageData);
+        // if (actualCrc !== expectedCrc) return reject(new Error('CRC mismatch'));
+
+        fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+
+        // Parse file listings from the payload
+        const decoder = new TextDecoder();
+        const listingString = decoder.decode(messageData);
+        const fileListings = JSON.parse(listingString) as FileListing[];
+        resolve(fileListings);
       }
-      return acc;
-    }),
-    map((array) => {
-      const decoder = new TextDecoder();
-      const messageString = decoder.decode(array);
-      const message = JSON.parse(messageString) as FileListing[];
-      return message;
-    }),
-    takeUntil(listFilesMessageComplete$)
-  );
+    };
 
-  fileCharacteristic.writeValueWithResponse(payload);
+    fileCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
 
-  let result: FileListing[];
-  listFilesResponse$.subscribe({
-    complete: (fileListings: FileListing[]) => {
-      result = fileListings;
-    }
-  })
+    // Send the "list files" request to the device
+    // (You'll need to fill in the correct command for your device)
+    const listCommand = new Uint8Array([0x04]); // e.g., 0x04 = "list files"
+    fileCharacteristic.writeValue(listCommand).catch(err => {
+      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+      reject(err);
+    });
+  });
 }
-*/
+
 
 export async function eraseAllPythonFiles(
   fileCharacteristic: BluetoothRemoteGATTCharacteristic,

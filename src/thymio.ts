@@ -9,6 +9,7 @@ import * as audio from './audio';
 import * as files from './files';
 import { delay } from "./utils";
 import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID } from "./constants";
+import type { FileListing } from "./files";
 
 let device: BluetoothDevice;
 let reconnecting = false;
@@ -235,4 +236,8 @@ export async function saveFile(filename: string): Promise<void> {
 
 export async function deleteFile(filename: string): Promise<void> {
   return await files.deleteFile(fileCharacteristic, filename);
+}
+
+export async function listFiles(): Promise<FileListing[]> {
+  return await files.listFiles(fileCharacteristic);
 }

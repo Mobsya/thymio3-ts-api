@@ -16,6 +16,11 @@ type ActuatorData = {
     sound: number;
 };
 
+type FileListing = {
+    name: string;
+    size: number;
+};
+
 /**
  * Request a bluetooth device and connect to it.
  */
@@ -68,5 +73,6 @@ declare function playFrequency(frequency: number, duration: number): Promise<voi
 declare function uploadFile(file: File): Promise<void>;
 declare function saveFile(filename: string): Promise<void>;
 declare function deleteFile(filename: string): Promise<void>;
+declare function listFiles(): Promise<FileListing[]>;
 
-export { deleteFile, disconnect, executeLoadedScript, isConnected, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFile, uploadFirmware };
+export { deleteFile, disconnect, executeLoadedScript, isConnected, listFiles, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFile, uploadFirmware };
