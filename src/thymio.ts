@@ -6,11 +6,9 @@ import * as python from './python';
 import * as sensorStream from './sensor-stream';
 import * as ota from './ota';
 import * as audio from './audio';
+import * as files from './files';
 import { delay } from "./utils";
-import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID } from "./constants";
-
-let otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic;
-let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic;
+import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID } from "./constants";
 
 let device: BluetoothDevice;
 let reconnecting = false;
@@ -18,6 +16,10 @@ let commandCharacteristic: BluetoothRemoteGATTCharacteristic;
 let sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic;
 let pythonCharacteristic: BluetoothRemoteGATTCharacteristic;
 let audioCharacteristic: BluetoothRemoteGATTCharacteristic;
+let fileCharacteristic: BluetoothRemoteGATTCharacteristic;
+
+let otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic;
+let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic;
 
 /**
  * Request a bluetooth device and connect to it.
@@ -72,6 +74,10 @@ async function connect() {
       audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
       await audioCharacteristic.startNotifications();
       audioCharacteristic.addEventListener('characteristicvaluechanged', audio.handleAudioResponse);
+
+      fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
+      await fileCharacteristic.startNotifications();
+      fileCharacteristic.addEventListener('characteristicvaluechanged', files.handleFileResponse);
 
       const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
 
@@ -215,4 +221,18 @@ export async function playFrequency(
   duration: number
 ) {
   return await audio.playFrequency(audioCharacteristic, frequency, duration);
+}
+
+//// FILES CHARACTERISTIC
+
+export async function uploadFile(file: File): Promise<void> {
+  return await files.uploadFile(fileCharacteristic, file);
+}
+
+export async function saveFile(filename: string): Promise<void> {
+  return await files.saveFile(fileCharacteristic, filename);
+}
+
+export async function deleteFile(filename: string): Promise<void> {
+  return await files.deleteFile(fileCharacteristic, filename);
 }

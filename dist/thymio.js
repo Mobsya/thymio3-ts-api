@@ -20,6 +20,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/thymio.ts
 var thymio_exports = {};
 __export(thymio_exports, {
+  deleteFile: () => deleteFile2,
   disconnect: () => disconnect,
   executeLoadedScript: () => executeLoadedScript2,
   isConnected: () => isConnected,
@@ -27,6 +28,7 @@ __export(thymio_exports, {
   playFrequency: () => playFrequency2,
   recordAudio: () => recordAudio2,
   requestAndConnect: () => requestAndConnect,
+  saveFile: () => saveFile2,
   sendPythonScript: () => sendPythonScript2,
   setActuatorState: () => setActuatorState2,
   startSensorStreaming: () => startSensorStreaming2,
@@ -35,6 +37,7 @@ __export(thymio_exports, {
   stopScriptExecution: () => stopScriptExecution2,
   stopSensorStreaming: () => stopSensorStreaming2,
   uploadAudioFile: () => uploadAudioFile2,
+  uploadFile: () => uploadFile2,
   uploadFirmware: () => uploadFirmware2
 });
 module.exports = __toCommonJS(thymio_exports);
@@ -114,6 +117,7 @@ var COMMAND_CHARACTERISTIC_UUID = "0000abf1-0000-1000-8000-00805f9b34fb";
 var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
 var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
 var AUDIO_CHARACTERISTIC_UUID = "0000abf4-0000-1000-8000-00805f9b34fb";
+var FILE_CHARACTERISTIC_UUID = "0000abf6-0000-1000-8000-00805f9b34fb";
 var OTA_SERVICE_UUID = 32792;
 var OTA_FIRMWARE_CHARACTERISTIC_UUID = 32800;
 var OTA_COMMAND_CHARACTERISTIC_UUID = 32802;
@@ -124,6 +128,7 @@ var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
 var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
 var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
 var THYMIO_AUDIO_UPLOAD_PROGRESS_EVENT_ID = "thymio-audio-upload-progress";
+var THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID = "thymio-file-upload-progress";
 
 // src/utils.ts
 function createPayloadPackets(payload, isAudio = false) {
@@ -728,15 +733,84 @@ async function isMonoAndCorrectSampleRate(file) {
   }
 }
 
+// src/files.ts
+var import_rxjs2 = require("rxjs");
+async function uploadFile(fileCharacteristic2, file) {
+  const buffer = await file.arrayBuffer();
+  const payload = new Uint8Array(buffer);
+  const packets = createPayloadPackets(payload, true);
+  const totalPackets = packets.length;
+  let uploadedPackets = 0;
+  for (const packet of packets) {
+    await fileCharacteristic2.writeValueWithResponse(packet);
+    const uploadProgressData = {
+      uploadedPackets,
+      totalPackets,
+      percentage: uploadedPackets / totalPackets * 100
+    };
+    const uploadProgressEvent = new CustomEvent(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, {
+      detail: uploadProgressData
+    });
+    document.dispatchEvent(uploadProgressEvent);
+    uploadedPackets++;
+  }
+}
+async function saveFile(fileCharacteristic2, filename) {
+  const id = 2;
+  const encoder = new TextEncoder();
+  const array = encoder.encode(filename);
+  if (array.byteLength > 30) {
+    throw new Error("File name too long.");
+  }
+  const body = new Uint8Array(30);
+  body.set(array.slice(0, 30));
+  const payload = new Uint8Array([id, ...body]);
+  return await fileCharacteristic2.writeValueWithResponse(payload);
+}
+async function deleteFile(fileCharacteristic2, filename) {
+  const id = 3;
+  const encoder = new TextEncoder();
+  const array = encoder.encode(filename);
+  if (array.byteLength > 30) {
+    throw new Error("File name too long.");
+  }
+  const body = new Uint8Array(30);
+  body.set(array.slice(0, 30));
+  const payload = new Uint8Array([id, ...body]);
+  return await fileCharacteristic2.writeValueWithResponse(payload);
+}
+function handleFileResponse(event) {
+  const value = event.target.value;
+  if (value) {
+    const buffer = value.buffer;
+    const array = new Uint8Array(buffer);
+    const view = new DataView(buffer);
+    const id = view.getUint8(0);
+    switch (id) {
+      case 1:
+        break;
+      case 2:
+        break;
+      case 3:
+        break;
+      case 4:
+        break;
+      default:
+        throw new Error(`Unknown file response ID`);
+    }
+  }
+}
+
 // src/thymio.ts
-var otaFirmwareCharacteristic;
-var otaCommandCharacteristic;
 var device;
 var reconnecting = false;
 var commandCharacteristic;
 var sensorStreamCharacteristic;
 var pythonCharacteristic;
 var audioCharacteristic;
+var fileCharacteristic;
+var otaFirmwareCharacteristic;
+var otaCommandCharacteristic;
 async function requestAndConnect() {
   device = await navigator.bluetooth.requestDevice({
     filters: [{ namePrefix: "THYMIO" }],
@@ -774,6 +848,9 @@ async function connect() {
       audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
       await audioCharacteristic.startNotifications();
       audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);
+      fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
+      await fileCharacteristic.startNotifications();
+      fileCharacteristic.addEventListener("characteristicvaluechanged", handleFileResponse);
       const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
       otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
       otaFirmwareCharacteristic.startNotifications();
@@ -853,8 +930,18 @@ async function recordAudio2(duration) {
 async function playFrequency2(frequency, duration) {
   return await playFrequency(audioCharacteristic, frequency, duration);
 }
+async function uploadFile2(file) {
+  return await uploadFile(fileCharacteristic, file);
+}
+async function saveFile2(filename) {
+  return await saveFile(fileCharacteristic, filename);
+}
+async function deleteFile2(filename) {
+  return await deleteFile(fileCharacteristic, filename);
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  deleteFile,
   disconnect,
   executeLoadedScript,
   isConnected,
@@ -862,6 +949,7 @@ async function playFrequency2(frequency, duration) {
   playFrequency,
   recordAudio,
   requestAndConnect,
+  saveFile,
   sendPythonScript,
   setActuatorState,
   startSensorStreaming,
@@ -870,6 +958,7 @@ async function playFrequency2(frequency, duration) {
   stopScriptExecution,
   stopSensorStreaming,
   uploadAudioFile,
+  uploadFile,
   uploadFirmware
 });
 //# sourceMappingURL=thymio.js.map

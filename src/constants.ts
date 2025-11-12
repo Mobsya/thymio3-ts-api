@@ -4,6 +4,7 @@ export const COMMAND_CHARACTERISTIC_UUID = '0000abf1-0000-1000-8000-00805f9b34fb
 export const SENSOR_STREAM_CHARACTERISTIC_UUID = '0000abf2-0000-1000-8000-00805f9b34fb';
 export const PYTHON_CHARACTERISTIC_UUID = '0000abf3-0000-1000-8000-00805f9b34fb';
 export const AUDIO_CHARACTERISTIC_UUID = '0000abf4-0000-1000-8000-00805f9b34fb';
+export const FILE_CHARACTERISTIC_UUID = '0000abf6-0000-1000-8000-00805f9b34fb';
 
 export const OTA_SERVICE_UUID = 0x8018;
 export const OTA_FIRMWARE_CHARACTERISTIC_UUID = 0x8020;
@@ -20,3 +21,4 @@ export const THYMIO_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-values';
 export const THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-other-values';
 export const THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = 'thymio-ota-upload-progress';
 export const THYMIO_AUDIO_UPLOAD_PROGRESS_EVENT_ID = 'thymio-audio-upload-progress';
+export const THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID = 'thymio-file-upload-progress';

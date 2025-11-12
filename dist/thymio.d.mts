@@ -65,5 +65,8 @@ declare function recordAudio(duration: number): Promise<void>;
  * @param duration Duration in tenths of a second, 0 means play forever
  */
 declare function playFrequency(frequency: number, duration: number): Promise<void>;
+declare function uploadFile(file: File): Promise<void>;
+declare function saveFile(filename: string): Promise<void>;
+declare function deleteFile(filename: string): Promise<void>;
 
-export { disconnect, executeLoadedScript, isConnected, playAudioFile, playFrequency, recordAudio, requestAndConnect, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFirmware };
+export { deleteFile, disconnect, executeLoadedScript, isConnected, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFile, uploadFirmware };
