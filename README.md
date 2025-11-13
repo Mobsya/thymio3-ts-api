@@ -50,6 +50,19 @@ To generate the `dist` folder, run `npm run build`.
 #### Events
 `thymio-audio-upload-progress` - event that exposes the current audio file upload progress\
 
+### Files
+
+`thymio.uploadFile(file)` - upload a file to the Thymio RAM\
+`thymio.saveFile(filename)` - save the file that is in the RAM for the storage\
+`thymio.deleteFile(filename)` - delete a file from the storage\
+`thymio.listFiles()` - list all files in the storage\
+`thymio.eraseAllFiles()` - erase all files from the storage\
+`thymio.downloadFile()` - download a file from the storage\
+`thymio.freeMemory()` - free the RAM from the uploaded files
+
+#### Events
+`thymio-file-upload-progress` - event that exposes the current file upload progress\
+
 ### OTA updates
 
 `thymio.uploadFirmware(firmware)` - upload the OTA update file, which will install itself on the robot and reboot it upon completion\
