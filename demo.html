@@ -115,6 +115,18 @@
       fileListOutput.textContent = JSON.stringify(fileList, null, 2);
     }
 
+    async function getFirmwareInfo() {
+      const firmwareInfo = await thymio.getFirmwareInfo();
+      const firmwareInfoOutput = document.getElementById("firmware-info-output");
+      firmwareInfoOutput.textContent = JSON.stringify(firmwareInfo, null, 2);
+    }
+
+    async function getMemoryInfo() {
+      const memoryInfo = await thymio.getMemoryInfo();
+      const memoryInfoOutput = document.getElementById("memory-info-output");
+      memoryInfoOutput.textContent = JSON.stringify(memoryInfo, null, 2);
+    }
+
     async function uploadOTA() {
       const fileInput = document.getElementById('firmware');
       const file = fileInput.files[0];
@@ -447,6 +459,20 @@ while 1:
     <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
       <button onclick="listFiles()">List files</button>
       <pre id="file-list-output">Waiting for file listings...</pre>
+    </div>
+  </div>
+
+  <div>
+    <h3>Device Info</h3>
+
+    <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
+      <button onclick="getFirmwareInfo()">Get firmware info</button>
+      <pre id="firmware-info-output">Waiting for firmware info...</pre>
+    </div>
+
+    <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
+      <button onclick="getMemoryInfo()">Get memory info</button>
+      <pre id="memory-info-output">Waiting for memory info...</pre>
     </div>
   </div>
 

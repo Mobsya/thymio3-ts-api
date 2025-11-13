@@ -26,6 +26,8 @@ __export(thymio_exports, {
   eraseAllFiles: () => eraseAllFiles2,
   executeLoadedScript: () => executeLoadedScript2,
   freeMemory: () => freeMemory2,
+  getFirmwareInfo: () => getFirmwareInfo2,
+  getMemoryInfo: () => getMemoryInfo2,
   isConnected: () => isConnected,
   listFiles: () => listFiles2,
   playAudioFile: () => playAudioFile2,
@@ -122,6 +124,7 @@ var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
 var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
 var AUDIO_CHARACTERISTIC_UUID = "0000abf4-0000-1000-8000-00805f9b34fb";
 var FILE_CHARACTERISTIC_UUID = "0000abf6-0000-1000-8000-00805f9b34fb";
+var DEVICE_INFO_CHARACTERISTIC_UUID = "0000abf5-0000-1000-8000-00805f9b34fb";
 var OTA_SERVICE_UUID = 32792;
 var OTA_FIRMWARE_CHARACTERISTIC_UUID = 32800;
 var OTA_COMMAND_CHARACTERISTIC_UUID = 32802;
@@ -951,6 +954,60 @@ async function freeMemory(fileCharacteristic2) {
   return await fileCharacteristic2.writeValueWithResponse(payload);
 }
 
+// src/device-info.ts
+async function getFirmwareInfo(deviceInfoCharacteristic2) {
+  return new Promise(async (resolve, reject) => {
+    const onResponse = (event) => {
+      const value = event.target.value;
+      if (!value) return;
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
+      if (id !== 1) return;
+      deviceInfoCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+      const messageLength = view.getUint16(1, true);
+      const data = new Uint8Array(value.buffer, 3);
+      const decoder = new TextDecoder();
+      const firmwareInfoString = decoder.decode(data);
+      const firmwareInfo = JSON.parse(firmwareInfoString);
+      resolve(firmwareInfo);
+    };
+    deviceInfoCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+    try {
+      const id = 1;
+      const payload = new Uint8Array([id]);
+      await deviceInfoCharacteristic2.writeValueWithResponse(payload);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+async function getMemoryInfo(deviceInfoCharacteristic2) {
+  return new Promise(async (resolve, reject) => {
+    const onResponse = (event) => {
+      const value = event.target.value;
+      if (!value) return;
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
+      if (id !== 2) return;
+      deviceInfoCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+      const messageLength = view.getUint16(1, true);
+      const data = new Uint8Array(value.buffer, 3);
+      const decoder = new TextDecoder();
+      const memoryInfoString = decoder.decode(data);
+      const memoryInfo = JSON.parse(memoryInfoString);
+      resolve(memoryInfo);
+    };
+    deviceInfoCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+    try {
+      const id = 2;
+      const payload = new Uint8Array([id]);
+      await deviceInfoCharacteristic2.writeValueWithResponse(payload);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 // src/thymio.ts
 var device;
 var reconnecting = false;
@@ -959,6 +1016,7 @@ var sensorStreamCharacteristic;
 var pythonCharacteristic;
 var audioCharacteristic;
 var fileCharacteristic;
+var deviceInfoCharacteristic;
 var otaFirmwareCharacteristic;
 var otaCommandCharacteristic;
 async function requestAndConnect() {
@@ -1000,6 +1058,8 @@ async function connect() {
       audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);
       fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
       await fileCharacteristic.startNotifications();
+      deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
+      await deviceInfoCharacteristic.startNotifications();
       const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
       otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
       otaFirmwareCharacteristic.startNotifications();
@@ -1100,6 +1160,12 @@ async function downloadFile2(filename) {
 async function freeMemory2() {
   return await freeMemory(fileCharacteristic);
 }
+async function getFirmwareInfo2() {
+  return await getFirmwareInfo(deviceInfoCharacteristic);
+}
+async function getMemoryInfo2() {
+  return await getMemoryInfo(deviceInfoCharacteristic);
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   deleteFile,
@@ -1108,6 +1174,8 @@ async function freeMemory2() {
   eraseAllFiles,
   executeLoadedScript,
   freeMemory,
+  getFirmwareInfo,
+  getMemoryInfo,
   isConnected,
   listFiles,
   playAudioFile,

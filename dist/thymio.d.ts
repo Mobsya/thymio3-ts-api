@@ -21,6 +21,15 @@ type FileListing = {
     size: number;
 };
 
+type FirmwareInfo = {
+    esp32_ver: number;
+    stm32_ver: number;
+};
+type MemoryInfo = {
+    flash_bytes_free: number;
+    ram_bytes_free: number;
+};
+
 /**
  * Request a bluetooth device and connect to it.
  */
@@ -105,5 +114,13 @@ declare function downloadFile(filename: string): Promise<Uint8Array<ArrayBuffer>
  * Free the RAM from the uploaded files.
  */
 declare function freeMemory(): Promise<void>;
+/**
+ * Get the device firmware info.
+ */
+declare function getFirmwareInfo(): Promise<FirmwareInfo>;
+/**
+ * Get the device memory info.
+ */
+declare function getMemoryInfo(): Promise<MemoryInfo>;
 
-export { deleteFile, disconnect, downloadFile, eraseAllFiles, executeLoadedScript, freeMemory, isConnected, listFiles, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFile, uploadFirmware };
+export { deleteFile, disconnect, downloadFile, eraseAllFiles, executeLoadedScript, freeMemory, getFirmwareInfo, getMemoryInfo, isConnected, listFiles, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFile, uploadFirmware };

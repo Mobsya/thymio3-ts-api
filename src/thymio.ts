@@ -7,9 +7,11 @@ import * as sensorStream from './sensor-stream';
 import * as ota from './ota';
 import * as audio from './audio';
 import * as files from './files';
+import * as deviceInfo from './device-info';
 import { delay } from "./utils";
-import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID } from "./constants";
+import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID } from "./constants";
 import type { FileListing } from "./files";
+import type { FirmwareInfo, MemoryInfo } from "./device-info";
 
 let device: BluetoothDevice;
 let reconnecting = false;
@@ -18,6 +20,7 @@ let sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic;
 let pythonCharacteristic: BluetoothRemoteGATTCharacteristic;
 let audioCharacteristic: BluetoothRemoteGATTCharacteristic;
 let fileCharacteristic: BluetoothRemoteGATTCharacteristic;
+let deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic;
 
 let otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic;
 let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic;
@@ -78,6 +81,9 @@ async function connect() {
 
       fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
       await fileCharacteristic.startNotifications();
+
+      deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
+      await deviceInfoCharacteristic.startNotifications();
 
       const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
 
@@ -279,4 +285,20 @@ export async function downloadFile(filename: string): Promise<Uint8Array<ArrayBu
  */
 export async function freeMemory(): Promise<void> {
   return await files.freeMemory(fileCharacteristic);
+}
+
+//// DEVICE INFO CHARACTERISTIC
+
+/**
+ * Get the device firmware info.
+ */
+export async function getFirmwareInfo(): Promise<FirmwareInfo> {
+  return await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic);
+}
+
+/**
+ * Get the device memory info.
+ */
+export async function getMemoryInfo(): Promise<MemoryInfo> {
+  return await deviceInfo.getMemoryInfo(deviceInfoCharacteristic);
 }
