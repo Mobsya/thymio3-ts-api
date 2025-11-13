@@ -86,6 +86,35 @@
       progressBar.textContent = progress + '%';
     });
 
+    async function uploadFile() {
+      const fileInput = document.getElementById('file-upload');
+      const file = fileInput.files[0];
+      await thymio.uploadFile(file);
+    }
+
+    document.addEventListener('thymio-file-upload-progress', function(e) {
+      const progress = e.detail.percentage;
+      const progressBar = document.getElementById('file-progress-bar');
+      progressBar.style.width = progress + '%';
+      progressBar.textContent = progress + '%';
+    });
+
+    async function saveFile() {
+      const filename = document.getElementById('filename').value;
+      await thymio.saveFile(filename);
+    }
+
+    async function deleteFile() {
+      const filename = document.getElementById('filename').value;
+      await thymio.deleteFile(filename);
+    }
+
+    async function listFiles() {
+      const fileList = await thymio.listFiles();
+      const fileListOutput = document.getElementById("file-list-output");
+      fileListOutput.textContent = JSON.stringify(fileList, null, 2);
+    }
+
     async function uploadOTA() {
       const fileInput = document.getElementById('firmware');
       const file = fileInput.files[0];
@@ -394,6 +423,30 @@ while 1:
       <button onclick="thymio.playAudioFile()">Play</button>
       <button onclick="thymio.stopAudioFile()">Stop</button>
       <button onclick="thymio.recordAudio(3)">Record</button>
+    </div>
+  </div>
+
+  <div>
+    <h3>Files</h3>
+    <input type="file" id="file-upload" />
+    <button onclick="uploadFile()">Upload file</button>
+
+    <h4>Upload progress</h4>
+    <div class="progress-container">
+      <div class="progress-bar" id="file-progress-bar">0%</div>
+    </div>
+
+    <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
+      <input type="text" id="filename" />
+      <button onclick="saveFile()">Save file</button>
+      <button onclick="deleteFile()">Delete file</button>
+      <button onclick="thymio.eraseAllFiles()">Erase all files</button>
+      <button onclick="thymio.freeMemory()">Free memory</button>
+    </div>
+
+    <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
+      <button onclick="listFiles()">List files</button>
+      <pre id="file-list-output">Waiting for file listings...</pre>
     </div>
   </div>
 
