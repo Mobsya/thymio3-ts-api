@@ -78,7 +78,6 @@ async function connect() {
 
       fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
       await fileCharacteristic.startNotifications();
-      fileCharacteristic.addEventListener('characteristicvaluechanged', files.handleFileResponse);
 
       const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
 

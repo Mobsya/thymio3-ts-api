@@ -295,32 +295,3 @@ export async function freeMemory(
   const payload = new Uint8Array([id]);
   return await fileCharacteristic.writeValueWithResponse(payload);
 }
-
-export function handleFileResponse(event: Event) {
-	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
-
-  if (value) {
-    const buffer = value.buffer;
-    const array = new Uint8Array(buffer) as Uint8Array<ArrayBuffer>;
-    const view = new DataView(buffer);
-
-    const id = view.getUint8(0);
-
-    switch(id) {
-      case 0x01:
-        // TODO file loaded reply
-        break;
-      case 0x02:
-        // TODO file save ack
-        break;
-      case 0x03:
-        // TODO file delete ack
-        break;
-      case 0x04:
-        // TODO file list response
-        break;
-      default:
-        throw new Error(`Unknown file response ID`);
-    }
-  }
-}

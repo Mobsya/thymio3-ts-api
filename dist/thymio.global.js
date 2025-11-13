@@ -10360,27 +10360,6 @@ var thymio = (() => {
     const payload = new Uint8Array([id]);
     return await fileCharacteristic2.writeValueWithResponse(payload);
   }
-  function handleFileResponse(event) {
-    const value = event.target.value;
-    if (value) {
-      const buffer = value.buffer;
-      const array = new Uint8Array(buffer);
-      const view = new DataView(buffer);
-      const id = view.getUint8(0);
-      switch (id) {
-        case 1:
-          break;
-        case 2:
-          break;
-        case 3:
-          break;
-        case 4:
-          break;
-        default:
-          throw new Error(`Unknown file response ID`);
-      }
-    }
-  }
 
   // src/thymio.ts
   var device;
@@ -10431,7 +10410,6 @@ var thymio = (() => {
         audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);
         fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
         await fileCharacteristic.startNotifications();
-        fileCharacteristic.addEventListener("characteristicvaluechanged", handleFileResponse);
         const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
         otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
         otaFirmwareCharacteristic.startNotifications();
