@@ -266,7 +266,7 @@ export async function eraseAllFiles(): Promise<void> {
 }
 
 /**
- * Download a file from the robot.
+ * Download a file from the robot. NOT IMPLEMENTED YET
  * @param filename Name of the file to download.
  * @returns An byte array of the downloaded file.
  */
