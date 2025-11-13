@@ -10149,48 +10149,150 @@ var thymio = (() => {
 
   // src/files.ts
   async function uploadFile(fileCharacteristic2, file) {
-    const buffer = await file.arrayBuffer();
-    const payload = new Uint8Array(buffer);
-    const packets = createPayloadPackets(payload, true);
-    const totalPackets = packets.length;
-    let uploadedPackets = 0;
-    for (const packet of packets) {
-      await fileCharacteristic2.writeValueWithResponse(packet);
-      const uploadProgressData = {
-        uploadedPackets,
-        totalPackets,
-        percentage: uploadedPackets / totalPackets * 100
+    return new Promise(async (resolve, reject) => {
+      const onResponse = (event) => {
+        const value = event.target.value;
+        if (!value) return;
+        const view = new DataView(value.buffer);
+        const id = view.getUint8(0);
+        if (id !== 1) return;
+        const responseCode = view.getUint8(1);
+        fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        switch (responseCode) {
+          case 0:
+            resolve();
+            break;
+          case 1:
+            reject(`File upload: CRC Mismatch`);
+            break;
+          case 2:
+            reject("File upload: Partial upload");
+            break;
+          case 3:
+            reject("File upload: Wrong sequence");
+            break;
+          case 4:
+            reject("File upload: File too big");
+            break;
+          default:
+            reject("File upload: Unknown response code");
+        }
       };
-      const uploadProgressEvent = new CustomEvent(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, {
-        detail: uploadProgressData
-      });
-      document.dispatchEvent(uploadProgressEvent);
-      uploadedPackets++;
-    }
+      fileCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+      try {
+        const buffer = await file.arrayBuffer();
+        const payload = new Uint8Array(buffer);
+        const packets = createPayloadPackets(payload, true);
+        const totalPackets = packets.length;
+        let uploadedPackets = 0;
+        for (const packet of packets) {
+          await fileCharacteristic2.writeValueWithResponse(packet);
+          const uploadProgressData = {
+            uploadedPackets,
+            totalPackets,
+            percentage: uploadedPackets / totalPackets * 100
+          };
+          const uploadProgressEvent = new CustomEvent(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, {
+            detail: uploadProgressData
+          });
+          document.dispatchEvent(uploadProgressEvent);
+          uploadedPackets++;
+        }
+      } catch (err) {
+        console.error(err);
+        fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        reject(err);
+      }
+    });
   }
   async function saveFile(fileCharacteristic2, filename) {
-    const id = 2;
-    const encoder = new TextEncoder();
-    const array = encoder.encode(filename);
-    if (array.byteLength > 30) {
-      throw new Error("File name too long.");
-    }
-    const body = new Uint8Array(30);
-    body.set(array.slice(0, 30));
-    const payload = new Uint8Array([id, ...body]);
-    return await fileCharacteristic2.writeValueWithResponse(payload);
+    return new Promise(async (resolve, reject) => {
+      const onResponse = (event) => {
+        const value = event.target.value;
+        if (!value) return;
+        const view = new DataView(value.buffer);
+        const id = view.getUint8(0);
+        if (id !== 2) return;
+        const responseCode = view.getUint8(1);
+        fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        switch (responseCode) {
+          case 0:
+            resolve();
+            break;
+          case 1:
+            reject(`File save: File not found`);
+            break;
+          case 2:
+            reject("File save: File too big");
+            break;
+          case 3:
+            reject("File save: Unknown error");
+            break;
+          default:
+            reject("File save: Unknown response code");
+        }
+      };
+      fileCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+      try {
+        const id = 2;
+        const encoder = new TextEncoder();
+        const array = encoder.encode(filename);
+        if (array.byteLength > 30) {
+          throw new Error("File name too long.");
+        }
+        const body = new Uint8Array(30);
+        body.set(array.slice(0, 30));
+        const payload = new Uint8Array([id, ...body]);
+        await fileCharacteristic2.writeValueWithResponse(payload);
+      } catch (err) {
+        console.error(err);
+        fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        reject(err);
+      }
+    });
   }
   async function deleteFile(fileCharacteristic2, filename) {
-    const id = 3;
-    const encoder = new TextEncoder();
-    const array = encoder.encode(filename);
-    if (array.byteLength > 30) {
-      throw new Error("File name too long.");
-    }
-    const body = new Uint8Array(30);
-    body.set(array.slice(0, 30));
-    const payload = new Uint8Array([id, ...body]);
-    return await fileCharacteristic2.writeValueWithResponse(payload);
+    return new Promise(async (resolve, reject) => {
+      const onResponse = (event) => {
+        const value = event.target.value;
+        if (!value) return;
+        const view = new DataView(value.buffer);
+        const id = view.getUint8(0);
+        if (id !== 3) return;
+        const responseCode = view.getUint8(1);
+        fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        switch (responseCode) {
+          case 0:
+            resolve();
+            break;
+          case 1:
+            reject(`File delete: File not found`);
+            break;
+          case 2:
+            reject("File delete: Unknown error");
+            break;
+          default:
+            reject("File delete: Unknown response code");
+        }
+      };
+      fileCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+      try {
+        const id = 3;
+        const encoder = new TextEncoder();
+        const array = encoder.encode(filename);
+        if (array.byteLength > 30) {
+          throw new Error("File name too long.");
+        }
+        const body = new Uint8Array(30);
+        body.set(array.slice(0, 30));
+        const payload = new Uint8Array([id, ...body]);
+        await fileCharacteristic2.writeValueWithResponse(payload);
+      } catch (err) {
+        console.error(err);
+        fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        reject(err);
+      }
+    });
   }
   async function listFiles(fileCharacteristic2) {
     return new Promise((resolve, reject) => {
@@ -10204,6 +10306,10 @@ var thymio = (() => {
         if (!value) return;
         const view = new DataView(value.buffer);
         const id2 = view.getUint8(0);
+        if (id2 === 5) {
+          fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+          reject("File list: could not generate file listing");
+        }
         if (id2 !== 4 && receivedLength === 0) return;
         let offset = 0;
         if (receivedLength === 0) {

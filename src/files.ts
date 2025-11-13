@@ -10,68 +10,191 @@ export async function uploadFile(
   fileCharacteristic: BluetoothRemoteGATTCharacteristic,
   file: File
 ): Promise<void> {
-  const buffer = await file.arrayBuffer();
-  const payload = new Uint8Array(buffer);
+  return new Promise<void>(async (resolve, reject) => {
+    const onResponse = (event: Event) => {
+      const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
+      if (!value) return;
 
-  const packets = createPayloadPackets(payload, true);
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
 
-  const totalPackets = packets.length;
-  let uploadedPackets = 0;
+      if (id !== 0x01) return;
 
-  for(const packet of packets) {
-    await fileCharacteristic.writeValueWithResponse(packet);
+      const responseCode = view.getUint8(1);
 
-    const uploadProgressData: UploadProgress = {
-      uploadedPackets,
-      totalPackets,
-      percentage: (uploadedPackets / totalPackets) * 100
+      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+
+      switch(responseCode) {
+        case 0x00:
+          resolve();
+          break;
+        case 0x01:
+          reject(`File upload: CRC Mismatch`);
+          break;
+        case 0x02:
+          reject('File upload: Partial upload');
+          break;
+        case 0x03:
+          reject('File upload: Wrong sequence');
+          break;
+        case 0x04:
+          reject('File upload: File too big');
+          break;
+        default:
+          reject('File upload: Unknown response code')
+      }
     };
-    const uploadProgressEvent = new CustomEvent(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, {
-      detail: uploadProgressData
-    });
-    document.dispatchEvent(uploadProgressEvent);
-    uploadedPackets++;
-  }
+
+    fileCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const payload = new Uint8Array(buffer);
+
+      const packets = createPayloadPackets(payload, true);
+
+      const totalPackets = packets.length;
+      let uploadedPackets = 0;
+
+      for(const packet of packets) {
+        await fileCharacteristic.writeValueWithResponse(packet);
+
+        const uploadProgressData: UploadProgress = {
+          uploadedPackets,
+          totalPackets,
+          percentage: (uploadedPackets / totalPackets) * 100
+        };
+        const uploadProgressEvent = new CustomEvent(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, {
+          detail: uploadProgressData
+        });
+        document.dispatchEvent(uploadProgressEvent);
+        uploadedPackets++;
+      }
+    } catch (err) {
+      console.error(err);
+      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+      reject(err);
+    }
+  });
 }
 
 export async function saveFile(
   fileCharacteristic: BluetoothRemoteGATTCharacteristic,
   filename: string
 ): Promise<void> {
-  const id = 0x02;
+  return new Promise<void>(async (resolve, reject) => {
+    const onResponse = (event: Event) => {
+      const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
+      if (!value) return;
 
-  const encoder = new TextEncoder();
-  const array = encoder.encode(filename);
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
 
-  if(array.byteLength > 30) {
-    throw new Error("File name too long.");
-  }
+      if (id !== 0x02) return;
 
-  const body = new Uint8Array(30);
-  body.set(array.slice(0, 30));
-  const payload = new Uint8Array([id, ...body]);
+      const responseCode = view.getUint8(1);
 
-  return await fileCharacteristic.writeValueWithResponse(payload);
+      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+
+      switch(responseCode) {
+        case 0x00:
+          resolve();
+          break;
+        case 0x01:
+          reject(`File save: File not found`);
+          break;
+        case 0x02:
+          reject('File save: File too big');
+          break;
+        case 0x03:
+          reject('File save: Unknown error');
+          break;
+        default:
+          reject('File save: Unknown response code')
+      }
+    };
+
+    fileCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
+
+    try {
+      const id = 0x02;
+
+      const encoder = new TextEncoder();
+      const array = encoder.encode(filename);
+
+      if(array.byteLength > 30) {
+        throw new Error("File name too long.");
+      }
+
+      const body = new Uint8Array(30);
+      body.set(array.slice(0, 30));
+      const payload = new Uint8Array([id, ...body]);
+
+      await fileCharacteristic.writeValueWithResponse(payload);
+    } catch (err) {
+      console.error(err);
+      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+      reject(err);
+    }
+  });
 }
 
 export async function deleteFile(
   fileCharacteristic: BluetoothRemoteGATTCharacteristic,
   filename: string
 ): Promise<void> {
-  const id = 0x03;
+  return new Promise<void>(async (resolve, reject) => {
+    const onResponse = (event: Event) => {
+      const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
+      if (!value) return;
 
-  const encoder = new TextEncoder();
-  const array = encoder.encode(filename);
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
 
-  if(array.byteLength > 30) {
-    throw new Error("File name too long.");
-  }
+      if (id !== 0x03) return;
 
-  const body = new Uint8Array(30);
-  body.set(array.slice(0, 30));
-  const payload = new Uint8Array([id, ...body]);
+      const responseCode = view.getUint8(1);
 
-  return await fileCharacteristic.writeValueWithResponse(payload);
+      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+
+      switch(responseCode) {
+        case 0x00:
+          resolve();
+          break;
+        case 0x01:
+          reject(`File delete: File not found`);
+          break;
+        case 0x02:
+          reject('File delete: Unknown error');
+          break;
+        default:
+          reject('File delete: Unknown response code')
+      }
+    };
+
+    fileCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
+
+    try {
+      const id = 0x03;
+
+      const encoder = new TextEncoder();
+      const array = encoder.encode(filename);
+
+      if(array.byteLength > 30) {
+        throw new Error("File name too long.");
+      }
+
+      const body = new Uint8Array(30);
+      body.set(array.slice(0, 30));
+      const payload = new Uint8Array([id, ...body]);
+
+      await fileCharacteristic.writeValueWithResponse(payload);
+    } catch (err) {
+        console.error(err);
+        fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+        reject(err);
+    }
+  });
 }
 
 export async function listFiles(
@@ -90,6 +213,11 @@ export async function listFiles(
 
       const view = new DataView(value.buffer);
       const id = view.getUint8(0);
+
+      if (id === 0x05) {
+        fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+        reject("File list: could not generate file listing");
+      }
 
       // We only care about the file list response (0x04)
       if (id !== 0x04 && receivedLength === 0) return;
