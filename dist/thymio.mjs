@@ -72,6 +72,7 @@ var MAIN_SERVICE_UUID = "0000abf0-0000-1000-8000-00805f9b34fb";
 var COMMAND_CHARACTERISTIC_UUID = "0000abf1-0000-1000-8000-00805f9b34fb";
 var SENSOR_STREAM_CHARACTERISTIC_UUID = "0000abf2-0000-1000-8000-00805f9b34fb";
 var PYTHON_CHARACTERISTIC_UUID = "0000abf3-0000-1000-8000-00805f9b34fb";
+var STD_OUT_CHARACTERISTIC_UUID = "0000abf7-0000-1000-8000-00805f9b34fb";
 var AUDIO_CHARACTERISTIC_UUID = "0000abf4-0000-1000-8000-00805f9b34fb";
 var FILE_CHARACTERISTIC_UUID = "0000abf6-0000-1000-8000-00805f9b34fb";
 var DEVICE_INFO_CHARACTERISTIC_UUID = "0000abf5-0000-1000-8000-00805f9b34fb";
@@ -86,6 +87,7 @@ var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
 var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
 var THYMIO_AUDIO_UPLOAD_PROGRESS_EVENT_ID = "thymio-audio-upload-progress";
 var THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID = "thymio-file-upload-progress";
+var THYMIO_STD_OUT_EVENT_ID = "thymio-std-out-values";
 
 // src/utils.ts
 function createPayloadPackets(payload, isAudio = false) {
@@ -958,12 +960,26 @@ async function getMemoryInfo(deviceInfoCharacteristic2) {
   });
 }
 
+// src/std-out.ts
+function handleStdOutResponse(event) {
+  const value = event.target.value;
+  if (value) {
+    const decoder = new TextDecoder();
+    const stdOut = decoder.decode(value.buffer);
+    const stdOutEvent = new CustomEvent(THYMIO_STD_OUT_EVENT_ID, {
+      detail: stdOut
+    });
+    document.dispatchEvent(stdOutEvent);
+  }
+}
+
 // src/thymio.ts
 var device;
 var reconnecting = false;
 var commandCharacteristic;
 var sensorStreamCharacteristic;
 var pythonCharacteristic;
+var stdOutCharacteristic;
 var audioCharacteristic;
 var fileCharacteristic;
 var deviceInfoCharacteristic;
@@ -1003,6 +1019,9 @@ async function connect() {
       pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
       await pythonCharacteristic.startNotifications();
       pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
+      stdOutCharacteristic = await mainService.getCharacteristic(STD_OUT_CHARACTERISTIC_UUID);
+      await stdOutCharacteristic.startNotifications();
+      stdOutCharacteristic.addEventListener("characteristicvaluechanged", handleStdOutResponse);
       audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
       await audioCharacteristic.startNotifications();
       audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);

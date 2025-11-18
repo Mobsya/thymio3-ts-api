@@ -29,6 +29,11 @@
       await thymio.stopScriptExecution();
     }
 
+    document.addEventListener("thymio-std-out-values", (event) => {
+      const stdOutOutput = document.getElementById("std-out-output");
+      stdOutOutput.textContent = event.detail;
+    });
+
     function getRGB(prefix) {
       return {
         r: parseInt((document.getElementById(prefix + "R")).value),
@@ -302,6 +307,15 @@ while 1:
     <button onclick="executeClick()">Execute code</button>
     <button onclick="stopClick()">Stop code execution</button>
 
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 1rem;">
+    <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
+      <div>
+        <h3>STD OUT</h1>
+        <pre id="std-out-output">Waiting for the std out data...</pre>
+      </div>
+    </div>
   </div>
 
   <div>

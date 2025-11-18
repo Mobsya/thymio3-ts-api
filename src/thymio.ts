@@ -9,15 +9,17 @@ import * as audio from './audio';
 import * as files from './files';
 import * as deviceInfo from './device-info';
 import { delay } from "./utils";
-import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID } from "./constants";
+import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID, STD_OUT_CHARACTERISTIC_UUID } from "./constants";
 import type { FileListing } from "./files";
 import type { FirmwareInfo, MemoryInfo } from "./device-info";
+import { handleStdOutResponse } from "./std-out";
 
 let device: BluetoothDevice;
 let reconnecting = false;
 let commandCharacteristic: BluetoothRemoteGATTCharacteristic;
 let sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic;
 let pythonCharacteristic: BluetoothRemoteGATTCharacteristic;
+let stdOutCharacteristic: BluetoothRemoteGATTCharacteristic;
 let audioCharacteristic: BluetoothRemoteGATTCharacteristic;
 let fileCharacteristic: BluetoothRemoteGATTCharacteristic;
 let deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic;
@@ -74,6 +76,10 @@ async function connect() {
       pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
       await pythonCharacteristic.startNotifications();
       pythonCharacteristic.addEventListener('characteristicvaluechanged', python.handlePythonResponse);
+
+      stdOutCharacteristic = await mainService.getCharacteristic(STD_OUT_CHARACTERISTIC_UUID);
+      await stdOutCharacteristic.startNotifications();
+      stdOutCharacteristic.addEventListener('characteristicvaluechanged', handleStdOutResponse);
 
       audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
       await audioCharacteristic.startNotifications();
