@@ -30,6 +30,10 @@ To generate the `dist` folder, run `npm run build`.
 `thymio.executeLoadedScript()` - executes the script loaded in the Thymio memory\
 `thymio.stopScriptExecution()` - stops the script currently running on the Thymio
 
+#### Events
+
+`thymio-std-out-values` - event that exposes the Thymio's std out values
+
 ### Sensor data streaming
 
 `thymio.startSensorStreaming(other)` - starts sensor streaming\
