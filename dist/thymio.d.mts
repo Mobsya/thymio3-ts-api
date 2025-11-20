@@ -53,6 +53,9 @@ declare function startSensorStreaming(other?: boolean): Promise<void>;
  * Stop all sensor streaming.
  */
 declare function stopSensorStreaming(): Promise<void>;
+declare function isNewerFirmwareAvailable(): Promise<boolean>;
+declare function getNewFirmware(): Promise<ArrayBuffer>;
+declare function updateFirmware(): Promise<void>;
 declare function uploadFirmware(firmware: ArrayBuffer): Promise<void>;
 declare function stopFirmwareUpload(): Promise<void>;
 /**
@@ -123,4 +126,4 @@ declare function getFirmwareInfo(): Promise<FirmwareInfo>;
  */
 declare function getMemoryInfo(): Promise<MemoryInfo>;
 
-export { deleteFile, disconnect, downloadFile, eraseAllFiles, executeLoadedScript, freeMemory, getFirmwareInfo, getMemoryInfo, isConnected, listFiles, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, uploadAudioFile, uploadFile, uploadFirmware };
+export { deleteFile, disconnect, downloadFile, eraseAllFiles, executeLoadedScript, freeMemory, getFirmwareInfo, getMemoryInfo, getNewFirmware, isConnected, isNewerFirmwareAvailable, listFiles, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, sendPythonScript, setActuatorState, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, updateFirmware, uploadAudioFile, uploadFile, uploadFirmware };

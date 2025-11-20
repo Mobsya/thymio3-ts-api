@@ -396,6 +396,60 @@ function parseOtherSensorData(bytes) {
   };
 }
 
+// src/device-info.ts
+async function getFirmwareInfo(deviceInfoCharacteristic2) {
+  return new Promise(async (resolve, reject) => {
+    const onResponse = (event) => {
+      const value = event.target.value;
+      if (!value) return;
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
+      if (id !== 1) return;
+      deviceInfoCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+      const messageLength = view.getUint16(1, true);
+      const data = new Uint8Array(value.buffer, 3);
+      const decoder = new TextDecoder();
+      const firmwareInfoString = decoder.decode(data);
+      const firmwareInfo = JSON.parse(firmwareInfoString);
+      resolve(firmwareInfo);
+    };
+    deviceInfoCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+    try {
+      const id = 1;
+      const payload = new Uint8Array([id]);
+      await deviceInfoCharacteristic2.writeValueWithResponse(payload);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+async function getMemoryInfo(deviceInfoCharacteristic2) {
+  return new Promise(async (resolve, reject) => {
+    const onResponse = (event) => {
+      const value = event.target.value;
+      if (!value) return;
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
+      if (id !== 2) return;
+      deviceInfoCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+      const messageLength = view.getUint16(1, true);
+      const data = new Uint8Array(value.buffer, 3);
+      const decoder = new TextDecoder();
+      const memoryInfoString = decoder.decode(data);
+      const memoryInfo = JSON.parse(memoryInfoString);
+      resolve(memoryInfo);
+    };
+    deviceInfoCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+    try {
+      const id = 2;
+      const payload = new Uint8Array([id]);
+      await deviceInfoCharacteristic2.writeValueWithResponse(payload);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 // src/ota.ts
 import { BehaviorSubject, filter, firstValueFrom, timeout } from "rxjs";
 var otaCommandResponse$;
@@ -558,6 +612,53 @@ function buildFinalPacket(sectorIndex, data) {
   const crc = crc16_ccitt(data);
   view.setUint16(3 + FIRMWARE_PAYLOAD_SIZE - 2, crc, true);
   return new Uint8Array(buffer);
+}
+
+// src/updater.ts
+var FIRMWARE_URL = "https://api.github.com/repos/mobsya/thymio3-firmware/releases/latest";
+async function isNewerFirmwareAvailable(deviceInfoCharacteristic2) {
+  const localVersion = (await getFirmwareInfo(deviceInfoCharacteristic2)).esp32_ver;
+  const latestRelease = await getLatestRelease();
+  const remoteVersion = latestRelease.tagName;
+  return isNewerVersion(remoteVersion, localVersion);
+}
+async function getNewFirmware(deviceInfoCharacteristic2) {
+  const localVersion = (await getFirmwareInfo(deviceInfoCharacteristic2)).esp32_ver;
+  const latestRelease = await getLatestRelease();
+  if (isNewerVersion(latestRelease.tagName, localVersion)) {
+    const firmwareURL = latestRelease.assetUrl;
+    return downloadFirmware(firmwareURL);
+  } else {
+    throw new Error(
+      `The local version ${localVersion} is the same or newer than the latest firmware version ${latestRelease.tagName}`
+    );
+  }
+}
+async function updateFirmware(deviceInfoCharacteristic2, otaCommandCharacteristic2, otaFirmwareCharacteristic2) {
+  const newFirmware = await getNewFirmware(deviceInfoCharacteristic2);
+  return await uploadFirmware(otaCommandCharacteristic2, otaFirmwareCharacteristic2, newFirmware);
+}
+async function downloadFirmware(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Firmware download failed");
+  return await response.arrayBuffer();
+}
+async function getLatestRelease() {
+  const response = await fetch(FIRMWARE_URL);
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+  const release = await response.json();
+  return {
+    tagName: release.tag_name,
+    // e.g., "v1.0.2"
+    assetUrl: release.assets[0]?.browser_download_url,
+    assetName: release.assets[0]?.name
+  };
+}
+function isNewerVersion(remoteTagName, localVersion) {
+  const remoteVersion = Number(remoteTagName.substring(1));
+  return remoteVersion > localVersion;
 }
 
 // src/audio.ts
@@ -1016,60 +1117,6 @@ async function sendFileDownloadAck(fileCharacteristic2) {
   return await fileCharacteristic2.writeValueWithResponse(payload);
 }
 
-// src/device-info.ts
-async function getFirmwareInfo(deviceInfoCharacteristic2) {
-  return new Promise(async (resolve, reject) => {
-    const onResponse = (event) => {
-      const value = event.target.value;
-      if (!value) return;
-      const view = new DataView(value.buffer);
-      const id = view.getUint8(0);
-      if (id !== 1) return;
-      deviceInfoCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
-      const messageLength = view.getUint16(1, true);
-      const data = new Uint8Array(value.buffer, 3);
-      const decoder = new TextDecoder();
-      const firmwareInfoString = decoder.decode(data);
-      const firmwareInfo = JSON.parse(firmwareInfoString);
-      resolve(firmwareInfo);
-    };
-    deviceInfoCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
-    try {
-      const id = 1;
-      const payload = new Uint8Array([id]);
-      await deviceInfoCharacteristic2.writeValueWithResponse(payload);
-    } catch (err) {
-      reject(err);
-    }
-  });
-}
-async function getMemoryInfo(deviceInfoCharacteristic2) {
-  return new Promise(async (resolve, reject) => {
-    const onResponse = (event) => {
-      const value = event.target.value;
-      if (!value) return;
-      const view = new DataView(value.buffer);
-      const id = view.getUint8(0);
-      if (id !== 2) return;
-      deviceInfoCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
-      const messageLength = view.getUint16(1, true);
-      const data = new Uint8Array(value.buffer, 3);
-      const decoder = new TextDecoder();
-      const memoryInfoString = decoder.decode(data);
-      const memoryInfo = JSON.parse(memoryInfoString);
-      resolve(memoryInfo);
-    };
-    deviceInfoCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
-    try {
-      const id = 2;
-      const payload = new Uint8Array([id]);
-      await deviceInfoCharacteristic2.writeValueWithResponse(payload);
-    } catch (err) {
-      reject(err);
-    }
-  });
-}
-
 // src/std-out.ts
 function handleStdOutResponse(event) {
   const value = event.target.value;
@@ -1210,6 +1257,19 @@ async function startSensorStreaming2(other = false) {
 async function stopSensorStreaming2() {
   return await stopSensorStreaming(sensorStreamCharacteristic);
 }
+async function isNewerFirmwareAvailable2() {
+  return await isNewerFirmwareAvailable(deviceInfoCharacteristic);
+}
+async function getNewFirmware2() {
+  return await getNewFirmware(deviceInfoCharacteristic);
+}
+async function updateFirmware2() {
+  return await updateFirmware(
+    deviceInfoCharacteristic,
+    otaCommandCharacteristic,
+    otaFirmwareCharacteristic
+  );
+}
 async function uploadFirmware2(firmware) {
   return await uploadFirmware(otaCommandCharacteristic, otaFirmwareCharacteristic, firmware);
 }
@@ -1267,7 +1327,9 @@ export {
   freeMemory2 as freeMemory,
   getFirmwareInfo2 as getFirmwareInfo,
   getMemoryInfo2 as getMemoryInfo,
+  getNewFirmware2 as getNewFirmware,
   isConnected,
+  isNewerFirmwareAvailable2 as isNewerFirmwareAvailable,
   listFiles2 as listFiles,
   playAudioFile2 as playAudioFile,
   playFrequency2 as playFrequency,
@@ -1281,6 +1343,7 @@ export {
   stopFirmwareUpload2 as stopFirmwareUpload,
   stopScriptExecution2 as stopScriptExecution,
   stopSensorStreaming2 as stopSensorStreaming,
+  updateFirmware2 as updateFirmware,
   uploadAudioFile2 as uploadAudioFile,
   uploadFile2 as uploadFile,
   uploadFirmware2 as uploadFirmware

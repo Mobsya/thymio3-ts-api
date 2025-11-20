@@ -4,6 +4,7 @@ import type { ActuatorData } from "./command";
 import * as command from './command';
 import * as python from './python';
 import * as sensorStream from './sensor-stream';
+import * as updater from './updater';
 import * as ota from './ota';
 import * as audio from './audio';
 import * as files from './files';
@@ -206,6 +207,24 @@ export async function startSensorStreaming(other = false) {
  */
 export async function stopSensorStreaming() {
   return await sensorStream.stopSensorStreaming(sensorStreamCharacteristic);
+}
+
+//// FIRMWARE UPDATE
+
+export async function isNewerFirmwareAvailable(): Promise<boolean> {
+  return await updater.isNewerFirmwareAvailable(deviceInfoCharacteristic);
+}
+
+export async function getNewFirmware(): Promise<ArrayBuffer> {
+  return await updater.getNewFirmware(deviceInfoCharacteristic);
+}
+
+export async function updateFirmware(): Promise<void> {
+  return await updater.updateFirmware(
+    deviceInfoCharacteristic,
+    otaCommandCharacteristic,
+    otaFirmwareCharacteristic
+  );
 }
 
 //// OTA CHARACTERISTIC

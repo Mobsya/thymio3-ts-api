@@ -135,7 +135,9 @@
     }
 
     async function getFirmwareInfo() {
+      console.log('doing')
       const firmwareInfo = await thymio.getFirmwareInfo();
+      console.log(firmwareInfo)
       const firmwareInfoOutput = document.getElementById("firmware-info-output");
       firmwareInfoOutput.textContent = JSON.stringify(firmwareInfo, null, 2);
     }
@@ -512,10 +514,17 @@ while 1:
   </div>
 
   <div>
-    <h3>OTA update</h3>
-    <input type="file" id="firmware" />
-    <button onclick="uploadOTA()">Start OTA</button>
-    <button onclick="stopOTA()">Stop OTA Upload</button>
+    <h3>Firmware update</h3>
+    <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
+      <button onclick="thymio.isNewerFirmwareAvailable()">Check for newer firmware</button>
+      <button onclick="thymio.updateFirmware()">Update Firmware</button>
+    </div>
+
+    <div style="display: flex; flex-direction: row; justify-content: space-around; align-items: center; gap: 1rem;">
+      <input type="file" id="firmware" />
+      <button onclick="uploadOTA()">Start OTA</button>
+      <button onclick="stopOTA()">Stop OTA Upload</button>
+    </div>
 
     <h4>Upload progress</h4>
     <div class="progress-container">
