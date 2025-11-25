@@ -61,7 +61,7 @@ To generate the `dist` folder, run `npm run build`.
 `thymio.deleteFile(filename)` - delete a file from the storage\
 `thymio.listFiles()` - list all files in the storage\
 `thymio.eraseAllFiles()` - erase all files from the storage\
-`thymio.downloadFile()` - download a file from the storage. NOT IMPLEMENTED YET\
+`thymio.downloadFile(filename)` - download file from Thymio's storage \
 `thymio.freeMemory()` - free the RAM from the uploaded files
 
 #### Events

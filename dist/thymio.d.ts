@@ -105,7 +105,7 @@ declare function listFiles(): Promise<FileListing[]>;
  */
 declare function eraseAllFiles(): Promise<void>;
 /**
- * Download a file from the robot. NOT IMPLEMENTED YET
+ * Download a file from the robot.
  * @param filename Name of the file to download.
  * @returns An byte array of the downloaded file.
  */

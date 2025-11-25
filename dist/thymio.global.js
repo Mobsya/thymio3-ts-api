@@ -9547,6 +9547,7 @@ var thymio = (() => {
   var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
   var THYMIO_AUDIO_UPLOAD_PROGRESS_EVENT_ID = "thymio-audio-upload-progress";
   var THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID = "thymio-file-upload-progress";
+  var THYMIO_FILE_DOWNLOAD_PROGRESS_EVENT_ID = "thymio-file-download-progress";
   var THYMIO_STD_OUT_EVENT_ID = "thymio-std-out-values";
 
   // src/utils.ts
@@ -10358,10 +10359,116 @@ var thymio = (() => {
     return await fileCharacteristic2.writeValueWithResponse(payload);
   }
   async function downloadFile(fileCharacteristic2, filename) {
-    throw new Error(`Not implemented yet`);
+    return new Promise(async (resolve, reject) => {
+      let totalLength = 0;
+      let receivedLength = 0;
+      let expectedCrc = 0;
+      let receivedChunks = [];
+      let fileArray = null;
+      const onResponse = async (event) => {
+        const value = event.target.value;
+        if (!value) return;
+        const view = new DataView(value.buffer);
+        const id = view.getUint8(0);
+        console.log(`id : ${id}`);
+        if (id !== 7 && receivedLength === 0) return;
+        let offset = 0;
+        if (receivedLength === 0) {
+          console.log("first response");
+          offset = 1;
+          totalLength = view.getUint32(offset, true);
+          offset += 4;
+          expectedCrc = view.getUint32(offset, true);
+          offset += 4;
+        }
+        const seqId = view.getUint16(offset, true);
+        offset += 2;
+        const data = new Uint8Array(value.buffer, offset);
+        receivedChunks.push(data);
+        receivedLength += data.length;
+        console.log(receivedLength);
+        const downloadProgressData = {
+          uploadedPackets: receivedLength,
+          totalPackets: totalLength,
+          percentage: receivedLength / totalLength * 100
+        };
+        const downloadProgressEvent = new CustomEvent(THYMIO_FILE_DOWNLOAD_PROGRESS_EVENT_ID, {
+          detail: downloadProgressData
+        });
+        document.dispatchEvent(downloadProgressEvent);
+        if (receivedLength >= totalLength) {
+          fileArray = new Uint8Array(totalLength);
+          let pos = 0;
+          for (const chunk of receivedChunks) {
+            fileArray.set(chunk, pos);
+            pos += chunk.length;
+          }
+          fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+          resolve(fileArray);
+        }
+        await sendFileDownloadAck(fileCharacteristic2);
+      };
+      fileCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+      try {
+        console.log("sending dw request");
+        await sendFileDownloadRequest(fileCharacteristic2, filename);
+        console.log("keeping on");
+      } catch (err) {
+        fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        reject(err);
+      }
+    });
   }
   async function freeMemory(fileCharacteristic2) {
     const id = 8;
+    const payload = new Uint8Array([id]);
+    return await fileCharacteristic2.writeValueWithResponse(payload);
+  }
+  async function sendFileDownloadRequest(fileCharacteristic2, filename) {
+    return new Promise(async (resolve, reject) => {
+      const onResponse = (event) => {
+        const value = event.target.value;
+        if (!value) return;
+        const view = new DataView(value.buffer);
+        const id = view.getUint8(0);
+        if (id !== 8) return;
+        const responseCode = view.getUint8(1);
+        fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        switch (responseCode) {
+          case 0:
+            resolve();
+            break;
+          case 1:
+            reject(`File download: file not found: ${filename}`);
+            break;
+          case 2:
+            reject(`File download: unknown error`);
+            break;
+          default:
+            reject("File upload: Unknown response code");
+        }
+      };
+      fileCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+      try {
+        const id = 6;
+        const encoder = new TextEncoder();
+        const array = encoder.encode(filename);
+        if (array.byteLength > 30) {
+          throw new Error("File name too long.");
+        }
+        const body = new Uint8Array(30);
+        body.set(array.slice(0, 30));
+        const payload = new Uint8Array([id, ...body]);
+        await fileCharacteristic2.writeValueWithResponse(payload);
+      } catch (err) {
+        console.error(err);
+        fileCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        reject(err);
+      }
+    });
+  }
+  async function sendFileDownloadAck(fileCharacteristic2) {
+    const id = 7;
     const payload = new Uint8Array([id]);
     return await fileCharacteristic2.writeValueWithResponse(payload);
   }

@@ -24,4 +24,5 @@ export const THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-other-values';
 export const THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = 'thymio-ota-upload-progress';
 export const THYMIO_AUDIO_UPLOAD_PROGRESS_EVENT_ID = 'thymio-audio-upload-progress';
 export const THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID = 'thymio-file-upload-progress';
+export const THYMIO_FILE_DOWNLOAD_PROGRESS_EVENT_ID = 'thymio-file-download-progress';
 export const THYMIO_STD_OUT_EVENT_ID = 'thymio-std-out-values';

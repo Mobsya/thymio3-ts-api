@@ -1,4 +1,4 @@
-import { THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID } from "./constants";
+import { THYMIO_FILE_DOWNLOAD_PROGRESS_EVENT_ID, THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID } from "./constants";
 import { createPayloadPackets, type UploadProgress } from "./utils";
 
 export type FileListing = {
@@ -285,13 +285,156 @@ export async function downloadFile(
   fileCharacteristic: BluetoothRemoteGATTCharacteristic,
   filename: string
 ): Promise<Uint8Array<ArrayBuffer>> {
-  throw new Error(`Not implemented yet`);
+  return new Promise<Uint8Array<ArrayBuffer>>(async (resolve, reject) => {
+    let totalLength = 0;
+    let receivedLength = 0;
+    let expectedCrc = 0;
+    let receivedChunks: Uint8Array[] = [];
+    let fileArray: Uint8Array | null = null;
+
+    const onResponse = async (event: Event) => {
+      const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
+      if (!value) return;
+
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
+
+      console.log(`id : ${id}`)
+
+      // We only care about the file download response 0x07
+      if (id !== 0x07 && receivedLength === 0) return;
+
+      let offset = 0;
+      if (receivedLength === 0) {
+        console.log('first response')
+        // First packet
+        offset = 1; // skip ID
+        totalLength = view.getUint32(offset, true); offset += 4;
+        expectedCrc = view.getUint32(offset, true); offset += 4;
+      }
+
+      const seqId = view.getUint16(offset, true); offset += 2;
+      const data = new Uint8Array(value.buffer, offset);
+      receivedChunks.push(data);
+      receivedLength += data.length;
+      console.log(receivedLength)
+
+      // TODO put in a separate function
+      const downloadProgressData: UploadProgress = {
+        uploadedPackets: receivedLength,
+        totalPackets: totalLength,
+        percentage: (receivedLength / totalLength) * 100
+      };
+      const downloadProgressEvent = new CustomEvent(THYMIO_FILE_DOWNLOAD_PROGRESS_EVENT_ID, {
+        detail: downloadProgressData
+      });
+      document.dispatchEvent(downloadProgressEvent);
+
+      // Check if we got everything
+      if (receivedLength >= totalLength) {
+        // Concatenate all chunks
+        fileArray = new Uint8Array(totalLength);
+        let pos = 0;
+        for (const chunk of receivedChunks) {
+          fileArray.set(chunk, pos);
+          pos += chunk.length;
+        }
+
+        // Optional: validate CRC if you have a CRC32 function
+        // const actualCrc = crc32(messageData);
+        // if (actualCrc !== expectedCrc) return reject(new Error('CRC mismatch'));
+
+        fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+
+        resolve(fileArray as Uint8Array<ArrayBuffer>);
+      }
+
+      // Send the file download ack after each chunk reception
+      await sendFileDownloadAck(fileCharacteristic);
+    };
+
+    fileCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
+
+    try {
+      console.log('sending dw request')
+      await sendFileDownloadRequest(fileCharacteristic, filename);
+      console.log('keeping on')
+    } catch (err) {
+      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+      reject(err);
+    }
+  });
 }
 
 export async function freeMemory(
   fileCharacteristic: BluetoothRemoteGATTCharacteristic
 ): Promise<void> {
   const id = 0x08;
+  const payload = new Uint8Array([id]);
+  return await fileCharacteristic.writeValueWithResponse(payload);
+}
+
+async function sendFileDownloadRequest(
+  fileCharacteristic: BluetoothRemoteGATTCharacteristic,
+  filename: string,
+): Promise<void> {
+  return new Promise<void>(async (resolve, reject) => {
+    const onResponse = (event: Event) => {
+      const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
+      if (!value) return;
+
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
+
+      if (id !== 0x08) return;
+
+      const responseCode = view.getUint8(1);
+
+      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+
+      switch(responseCode) {
+        case 0x00:
+          resolve();
+          break;
+        case 0x01:
+          reject(`File download: file not found: ${filename}`);
+          break;
+        case 0x02:
+          reject(`File download: unknown error`);
+          break;
+        default:
+          reject('File upload: Unknown response code')
+      }
+    };
+
+    fileCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
+
+    try {
+      const id = 0x06;
+      const encoder = new TextEncoder();
+      const array = encoder.encode(filename);
+
+      if(array.byteLength > 30) {
+        throw new Error("File name too long.");
+      }
+
+      const body = new Uint8Array(30);
+      body.set(array.slice(0, 30));
+      const payload = new Uint8Array([id, ...body]);
+
+      await fileCharacteristic.writeValueWithResponse(payload);
+    } catch (err) {
+      console.error(err);
+      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+      reject(err);
+    }
+  })
+}
+
+async function sendFileDownloadAck(
+  fileCharacteristic: BluetoothRemoteGATTCharacteristic
+): Promise<void> {
+  const id = 0x07;
   const payload = new Uint8Array([id]);
   return await fileCharacteristic.writeValueWithResponse(payload);
 }
