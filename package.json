@@ -1,6 +1,6 @@
 {
   "name": "thymio3-ts-api",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Thymio 3 API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
