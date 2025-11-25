@@ -120,7 +120,8 @@ export async function saveFile(
       const id = 0x02;
 
       const encoder = new TextEncoder();
-      const array = encoder.encode(filename);
+      const nullTerminatedFilename = filename + String.fromCharCode(0);
+      const array = encoder.encode(nullTerminatedFilename);
 
       if(array.byteLength > 30) {
         throw new Error("File name too long.");
@@ -178,7 +179,8 @@ export async function deleteFile(
       const id = 0x03;
 
       const encoder = new TextEncoder();
-      const array = encoder.encode(filename);
+      const nullTerminatedFilename = filename + String.fromCharCode(0);
+      const array = encoder.encode(nullTerminatedFilename);
 
       if(array.byteLength > 30) {
         throw new Error("File name too long.");
@@ -412,7 +414,8 @@ async function sendFileDownloadRequest(
     try {
       const id = 0x06;
       const encoder = new TextEncoder();
-      const array = encoder.encode(filename);
+      const nullTerminatedFilename = filename + String.fromCharCode(0);
+      const array = encoder.encode(nullTerminatedFilename);
 
       if(array.byteLength > 30) {
         throw new Error("File name too long.");

@@ -10242,7 +10242,8 @@ var thymio = (() => {
       try {
         const id = 2;
         const encoder = new TextEncoder();
-        const array = encoder.encode(filename);
+        const nullTerminatedFilename = filename + String.fromCharCode(0);
+        const array = encoder.encode(nullTerminatedFilename);
         if (array.byteLength > 30) {
           throw new Error("File name too long.");
         }
@@ -10285,7 +10286,8 @@ var thymio = (() => {
       try {
         const id = 3;
         const encoder = new TextEncoder();
-        const array = encoder.encode(filename);
+        const nullTerminatedFilename = filename + String.fromCharCode(0);
+        const array = encoder.encode(nullTerminatedFilename);
         if (array.byteLength > 30) {
           throw new Error("File name too long.");
         }
@@ -10452,7 +10454,8 @@ var thymio = (() => {
       try {
         const id = 6;
         const encoder = new TextEncoder();
-        const array = encoder.encode(filename);
+        const nullTerminatedFilename = filename + String.fromCharCode(0);
+        const array = encoder.encode(nullTerminatedFilename);
         if (array.byteLength > 30) {
           throw new Error("File name too long.");
         }
