@@ -1,7 +1,31 @@
 import { getFirmwareInfo } from "./device-info";
 import { uploadFirmware } from "./ota";
 
-const FIRMWARE_URL = "https://api.github.com/repos/mobsya/thymio3-firmware/releases/latest";
+const FIRMWARE_VERSIONS_URL = "https://mobsya.github.io/firmware-test/versions.json";
+const FIRMWARE_BASE_URL = 'https://mobsya.github.io/firmware-test/firmware/';
+
+interface FirmwareVersion {
+	version: string;
+	file: string;
+	releaseDate: string;
+	description: string;
+}
+
+export async function fetchFirmwareVersions(): Promise<FirmwareVersion[]> {
+	try {
+		const response = await fetch(FIRMWARE_VERSIONS_URL);
+
+		if (!response.ok) {
+				throw new Error('Failed to fetch firmware versions');
+		}
+
+		const data = await response.json();
+		return data.firmware_versions;
+	} catch (error) {
+		console.error('Error fetching firmware versions:', error);
+		throw error;
+	}
+}
 
 export async function isNewerFirmwareAvailable(
 	deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic
@@ -9,7 +33,7 @@ export async function isNewerFirmwareAvailable(
 	const localVersion = (await getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
 	const latestRelease = await getLatestRelease();
 
-	const remoteVersion = latestRelease.tagName;
+	const remoteVersion = latestRelease.version;
 
 	return isNewerVersion(remoteVersion, localVersion);
 }
@@ -20,13 +44,13 @@ export async function getNewFirmware(
 	const localVersion = (await getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
 	const latestRelease = await getLatestRelease();
 
-	if (isNewerVersion(latestRelease.tagName, localVersion)) {
-		const firmwareURL = latestRelease.assetUrl;
+	if (isNewerVersion(latestRelease.version, localVersion)) {
+		const firmwareURL = `${FIRMWARE_BASE_URL}${latestRelease.file}`
 
 		return downloadFirmware(firmwareURL);
 	} else {
 		throw new Error(
-			`The local version ${localVersion} is the same or newer than the latest firmware version ${latestRelease.tagName}`
+			`The local version ${localVersion} is the same or newer than the latest firmware version ${latestRelease.version}`
 		);
 	}
 }
@@ -49,21 +73,16 @@ async function downloadFirmware(url: string): Promise<ArrayBuffer> {
 }
 
 async function getLatestRelease() {
-	const response = await fetch(FIRMWARE_URL);
+	const firmwareVersions = await fetchFirmwareVersions();
 
-	if (!response.ok) {
-		throw new Error(`GitHub API error: ${response.statusText}`);
-	}
+	const latestVersion = firmwareVersions.reduce((prev, current) => {
+		const prevValue = prev.version.substring(1);
+		const currentValue = prev.version.substring(1);
 
-	const release = await response.json();
+		return (prevValue && prevValue > currentValue) ? prev : current;
+	});
 
-	return {
-		tagName: release.tag_name, // e.g., "v1.0.2"
-
-		assetUrl: release.assets[0]?.browser_download_url,
-
-		assetName: release.assets[0]?.name,
-	};
+	return latestVersion;
 }
 
 function isNewerVersion(remoteTagName: string, localVersion: number): boolean {

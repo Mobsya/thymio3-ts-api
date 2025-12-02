@@ -10078,22 +10078,36 @@ var thymio = (() => {
   }
 
   // src/updater.ts
-  var FIRMWARE_URL = "https://api.github.com/repos/mobsya/thymio3-firmware/releases/latest";
+  var FIRMWARE_VERSIONS_URL = "https://mobsya.github.io/firmware-test/versions.json";
+  var FIRMWARE_BASE_URL = "https://mobsya.github.io/firmware-test/firmware/";
+  async function fetchFirmwareVersions() {
+    try {
+      const response = await fetch(FIRMWARE_VERSIONS_URL);
+      if (!response.ok) {
+        throw new Error("Failed to fetch firmware versions");
+      }
+      const data = await response.json();
+      return data.firmware_versions;
+    } catch (error) {
+      console.error("Error fetching firmware versions:", error);
+      throw error;
+    }
+  }
   async function isNewerFirmwareAvailable(deviceInfoCharacteristic2) {
     const localVersion = (await getFirmwareInfo(deviceInfoCharacteristic2)).esp32_ver;
     const latestRelease = await getLatestRelease();
-    const remoteVersion = latestRelease.tagName;
+    const remoteVersion = latestRelease.version;
     return isNewerVersion(remoteVersion, localVersion);
   }
   async function getNewFirmware(deviceInfoCharacteristic2) {
     const localVersion = (await getFirmwareInfo(deviceInfoCharacteristic2)).esp32_ver;
     const latestRelease = await getLatestRelease();
-    if (isNewerVersion(latestRelease.tagName, localVersion)) {
-      const firmwareURL = latestRelease.assetUrl;
+    if (isNewerVersion(latestRelease.version, localVersion)) {
+      const firmwareURL = `${FIRMWARE_BASE_URL}${latestRelease.file}`;
       return downloadFirmware(firmwareURL);
     } else {
       throw new Error(
-        `The local version ${localVersion} is the same or newer than the latest firmware version ${latestRelease.tagName}`
+        `The local version ${localVersion} is the same or newer than the latest firmware version ${latestRelease.version}`
       );
     }
   }
@@ -10107,17 +10121,13 @@ var thymio = (() => {
     return await response.arrayBuffer();
   }
   async function getLatestRelease() {
-    const response = await fetch(FIRMWARE_URL);
-    if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.statusText}`);
-    }
-    const release = await response.json();
-    return {
-      tagName: release.tag_name,
-      // e.g., "v1.0.2"
-      assetUrl: release.assets[0]?.browser_download_url,
-      assetName: release.assets[0]?.name
-    };
+    const firmwareVersions = await fetchFirmwareVersions();
+    const latestVersion = firmwareVersions.reduce((prev, current) => {
+      const prevValue = prev.version.substring(1);
+      const currentValue = prev.version.substring(1);
+      return prevValue && prevValue > currentValue ? prev : current;
+    });
+    return latestVersion;
   }
   function isNewerVersion(remoteTagName, localVersion) {
     const remoteVersion = Number(remoteTagName.substring(1));
