@@ -31,6 +31,11 @@ let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic;
  * Request a bluetooth device and connect to it.
  */
 export async function requestAndConnect(): Promise<void> {
+  if (!navigator.bluetooth) {
+    throw new Error("Web Bluetooth not supported");
+  }
+
+  /*
   device = await navigator.bluetooth.requestDevice({
     filters: [{ namePrefix: 'THYMIO' }],
     optionalServices: [
@@ -38,6 +43,18 @@ export async function requestAndConnect(): Promise<void> {
       OTA_SERVICE_UUID
     ]
   });
+  */
+
+  device = await navigator.bluetooth.requestDevice({
+    filters: [
+      { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID]}
+    ]
+  });
+
+  if (!device.name?.startsWith('THYMIO')) {
+    // TODO empty the device var
+    throw new Error('Not a Thymio device');
+  }
 
   // To handle the reconnects
   device.addEventListener('gattserverdisconnected', onDisconnected);

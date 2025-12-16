@@ -10556,13 +10556,17 @@ var thymio = (() => {
   var otaFirmwareCharacteristic;
   var otaCommandCharacteristic;
   async function requestAndConnect() {
+    if (!navigator.bluetooth) {
+      throw new Error("Web Bluetooth not supported");
+    }
     device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "THYMIO" }],
-      optionalServices: [
-        MAIN_SERVICE_UUID,
-        OTA_SERVICE_UUID
+      filters: [
+        { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID] }
       ]
     });
+    if (!device.name?.startsWith("THYMIO")) {
+      throw new Error("Not a Thymio device");
+    }
     device.addEventListener("gattserverdisconnected", onDisconnected);
     await connect();
   }
