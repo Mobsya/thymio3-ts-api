@@ -49,7 +49,8 @@ To generate the `dist` folder, run `npm run build`.
 `thymio.uploadAudioFile(file)` - upload a custom audio file. The audio file must be in mp3 or wav format, mono-channel and have 12kHz sample rate\
 `thymio.playAudioFile()` - play the audio file that is currently in memory\
 `thymio.stopAudioFile()` - stop the audio file that is currently playing\
-`thymio.recordAudio(duration)` - start recording audio to memory
+`thymio.recordAudio(duration)` - start recording audio to memory\
+`thymio.playFrequency(frequency, duration)` - play a desired audio frequency
 
 #### Events
 `thymio-audio-upload-progress` - event that exposes the current audio file upload progress\
