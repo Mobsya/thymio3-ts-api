@@ -14,7 +14,7 @@ import type { FileListing } from "./files";
 import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
 
-let device: BluetoothDevice;
+let device: BluetoothDevice | undefined;
 let reconnecting = false;
 let commandCharacteristic: BluetoothRemoteGATTCharacteristic;
 let sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic;
@@ -35,6 +35,7 @@ export async function requestAndConnect(): Promise<void> {
     throw new Error("Web Bluetooth not supported");
   }
 
+  // For Chromium-based browsers
   /*
   device = await navigator.bluetooth.requestDevice({
     filters: [{ namePrefix: 'THYMIO' }],
@@ -52,7 +53,7 @@ export async function requestAndConnect(): Promise<void> {
   });
 
   if (!device.name?.startsWith('THYMIO')) {
-    // TODO empty the device var
+    device = undefined;
     throw new Error('Not a Thymio device');
   }
 
@@ -71,15 +72,20 @@ export function isConnected(): boolean {
 }
 
 export async function disconnect(): Promise<void> {
-  device.removeEventListener('gattserverdisconnected', onDisconnected);
-  await device.gatt?.disconnect();
+  if (device) {
+    device.removeEventListener('gattserverdisconnected', onDisconnected);
+    await device.gatt?.disconnect();
+    console.log("✅ Disconnected from Thymio 3.");
+  } else {
+    throw new Error('Bluetooth device is undefined');
+  }
 }
 
 /**
  * Connect to the device and to all of the exposed services and characteristics.
  */
 async function connect() {
-  if (device.gatt) {
+  if (device && device.gatt) {
     try {
       const server = await device.gatt.connect();
       const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
@@ -137,6 +143,10 @@ function onDisconnected() {
 }
 
 async function retryConnection() {
+  if (!device) {
+    throw new Error('Bluetooth device is undefined');
+  }
+
   let attempts = 0;
   const maxAttempts = 10;
 

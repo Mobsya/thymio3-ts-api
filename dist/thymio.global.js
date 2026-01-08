@@ -10565,6 +10565,7 @@ var thymio = (() => {
       ]
     });
     if (!device.name?.startsWith("THYMIO")) {
+      device = void 0;
       throw new Error("Not a Thymio device");
     }
     device.addEventListener("gattserverdisconnected", onDisconnected);
@@ -10578,11 +10579,16 @@ var thymio = (() => {
     }
   }
   async function disconnect() {
-    device.removeEventListener("gattserverdisconnected", onDisconnected);
-    await device.gatt?.disconnect();
+    if (device) {
+      device.removeEventListener("gattserverdisconnected", onDisconnected);
+      await device.gatt?.disconnect();
+      console.log("\u2705 Disconnected from Thymio 3.");
+    } else {
+      throw new Error("Bluetooth device is undefined");
+    }
   }
   async function connect() {
-    if (device.gatt) {
+    if (device && device.gatt) {
       try {
         const server = await device.gatt.connect();
         const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
@@ -10626,6 +10632,9 @@ var thymio = (() => {
     }
   }
   async function retryConnection() {
+    if (!device) {
+      throw new Error("Bluetooth device is undefined");
+    }
     let attempts = 0;
     const maxAttempts = 10;
     while (attempts < maxAttempts) {
