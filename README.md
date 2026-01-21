@@ -53,6 +53,7 @@ To generate the `dist` folder, run `npm run build`.
 `thymio.playFrequency(frequency, duration)` - play a desired audio frequency
 
 #### Events
+
 `thymio-audio-upload-progress` - event that exposes the current audio file upload progress\
 
 ### Files
@@ -66,9 +67,15 @@ To generate the `dist` folder, run `npm run build`.
 `thymio.freeMemory()` - free the RAM from the uploaded files
 
 #### Events
+
 `thymio-file-upload-progress` - event that exposes the current file upload progress\
 
-### OTA updates
+### Firmware updates
+
+`thymio.isNewerFirmwareAvailable()` - check if a newer Thymio 3 version is available\
+`thymio.updateFirmware()` - update the firmware to the latest version
+
+### Manual OTA updates
 
 `thymio.uploadFirmware(firmware)` - upload the OTA update file, which will install itself on the robot and reboot it upon completion\
 `thymio.stopFirmwareUpload()` - Stops the current OTA update upload
