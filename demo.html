@@ -148,6 +148,12 @@
       memoryInfoOutput.textContent = JSON.stringify(memoryInfo, null, 2);
     }
 
+    async function checkForNewFirmware() {
+      const newFirmware = await thymio.isNewerFirmwareAvailable();
+      const newFirmwareAvailableOutput = document.getElementById("new-firmware-version-info-output");
+      newFirmwareAvailableOutput.textContent = JSON.stringify(newFirmware, null, 2);
+    }
+
     async function uploadOTA() {
       const fileInput = document.getElementById('firmware');
       const file = fileInput.files[0];
@@ -514,11 +520,21 @@ while 1:
   </div>
 
   <div>
-    <h3>Firmware update</h3>
+    <h3>Automatic Firmware update</h3>
     <div style="display: flex; flex-direction: row; justify-content: space-around; gap: 1rem;">
-      <button onclick="thymio.isNewerFirmwareAvailable()">Check for newer firmware</button>
+      <button onclick="checkForNewFirmware()">Check for newer firmware</button>
+      <pre id="new-firmware-version-info-output">Waiting for firmware info...</pre>
       <button onclick="thymio.updateFirmware()">Update Firmware</button>
     </div>
+
+    <h4>Upload progress</h4>
+    <div class="progress-container">
+      <div class="progress-bar" id="ota-progress-bar">0%</div>
+    </div>
+  </div>
+
+  <div>
+    <h3>Manual Firmware update</h3>
 
     <div style="display: flex; flex-direction: row; justify-content: space-around; align-items: center; gap: 1rem;">
       <input type="file" id="firmware" />

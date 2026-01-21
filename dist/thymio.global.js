@@ -10078,8 +10078,8 @@ var thymio = (() => {
   }
 
   // src/updater.ts
-  var FIRMWARE_VERSIONS_URL = "https://mobsya.github.io/firmware-test/versions.json";
-  var FIRMWARE_BASE_URL = "https://mobsya.github.io/firmware-test/firmware/";
+  var FIRMWARE_VERSIONS_URL = "https://mobsya.github.io/thymio-3-firmware/versions.json";
+  var FIRMWARE_BASE_URL = "https://mobsya.github.io/thymio-3-firmware/firmware/";
   async function fetchFirmwareVersions() {
     try {
       const response = await fetch(FIRMWARE_VERSIONS_URL);

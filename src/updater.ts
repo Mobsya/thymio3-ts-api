@@ -1,8 +1,8 @@
 import { getFirmwareInfo } from "./device-info";
 import { uploadFirmware } from "./ota";
 
-const FIRMWARE_VERSIONS_URL = "https://mobsya.github.io/firmware-test/versions.json";
-const FIRMWARE_BASE_URL = 'https://mobsya.github.io/firmware-test/firmware/';
+const FIRMWARE_VERSIONS_URL = "https://mobsya.github.io/thymio-3-firmware/versions.json";
+const FIRMWARE_BASE_URL = 'https://mobsya.github.io/thymio-3-firmware/firmware/';
 
 interface FirmwareVersion {
 	version: string;
