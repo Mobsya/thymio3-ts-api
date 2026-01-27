@@ -192,6 +192,14 @@ export async function stopScriptExecution() {
   await python.stopScriptExecution(pythonCharacteristic);
 }
 
+export async function saveScriptToPartition(scriptId: number) {
+	await python.saveScriptToPartition(pythonCharacteristic, scriptId);
+}
+
+export async function softResetPythonInterpreter() {
+	await python.softResetPythonInterpreter(pythonCharacteristic);
+}
+
 //// SENSOR STREAM CHARACTERISTIC
 
 /**

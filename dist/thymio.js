@@ -37,8 +37,10 @@ __export(thymio_exports, {
   recordAudio: () => recordAudio2,
   requestAndConnect: () => requestAndConnect,
   saveFile: () => saveFile2,
+  saveScriptToPartition: () => saveScriptToPartition2,
   sendPythonScript: () => sendPythonScript2,
   setActuatorState: () => setActuatorState2,
+  softResetPythonInterpreter: () => softResetPythonInterpreter2,
   startSensorStreaming: () => startSensorStreaming2,
   stopAudioFile: () => stopAudioFile2,
   stopFirmwareUpload: () => stopFirmwareUpload2,
@@ -238,6 +240,15 @@ async function executeLoadedScript(pythonCharacteristic2) {
 }
 async function stopScriptExecution(pythonCharacteristic2) {
   const packet = new Uint8Array([3]);
+  await pythonCharacteristic2.writeValueWithResponse(packet);
+}
+async function saveScriptToPartition(pythonCharacteristic2, scriptId) {
+  const id = 4;
+  const packet = new Uint8Array([id, scriptId]);
+  await pythonCharacteristic2.writeValueWithResponse(packet);
+}
+async function softResetPythonInterpreter(pythonCharacteristic2) {
+  const packet = new Uint8Array([5]);
   await pythonCharacteristic2.writeValueWithResponse(packet);
 }
 function handlePythonResponse(event) {
@@ -1314,6 +1325,12 @@ async function executeLoadedScript2() {
 async function stopScriptExecution2() {
   await stopScriptExecution(pythonCharacteristic);
 }
+async function saveScriptToPartition2(scriptId) {
+  await saveScriptToPartition(pythonCharacteristic, scriptId);
+}
+async function softResetPythonInterpreter2() {
+  await softResetPythonInterpreter(pythonCharacteristic);
+}
 async function startSensorStreaming2(other = false) {
   return await startSensorStreaming(sensorStreamCharacteristic, other);
 }
@@ -1400,8 +1417,10 @@ async function getMemoryInfo2() {
   recordAudio,
   requestAndConnect,
   saveFile,
+  saveScriptToPartition,
   sendPythonScript,
   setActuatorState,
+  softResetPythonInterpreter,
   startSensorStreaming,
   stopAudioFile,
   stopFirmwareUpload,

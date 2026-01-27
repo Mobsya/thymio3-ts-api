@@ -187,6 +187,15 @@ async function stopScriptExecution(pythonCharacteristic2) {
   const packet = new Uint8Array([3]);
   await pythonCharacteristic2.writeValueWithResponse(packet);
 }
+async function saveScriptToPartition(pythonCharacteristic2, scriptId) {
+  const id = 4;
+  const packet = new Uint8Array([id, scriptId]);
+  await pythonCharacteristic2.writeValueWithResponse(packet);
+}
+async function softResetPythonInterpreter(pythonCharacteristic2) {
+  const packet = new Uint8Array([5]);
+  await pythonCharacteristic2.writeValueWithResponse(packet);
+}
 function handlePythonResponse(event) {
   const value = event.target.value;
   if (value) {
@@ -1261,6 +1270,12 @@ async function executeLoadedScript2() {
 async function stopScriptExecution2() {
   await stopScriptExecution(pythonCharacteristic);
 }
+async function saveScriptToPartition2(scriptId) {
+  await saveScriptToPartition(pythonCharacteristic, scriptId);
+}
+async function softResetPythonInterpreter2() {
+  await softResetPythonInterpreter(pythonCharacteristic);
+}
 async function startSensorStreaming2(other = false) {
   return await startSensorStreaming(sensorStreamCharacteristic, other);
 }
@@ -1346,8 +1361,10 @@ export {
   recordAudio2 as recordAudio,
   requestAndConnect,
   saveFile2 as saveFile,
+  saveScriptToPartition2 as saveScriptToPartition,
   sendPythonScript2 as sendPythonScript,
   setActuatorState2 as setActuatorState,
+  softResetPythonInterpreter2 as softResetPythonInterpreter,
   startSensorStreaming2 as startSensorStreaming,
   stopAudioFile2 as stopAudioFile,
   stopFirmwareUpload2 as stopFirmwareUpload,

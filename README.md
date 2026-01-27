@@ -28,7 +28,9 @@ To generate the `dist` folder, run `npm run build`.
 
 `thymio.sendPythonScript(script)` - uploads a MicroPython script to the Thymio\
 `thymio.executeLoadedScript()` - executes the script loaded in the Thymio memory\
-`thymio.stopScriptExecution()` - stops the script currently running on the Thymio
+`thymio.stopScriptExecution()` - stops the script currently running on the Thymio\
+`thymio.saveScriptToPartition(scriptId)` - save the script in the micropython storage partition\
+`thymio.softResetPythonInterpreter()` - Soft reset the python interpreter
 
 #### Events
 

@@ -29,6 +29,24 @@ export async function stopScriptExecution(
   await pythonCharacteristic.writeValueWithResponse(packet);
 }
 
+export async function saveScriptToPartition(
+	pythonCharacteristic: BluetoothRemoteGATTCharacteristic,
+	scriptId: number
+) {
+	const id = 0x04;
+	const packet = new Uint8Array([id, scriptId]);
+
+	await pythonCharacteristic.writeValueWithResponse(packet);
+}
+
+export async function softResetPythonInterpreter(
+	pythonCharacteristic: BluetoothRemoteGATTCharacteristic
+) {
+	const packet = new Uint8Array([0x05]);
+
+	await pythonCharacteristic.writeValueWithResponse(packet);
+}
+
 export function handlePythonResponse(event: Event) {
 	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
 	if (value) {

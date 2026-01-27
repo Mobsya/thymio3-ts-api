@@ -29,6 +29,15 @@
       await thymio.stopScriptExecution();
     }
 
+    async function saveToPartition() {
+      const scriptId = document.getElementById('script-id-to-save').value;
+      await thymio.saveScriptToPartition(scriptId);
+    }
+
+    async function softResetPythonInterpreter() {
+      await thymio.softResetPythonInterpreter();
+    }
+
     document.addEventListener("thymio-std-out-values", (event) => {
       const stdOutOutput = document.getElementById("std-out-output");
       stdOutOutput.textContent = event.detail;
@@ -328,6 +337,12 @@ while 1:
     </textarea>
     <button onclick="executeClick()">Execute code</button>
     <button onclick="stopClick()">Stop code execution</button>
+
+      <div>
+        <input type="number" id="script-id-to-save" />
+        <button onclick="saveToPartition()">Save to partition</button>
+        <button onclick="softResetPythonInterpreter()">Reset interpreter</button>
+      </div>
 
   </div>
 
