@@ -1289,6 +1289,7 @@ async function getNewFirmware2() {
   return await getNewFirmware(deviceInfoCharacteristic);
 }
 async function updateFirmware2() {
+  unsubscribeFromCharacteristics();
   return await updateFirmware(
     deviceInfoCharacteristic,
     otaCommandCharacteristic,
@@ -1296,6 +1297,7 @@ async function updateFirmware2() {
   );
 }
 async function uploadFirmware2(firmware) {
+  unsubscribeFromCharacteristics();
   return await uploadFirmware(otaCommandCharacteristic, otaFirmwareCharacteristic, firmware);
 }
 async function stopFirmwareUpload2() {
@@ -1342,6 +1344,18 @@ async function getFirmwareInfo2() {
 }
 async function getMemoryInfo2() {
   return await getMemoryInfo(deviceInfoCharacteristic);
+}
+async function unsubscribeFromCharacteristics() {
+  await sensorStreamCharacteristic.stopNotifications();
+  sensorStreamCharacteristic.removeEventListener("characteristicvaluechanged", handleStreamResponse);
+  await pythonCharacteristic.stopNotifications();
+  pythonCharacteristic.removeEventListener("characteristicvaluechanged", handlePythonResponse);
+  await stdOutCharacteristic.stopNotifications();
+  stdOutCharacteristic.removeEventListener("characteristicvaluechanged", handleStdOutResponse);
+  await audioCharacteristic.stopNotifications();
+  audioCharacteristic.removeEventListener("characteristicvaluechanged", handleAudioResponse);
+  await fileCharacteristic.stopNotifications();
+  await deviceInfoCharacteristic.stopNotifications();
 }
 export {
   deleteFile2 as deleteFile,

@@ -228,6 +228,9 @@ export async function getNewFirmware(): Promise<ArrayBuffer> {
 }
 
 export async function updateFirmware(): Promise<void> {
+  // Temporary fix for the OTA slowdown
+  unsubscribeFromCharacteristics();
+
   return await updater.updateFirmware(
     deviceInfoCharacteristic,
     otaCommandCharacteristic,
@@ -238,6 +241,9 @@ export async function updateFirmware(): Promise<void> {
 //// OTA CHARACTERISTIC
 
 export async function uploadFirmware(firmware: ArrayBuffer): Promise<void> {
+  // Temporary fix for the OTA slowdown
+  unsubscribeFromCharacteristics();
+
   return await ota.uploadFirmware(otaCommandCharacteristic, otaFirmwareCharacteristic, firmware);
 }
 
@@ -361,4 +367,23 @@ export async function getFirmwareInfo(): Promise<FirmwareInfo> {
  */
 export async function getMemoryInfo(): Promise<MemoryInfo> {
   return await deviceInfo.getMemoryInfo(deviceInfoCharacteristic);
+}
+
+// Temporary fix for the OTA slowdown
+async function unsubscribeFromCharacteristics() {
+  await sensorStreamCharacteristic.stopNotifications();
+  sensorStreamCharacteristic.removeEventListener('characteristicvaluechanged', sensorStream.handleStreamResponse);
+
+  await pythonCharacteristic.stopNotifications();
+  pythonCharacteristic.removeEventListener('characteristicvaluechanged', python.handlePythonResponse);
+
+  await stdOutCharacteristic.stopNotifications();
+  stdOutCharacteristic.removeEventListener('characteristicvaluechanged', handleStdOutResponse);
+
+  await audioCharacteristic.stopNotifications();
+  audioCharacteristic.removeEventListener('characteristicvaluechanged', audio.handleAudioResponse);
+
+  await fileCharacteristic.stopNotifications();
+
+  await deviceInfoCharacteristic.stopNotifications();
 }

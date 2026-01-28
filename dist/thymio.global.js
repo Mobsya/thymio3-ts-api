@@ -10754,6 +10754,7 @@ var thymio = (() => {
     return await getNewFirmware(deviceInfoCharacteristic);
   }
   async function updateFirmware2() {
+    unsubscribeFromCharacteristics();
     return await updateFirmware(
       deviceInfoCharacteristic,
       otaCommandCharacteristic,
@@ -10761,6 +10762,7 @@ var thymio = (() => {
     );
   }
   async function uploadFirmware2(firmware) {
+    unsubscribeFromCharacteristics();
     return await uploadFirmware(otaCommandCharacteristic, otaFirmwareCharacteristic, firmware);
   }
   async function stopFirmwareUpload2() {
@@ -10807,6 +10809,18 @@ var thymio = (() => {
   }
   async function getMemoryInfo2() {
     return await getMemoryInfo(deviceInfoCharacteristic);
+  }
+  async function unsubscribeFromCharacteristics() {
+    await sensorStreamCharacteristic.stopNotifications();
+    sensorStreamCharacteristic.removeEventListener("characteristicvaluechanged", handleStreamResponse);
+    await pythonCharacteristic.stopNotifications();
+    pythonCharacteristic.removeEventListener("characteristicvaluechanged", handlePythonResponse);
+    await stdOutCharacteristic.stopNotifications();
+    stdOutCharacteristic.removeEventListener("characteristicvaluechanged", handleStdOutResponse);
+    await audioCharacteristic.stopNotifications();
+    audioCharacteristic.removeEventListener("characteristicvaluechanged", handleAudioResponse);
+    await fileCharacteristic.stopNotifications();
+    await deviceInfoCharacteristic.stopNotifications();
   }
   return __toCommonJS(thymio_exports);
 })();
