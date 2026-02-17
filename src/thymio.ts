@@ -10,7 +10,7 @@ import * as audio from './audio';
 import * as files from './files';
 import * as deviceInfo from './device-info';
 import { delay } from "./utils";
-import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID, STD_OUT_CHARACTERISTIC_UUID } from "./constants";
+import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID, STD_OUT_CHARACTERISTIC_UUID, THYMIO_CONNECTED_EVENT_ID } from "./constants";
 import type { FileListing } from "./files";
 import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
@@ -76,6 +76,9 @@ export async function disconnect(): Promise<void> {
   if (device) {
     device.removeEventListener('gattserverdisconnected', onDisconnected);
     await device.gatt?.disconnect();
+
+    dispatchConnectedEvent(false);
+
     console.log("✅ Disconnected from Thymio 3.");
   } else {
     throw new Error('Bluetooth device is undefined');
@@ -124,6 +127,8 @@ async function connect() {
     otaCommandCharacteristic.startNotifications();
     otaCommandCharacteristic.addEventListener('characteristicvaluechanged', ota.otaCommandNotificationHandler);
 
+    dispatchConnectedEvent(true);
+
     console.log("✅ Connected to Thymio 3 !");
   } else {
     throw new Error("Bluetooth GATT is not available.")
@@ -131,7 +136,10 @@ async function connect() {
 }
 
 function onDisconnected() {
+  dispatchConnectedEvent(false);
+
   console.log('⚠️ Disconnected. Attempting to reconnect...');
+
   if (!reconnecting) {
     reconnecting = true;
     retryConnection();
@@ -366,6 +374,13 @@ export async function getFirmwareInfo(): Promise<FirmwareInfo> {
  */
 export async function getMemoryInfo(): Promise<MemoryInfo> {
   return await deviceInfo.getMemoryInfo(deviceInfoCharacteristic);
+}
+
+function dispatchConnectedEvent(connected: boolean) {
+  const connectedEvent = new CustomEvent(THYMIO_CONNECTED_EVENT_ID, {
+    detail: connected
+  });
+  document.dispatchEvent(connectedEvent);
 }
 
 // Temporary fix for the OTA slowdown

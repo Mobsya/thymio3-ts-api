@@ -20,6 +20,10 @@ To generate the `dist` folder, run `npm run build`.
 `thymio.isConnected()` - returns true if Thymio device is connected\
 `thymio.disconnect()` - disconnects the Thymio device
 
+#### Events
+
+`thymio-connected` - event that tells if the robot is connected or not
+
 ### Actuators
 
 `thymio.setActuatorState(actuatorData)` - sets the actuator data on the Thymio

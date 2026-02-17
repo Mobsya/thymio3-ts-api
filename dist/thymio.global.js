@@ -9547,6 +9547,7 @@ var thymio = (() => {
   var MTU = 500;
   var FIRMWARE_PAYLOAD_SIZE = MTU - 4;
   var FIRMWARE_SECTOR_SIZE = 4096;
+  var THYMIO_CONNECTED_EVENT_ID = "thymio-connected";
   var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
   var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
   var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
@@ -10653,6 +10654,7 @@ var thymio = (() => {
     if (device) {
       device.removeEventListener("gattserverdisconnected", onDisconnected);
       await device.gatt?.disconnect();
+      dispatchConnectedEvent(false);
       console.log("\u2705 Disconnected from Thymio 3.");
     } else {
       throw new Error("Bluetooth device is undefined");
@@ -10686,12 +10688,14 @@ var thymio = (() => {
       otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
       otaCommandCharacteristic.startNotifications();
       otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
+      dispatchConnectedEvent(true);
       console.log("\u2705 Connected to Thymio 3 !");
     } else {
       throw new Error("Bluetooth GATT is not available.");
     }
   }
   function onDisconnected() {
+    dispatchConnectedEvent(false);
     console.log("\u26A0\uFE0F Disconnected. Attempting to reconnect...");
     if (!reconnecting) {
       reconnecting = true;
@@ -10809,6 +10813,12 @@ var thymio = (() => {
   }
   async function getMemoryInfo2() {
     return await getMemoryInfo(deviceInfoCharacteristic);
+  }
+  function dispatchConnectedEvent(connected) {
+    const connectedEvent = new CustomEvent(THYMIO_CONNECTED_EVENT_ID, {
+      detail: connected
+    });
+    document.dispatchEvent(connectedEvent);
   }
   async function unsubscribeFromCharacteristics() {
     await sensorStreamCharacteristic.stopNotifications();
