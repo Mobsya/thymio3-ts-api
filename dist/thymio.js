@@ -1250,36 +1250,32 @@ async function disconnect() {
 }
 async function connect() {
   if (device && device.gatt) {
-    try {
-      const server = await device.gatt.connect();
-      const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
-      commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
-      sensorStreamCharacteristic = await mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
-      await sensorStreamCharacteristic.startNotifications();
-      sensorStreamCharacteristic.addEventListener("characteristicvaluechanged", handleStreamResponse);
-      pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
-      await pythonCharacteristic.startNotifications();
-      pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
-      stdOutCharacteristic = await mainService.getCharacteristic(STD_OUT_CHARACTERISTIC_UUID);
-      await stdOutCharacteristic.startNotifications();
-      stdOutCharacteristic.addEventListener("characteristicvaluechanged", handleStdOutResponse);
-      audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
-      await audioCharacteristic.startNotifications();
-      audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);
-      fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
-      await fileCharacteristic.startNotifications();
-      deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
-      await deviceInfoCharacteristic.startNotifications();
-      const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
-      otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
-      otaFirmwareCharacteristic.startNotifications();
-      otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
-      otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
-      otaCommandCharacteristic.startNotifications();
-      otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
-    } catch (e) {
-      console.error(`Could not connect to Thymio 3.`, e);
-    }
+    const server = await device.gatt.connect();
+    const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
+    commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
+    sensorStreamCharacteristic = await mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
+    await sensorStreamCharacteristic.startNotifications();
+    sensorStreamCharacteristic.addEventListener("characteristicvaluechanged", handleStreamResponse);
+    pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
+    await pythonCharacteristic.startNotifications();
+    pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
+    stdOutCharacteristic = await mainService.getCharacteristic(STD_OUT_CHARACTERISTIC_UUID);
+    await stdOutCharacteristic.startNotifications();
+    stdOutCharacteristic.addEventListener("characteristicvaluechanged", handleStdOutResponse);
+    audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
+    await audioCharacteristic.startNotifications();
+    audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);
+    fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
+    await fileCharacteristic.startNotifications();
+    deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
+    await deviceInfoCharacteristic.startNotifications();
+    const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
+    otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
+    otaFirmwareCharacteristic.startNotifications();
+    otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
+    otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
+    otaCommandCharacteristic.startNotifications();
+    otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
     console.log("\u2705 Connected to Thymio 3 !");
   } else {
     throw new Error("Bluetooth GATT is not available.");
@@ -1297,10 +1293,10 @@ async function retryConnection() {
     throw new Error("Bluetooth device is undefined");
   }
   let attempts = 0;
-  const maxAttempts = 10;
+  const maxAttempts = 15;
   while (attempts < maxAttempts) {
     try {
-      await delay(2e3);
+      await delay(3e3);
       if (!device.gatt.connected) {
         await connect();
         reconnecting = false;
@@ -1353,7 +1349,11 @@ async function updateFirmware2() {
 }
 async function uploadFirmware2(firmware) {
   unsubscribeFromCharacteristics();
-  return await uploadFirmware(otaCommandCharacteristic, otaFirmwareCharacteristic, firmware);
+  return await uploadFirmware(
+    otaCommandCharacteristic,
+    otaFirmwareCharacteristic,
+    firmware
+  );
 }
 async function stopFirmwareUpload2() {
   return await stopFirmwareUpload(otaCommandCharacteristic);
