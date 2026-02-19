@@ -10,7 +10,7 @@ import * as audio from './audio';
 import * as files from './files';
 import * as deviceInfo from './device-info';
 import { delay } from "./utils";
-import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID, STD_OUT_CHARACTERISTIC_UUID, THYMIO_CONNECTED_EVENT_ID } from "./constants";
+import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID, STD_OUT_CHARACTERISTIC_UUID, THYMIO_CONNECTED_EVENT_ID, THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID } from "./constants";
 import type { FileListing } from "./files";
 import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
@@ -146,6 +146,10 @@ function onDisconnected() {
   }
 }
 
+// The automatic BT re-connection fails for devices that have not been manually connected
+// for more than three minutes.
+// We can remove this mitigation as soon as https://chromestatus.com/feature/4797798639730688 is implemented
+// See also https://stackoverflow.com/questions/60603666/web-bluetooth-bypass-pairing-screen-for-a-known-device-id
 async function retryConnection() {
   if (!device) {
     throw new Error('Bluetooth device is undefined');
@@ -169,6 +173,9 @@ async function retryConnection() {
   }
 
   console.log(`❌ Failed to reconnect after ${attempts} attempts`);
+
+  // Prompt for manual reconnection if automatic reconnection fails
+  dispatchManualReconnectionEvent();
 }
 
 // COMMAND CHARACTERISTIC
@@ -376,6 +383,10 @@ export async function getMemoryInfo(): Promise<MemoryInfo> {
   return await deviceInfo.getMemoryInfo(deviceInfoCharacteristic);
 }
 
+function dispatchManualReconnectionEvent() {
+  const manualReconnEvent = new CustomEvent(THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID);
+  document.dispatchEvent(manualReconnEvent);
+}
 function dispatchConnectedEvent(connected: boolean) {
   const connectedEvent = new CustomEvent(THYMIO_CONNECTED_EVENT_ID, {
     detail: connected
