@@ -152,7 +152,7 @@ async function retryConnection() {
   }
 
   let attempts = 0;
-  const maxAttempts = 15;
+  const maxAttempts = 5;
 
   while (attempts < maxAttempts) {
     try {

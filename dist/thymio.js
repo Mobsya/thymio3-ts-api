@@ -245,9 +245,39 @@ async function stopScriptExecution(pythonCharacteristic2) {
   await pythonCharacteristic2.writeValueWithResponse(packet);
 }
 async function saveScriptToPartition(pythonCharacteristic2, scriptId) {
-  const id = 4;
-  const packet = new Uint8Array([id, scriptId]);
-  await pythonCharacteristic2.writeValueWithResponse(packet);
+  if (!scriptId) {
+    throw new Error("Script ID must not be empty");
+  }
+  return new Promise((resolve, reject) => {
+    const onResponse = (event) => {
+      const value = event.target.value;
+      if (!value) return;
+      const view = new DataView(value.buffer);
+      const id2 = view.getUint8(0);
+      if (id2 === 5) {
+        const result = view.getInt8(1);
+        pythonCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+        switch (result) {
+          case 0:
+            resolve();
+            break;
+          case 1:
+            reject(`[Python save file to partition]: ${scriptId} not found`);
+            break;
+          case 2:
+            reject(`[Python save file to partition]: unknown error`);
+            break;
+        }
+      }
+    };
+    pythonCharacteristic2.addEventListener("characteristicvaluechanged", onResponse);
+    const id = 4;
+    const packet = new Uint8Array([id, scriptId]);
+    pythonCharacteristic2.writeValueWithResponse(packet).catch((err) => {
+      pythonCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
+      reject(err);
+    });
+  });
 }
 async function softResetPythonInterpreter(pythonCharacteristic2) {
   const packet = new Uint8Array([5]);
@@ -1317,7 +1347,7 @@ async function retryConnection() {
     throw new Error("Bluetooth device is undefined");
   }
   let attempts = 0;
-  const maxAttempts = 15;
+  const maxAttempts = 5;
   while (attempts < maxAttempts) {
     try {
       await delay(3e3);
@@ -1332,6 +1362,7 @@ async function retryConnection() {
     attempts++;
   }
   console.log(`\u274C Failed to reconnect after ${attempts} attempts`);
+  requestAndConnect();
 }
 async function setActuatorState2(actuatorData) {
   await setActuatorState(commandCharacteristic, actuatorData);

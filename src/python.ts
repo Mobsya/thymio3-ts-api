@@ -34,10 +34,48 @@ export async function saveScriptToPartition(
 	pythonCharacteristic: BluetoothRemoteGATTCharacteristic,
 	scriptId: number
 ) {
-	const id = 0x04;
-	const packet = new Uint8Array([id, scriptId]);
+	if(!scriptId) {
+		throw new Error("Script ID must not be empty");
+	}
 
-	await pythonCharacteristic.writeValueWithResponse(packet);
+	return new Promise<void>((resolve, reject) => {
+		const onResponse = (event: Event) => {
+      const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
+      if (!value) return;
+
+      const view = new DataView(value.buffer);
+      const id = view.getUint8(0);
+
+      // We only care about the save to partition response (0x05)
+      if (id === 0x05) {
+				const result = view.getInt8(1);
+
+				pythonCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+
+				switch(result) {
+					case 0:
+						resolve();
+						break;
+					case 1:
+						reject(`[Python save file to partition]: ${scriptId} not found`);
+						break;
+					case 2:
+						reject(`[Python save file to partition]: unknown error`);
+						break;
+				}
+			}
+		};
+
+		pythonCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
+
+		const id = 0x04;
+		const packet = new Uint8Array([id, scriptId]);
+
+		pythonCharacteristic.writeValueWithResponse(packet).catch(err => {
+			pythonCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+			reject(err);
+		});
+	});
 }
 
 export async function softResetPythonInterpreter(
