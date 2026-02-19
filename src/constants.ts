@@ -20,6 +20,7 @@ export const FIRMWARE_PAYLOAD_SIZE = MTU - 4;
 export const FIRMWARE_SECTOR_SIZE = 4096; // 4KB;
 
 export const THYMIO_CONNECTED_EVENT_ID = 'thymio-connected';
+export const THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID = 'thymio-python-execution-status';
 export const THYMIO_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-values';
 export const THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-other-values';
 export const THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = 'thymio-ota-upload-progress';

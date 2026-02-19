@@ -1,3 +1,4 @@
+import { THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID } from "./constants";
 import { createPayloadPackets } from "./utils";
 
 export async function sendPythonScript(
@@ -54,36 +55,58 @@ export function handlePythonResponse(event: Event) {
 
 		if (id === 0x01) {
 			const loadResult = value.getUint8(1);
-			const resultMessages: {[index: number]: string} = {
-				0: "✅ Script loaded successfully.",
-				1: "❌ CRC mismatch.",
-				2: "⚠️ Partial upload.",
-				3: "❌ Wrong sequence.",
-				4: "❌ Script too big (2 KB limit).",
-				// Add more error codes if needed
-			};
 
-			console.log(
-				`[Notification] Script Loaded: ${resultMessages[loadResult] || "Unknown error code: " + loadResult}`
-			);
+			switch(loadResult) {
+				case 0:
+					dispatchExecutionStatusEvent(true);
+					console.log("[Python execution]: ✅ Script loaded successfully.");
+					break;
+				case 1:
+					console.log("[Python execution]: ❌ CRC mismatch.");
+					break;
+				case 2:
+					console.log("[Python execution]: ⚠️ Partial upload.");
+					break;
+				case 3:
+					console.log("[Python execution]: ❌ Wrong sequence.");
+					break;
+				case 4:
+					console.log("[Python execution]: ❌ Script too big (2 KB limit).");
+					break;
+				default:
+					throw new Error("[Python execution]: Unknown return code.")
+			}
 		} else if (id === 0x02) {
 			const result = value.getUint8(1);
 
 			const exception = (result & 0b00000001) !== 0;
 			const scriptRunning = (result & 0b00000010) !== 0;
 
-			console.log("[Notification] Script Terminated:");
+			let terminationReason;
 			if (!exception && !scriptRunning) {
-				console.log("✅ Script terminated normally.");
+				terminationReason = "✅ Script terminated normally.";
 			} else {
-				if (exception) console.log("❌ Script terminated with exception.");
-				if (scriptRunning)
-					console.log("⚠️ Another script was already running.");
+				if (exception) {
+					terminationReason = "❌ Script terminated with exception.";
+				}
+				else if (scriptRunning) {
+					terminationReason = "⚠️ Another script was already running.";
+				}
 			}
+			console.log(`[Python execution]: Script Terminated: ${terminationReason}`);
+
+			dispatchExecutionStatusEvent(false);
 		} else {
 			console.warn(
 				`[Notification] Unknown ID: 0x${id.toString(16).padStart(2, "0")}`
 			);
 		}
 	}
+}
+
+function dispatchExecutionStatusEvent(executing: boolean) {
+	const executionStatusEvent = new CustomEvent(THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID, {
+		detail: executing
+	});
+	document.dispatchEvent(executionStatusEvent);
 }

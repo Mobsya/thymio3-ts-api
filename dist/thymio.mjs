@@ -83,6 +83,7 @@ var MTU = 500;
 var FIRMWARE_PAYLOAD_SIZE = MTU - 4;
 var FIRMWARE_SECTOR_SIZE = 4096;
 var THYMIO_CONNECTED_EVENT_ID = "thymio-connected";
+var THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID = "thymio-python-execution-status";
 var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
 var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
 var THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = "thymio-ota-upload-progress";
@@ -203,35 +204,54 @@ function handlePythonResponse(event) {
     const id = value.getUint8(0);
     if (id === 1) {
       const loadResult = value.getUint8(1);
-      const resultMessages = {
-        0: "\u2705 Script loaded successfully.",
-        1: "\u274C CRC mismatch.",
-        2: "\u26A0\uFE0F Partial upload.",
-        3: "\u274C Wrong sequence.",
-        4: "\u274C Script too big (2 KB limit)."
-        // Add more error codes if needed
-      };
-      console.log(
-        `[Notification] Script Loaded: ${resultMessages[loadResult] || "Unknown error code: " + loadResult}`
-      );
+      switch (loadResult) {
+        case 0:
+          dispatchExecutionStatusEvent(true);
+          console.log("[Python execution]: \u2705 Script loaded successfully.");
+          break;
+        case 1:
+          console.log("[Python execution]: \u274C CRC mismatch.");
+          break;
+        case 2:
+          console.log("[Python execution]: \u26A0\uFE0F Partial upload.");
+          break;
+        case 3:
+          console.log("[Python execution]: \u274C Wrong sequence.");
+          break;
+        case 4:
+          console.log("[Python execution]: \u274C Script too big (2 KB limit).");
+          break;
+        default:
+          throw new Error("[Python execution]: Unknown return code.");
+      }
     } else if (id === 2) {
       const result = value.getUint8(1);
       const exception = (result & 1) !== 0;
       const scriptRunning = (result & 2) !== 0;
-      console.log("[Notification] Script Terminated:");
+      let terminationReason;
       if (!exception && !scriptRunning) {
-        console.log("\u2705 Script terminated normally.");
+        terminationReason = "\u2705 Script terminated normally.";
       } else {
-        if (exception) console.log("\u274C Script terminated with exception.");
-        if (scriptRunning)
-          console.log("\u26A0\uFE0F Another script was already running.");
+        if (exception) {
+          terminationReason = "\u274C Script terminated with exception.";
+        } else if (scriptRunning) {
+          terminationReason = "\u26A0\uFE0F Another script was already running.";
+        }
       }
+      console.log(`[Python execution]: Script Terminated: ${terminationReason}`);
+      dispatchExecutionStatusEvent(false);
     } else {
       console.warn(
         `[Notification] Unknown ID: 0x${id.toString(16).padStart(2, "0")}`
       );
     }
   }
+}
+function dispatchExecutionStatusEvent(executing) {
+  const executionStatusEvent = new CustomEvent(THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID, {
+    detail: executing
+  });
+  document.dispatchEvent(executionStatusEvent);
 }
 
 // src/sensor-stream.ts

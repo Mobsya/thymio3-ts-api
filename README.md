@@ -38,6 +38,7 @@ To generate the `dist` folder, run `npm run build`.
 
 #### Events
 
+`thymio-python-execution-status` - exposes the Python execution status\
 `thymio-std-out-values` - event that exposes the Thymio's std out values
 
 ### Sensor data streaming
