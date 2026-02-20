@@ -174,7 +174,8 @@ async function retryConnection() {
 
   console.log(`❌ Failed to reconnect after ${attempts} attempts`);
 
-  // Prompt for manual reconnection if automatic reconnection fails
+  // Disconnect and prompt for manual reconnection if automatic reconnection fails
+  disconnect();
   dispatchManualReconnectionEvent();
 }
 

@@ -83,6 +83,7 @@ var MTU = 500;
 var FIRMWARE_PAYLOAD_SIZE = MTU - 4;
 var FIRMWARE_SECTOR_SIZE = 4096;
 var THYMIO_CONNECTED_EVENT_ID = "thymio-connected";
+var THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID = "thymio-prompt-manual-reconnection";
 var THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID = "thymio-python-execution-status";
 var THYMIO_SENSOR_VALUES_EVENT_ID = "thymio-sensor-values";
 var THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = "thymio-sensor-other-values";
@@ -1307,7 +1308,8 @@ async function retryConnection() {
     attempts++;
   }
   console.log(`\u274C Failed to reconnect after ${attempts} attempts`);
-  requestAndConnect();
+  disconnect();
+  dispatchManualReconnectionEvent();
 }
 async function setActuatorState2(actuatorData) {
   await setActuatorState(commandCharacteristic, actuatorData);
@@ -1399,6 +1401,10 @@ async function getFirmwareInfo2() {
 }
 async function getMemoryInfo2() {
   return await getMemoryInfo(deviceInfoCharacteristic);
+}
+function dispatchManualReconnectionEvent() {
+  const manualReconnEvent = new CustomEvent(THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID);
+  document.dispatchEvent(manualReconnEvent);
 }
 function dispatchConnectedEvent(connected) {
   const connectedEvent = new CustomEvent(THYMIO_CONNECTED_EVENT_ID, {
