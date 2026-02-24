@@ -122,16 +122,14 @@ async function connect() {
     const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
 
     otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
-    otaFirmwareCharacteristic.startNotifications();
+    await otaFirmwareCharacteristic.startNotifications();
     otaFirmwareCharacteristic.addEventListener('characteristicvaluechanged', ota.otaFirmwareNotificationHandler);
 
     otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
-    otaCommandCharacteristic.startNotifications();
+    await otaCommandCharacteristic.startNotifications();
     otaCommandCharacteristic.addEventListener('characteristicvaluechanged', ota.otaCommandNotificationHandler);
 
     dispatchConnectedEvent(true);
-
-    await delay(3000);
 
     console.log("✅ Connected to Thymio 3 !");
   } else {

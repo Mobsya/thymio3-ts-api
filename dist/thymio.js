@@ -1325,13 +1325,12 @@ async function connect() {
     await deviceInfoCharacteristic.startNotifications();
     const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
     otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
-    otaFirmwareCharacteristic.startNotifications();
+    await otaFirmwareCharacteristic.startNotifications();
     otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
     otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
-    otaCommandCharacteristic.startNotifications();
+    await otaCommandCharacteristic.startNotifications();
     otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
     dispatchConnectedEvent(true);
-    await delay(3e3);
     console.log("\u2705 Connected to Thymio 3 !");
   } else {
     throw new Error("Bluetooth GATT is not available.");
