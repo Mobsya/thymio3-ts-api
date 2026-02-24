@@ -10693,6 +10693,7 @@ var thymio = (() => {
     }
     device.addEventListener("gattserverdisconnected", onDisconnected);
     await connect();
+    console.log("done");
   }
   function isConnected() {
     if (device && device.gatt) {
@@ -10740,6 +10741,7 @@ var thymio = (() => {
       otaCommandCharacteristic.startNotifications();
       otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
       dispatchConnectedEvent(true);
+      await delay(3e3);
       console.log("\u2705 Connected to Thymio 3 !");
     } else {
       throw new Error("Bluetooth GATT is not available.");

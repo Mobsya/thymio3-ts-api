@@ -62,6 +62,8 @@ export async function requestAndConnect(): Promise<void> {
   device.addEventListener('gattserverdisconnected', onDisconnected);
 
   await connect();
+
+  console.log("done")
 }
 
 export function isConnected(): boolean {
@@ -128,6 +130,8 @@ async function connect() {
     otaCommandCharacteristic.addEventListener('characteristicvaluechanged', ota.otaCommandNotificationHandler);
 
     dispatchConnectedEvent(true);
+
+    await delay(3000);
 
     console.log("✅ Connected to Thymio 3 !");
   } else {
