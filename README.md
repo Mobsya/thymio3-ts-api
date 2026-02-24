@@ -22,7 +22,8 @@ To generate the `dist` folder, run `npm run build`.
 
 #### Events
 
-`thymio-connected` - event that tells if the robot is connected or not
+`thymio-connected` - event that tells if the robot is connected or not/
+`thymio-prompt-manual-reconnection` - event that prompts the user to reconnect manually if the automatic reconnection fails
 
 ### Actuators
 
