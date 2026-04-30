@@ -12,6 +12,20 @@ To generate the `dist` folder, run `npm run build`.
 2. For use as as a CJS module: `dist/thymio.js`
 3. For use as a ESM module: `dist/thymio.mjs`
 
+## Demo
+
+A live demo of this project can be found in the `demo` folder.
+
+If you want to run the demo locally you can :
+```
+cd demo
+npm install
+npm run dev
+```
+
+And open the `localhost:5173` in your browser.
+
+
 ## Documentation
 
 ### Connection
