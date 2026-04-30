@@ -40,6 +40,7 @@ export async function getFirmwareInfo(
       const payload = new Uint8Array([id]);
       await deviceInfoCharacteristic.writeValueWithResponse(payload);
     } catch(err) {
+      deviceInfoCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
       reject(err);
     }
   });
@@ -77,6 +78,7 @@ export async function getMemoryInfo(
       const payload = new Uint8Array([id]);
       await deviceInfoCharacteristic.writeValueWithResponse(payload);
     } catch(err) {
+      deviceInfoCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
       reject(err);
     }
   });

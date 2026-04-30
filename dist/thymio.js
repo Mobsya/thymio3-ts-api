@@ -535,6 +535,7 @@ async function getFirmwareInfo(deviceInfoCharacteristic2) {
       const payload = new Uint8Array([id]);
       await deviceInfoCharacteristic2.writeValueWithResponse(payload);
     } catch (err) {
+      deviceInfoCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
       reject(err);
     }
   });
@@ -561,6 +562,7 @@ async function getMemoryInfo(deviceInfoCharacteristic2) {
       const payload = new Uint8Array([id]);
       await deviceInfoCharacteristic2.writeValueWithResponse(payload);
     } catch (err) {
+      deviceInfoCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
       reject(err);
     }
   });

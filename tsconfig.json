@@ -17,6 +17,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src"],
+  "include": ["src", "demo/src/App.jsx", "demo/src/main.jsx"],
   "exclude": ["node_modules", "dist"]
 }

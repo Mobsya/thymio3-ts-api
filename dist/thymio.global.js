@@ -9945,6 +9945,7 @@ var thymio = (() => {
         const payload = new Uint8Array([id]);
         await deviceInfoCharacteristic2.writeValueWithResponse(payload);
       } catch (err) {
+        deviceInfoCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
         reject(err);
       }
     });
@@ -9971,6 +9972,7 @@ var thymio = (() => {
         const payload = new Uint8Array([id]);
         await deviceInfoCharacteristic2.writeValueWithResponse(payload);
       } catch (err) {
+        deviceInfoCharacteristic2.removeEventListener("characteristicvaluechanged", onResponse);
         reject(err);
       }
     });
