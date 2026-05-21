@@ -32,7 +32,8 @@ And open the `localhost:5173` in your browser.
 
 `thymio.requestAndConnect()` - requests the Thymio through Bluetooth and pairs it to the browser\
 `thymio.isConnected()` - returns true if Thymio device is connected\
-`thymio.disconnect()` - disconnects the Thymio device
+`thymio.disconnect()` - disconnects the Thymio device\
+`thymio.getDeviceName()` - get the Thymio device name
 
 #### Events
 
@@ -59,7 +60,8 @@ And open the `localhost:5173` in your browser.
 ### Sensor data streaming
 
 `thymio.startSensorStreaming(other)` - starts sensor streaming\
-`thymio.stopSensorStreaming()` - stops sensor streaming
+`thymio.stopSensorStreaming()` - stops sensor streaming\
+`thymio.startBothSensorStreaming()` - starts both "most" and "others" sensors streaming
 
 #### Events
 

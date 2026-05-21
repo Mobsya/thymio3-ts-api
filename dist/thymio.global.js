@@ -9460,7 +9460,9 @@ var thymio = (() => {
     updateFirmware: () => updateFirmware2,
     uploadAudioFile: () => uploadAudioFile2,
     uploadFile: () => uploadFile2,
-    uploadFirmware: () => uploadFirmware2
+    uploadFirmware: () => uploadFirmware2,
+    startBothSensorStreaming: () => startBothSensorStreaming2,
+    getDeviceName: () => getDeviceName,
   });
 
   // src/command.ts
@@ -10891,6 +10893,18 @@ var thymio = (() => {
     audioCharacteristic.removeEventListener("characteristicvaluechanged", handleAudioResponse);
     await fileCharacteristic.stopNotifications();
     await deviceInfoCharacteristic.stopNotifications();
+  }
+  function getDeviceName() {
+    return device?.name || "Unknown Device";
+  }
+  async function startBothSensorStreaming(sensorStreamCharacteristic2) {
+    const id = 1;
+    let body = 3;
+    const payload = new Uint8Array([id, body]);
+    return await sensorStreamCharacteristic2.writeValueWithResponse(payload);
+  }  
+  async function startBothSensorStreaming2() {
+    return await startBothSensorStreaming(sensorStreamCharacteristic);
   }
   return __toCommonJS(thymio_exports);
 })();
