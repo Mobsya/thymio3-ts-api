@@ -1,26 +1,33 @@
 # Thymio 3 TS API
 
-## Build
+## Requirements
 
 Requires the latest stable version of `node`.
 
-To generate the `dist` folder, run `npm run build`.
+## Build
 
-## Use
+To build :
+```
+git clone git@github.com:Mobsya/thymio3-ts-api.git
+cd thymio3-ts-api
+npm install
+npm run build
+```
 
-1. For use directly in the browser: `dist/thymio.global.js`
-2. For use as as a CJS module: `dist/thymio.js`
-3. For use as a ESM module: `dist/thymio.mjs`
+This generates the `dist` folder in which you can find the following files:
+
+1. `dist/thymio.global.js` - for use directly in the browser
+2. `dist/thymio.js` - for use as a CJS module
+3. `dist/thymio.mjs` - for use as an ESM module
 
 ## Demo
 
-A live demo of this project can be found in the `demo` folder.
+A live demo of this project can be found [here](https://mobsya.github.io/thymio3-ts-api/).
 
-If you want to run the demo locally you can :
+If you want to run the demo locally you can run the following commands from the root directory :
 ```
-cd demo
-npm install
-npm run dev
+npm run install-demo
+npm run run-demo
 ```
 
 And open the `localhost:5173` in your browser.
