@@ -50,15 +50,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.package-version.outputs.version }}
+          RELEASE_NAME: v${{ steps.package-version.outputs.version }}
         run: |
-          if gh release view "$VERSION" >/dev/null 2>&1; then
-            gh release edit "$VERSION" --title "$VERSION" --notes-file release-notes.md
-            gh release upload "$VERSION" dist/* thymio3-ts-api-dist.tar.gz --clobber
+          if gh release view "$RELEASE_NAME" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_NAME" --title "$RELEASE_NAME" --notes-file release-notes.md
+            gh release upload "$RELEASE_NAME" dist/* thymio3-ts-api-dist.tar.gz --clobber
           else
-            gh release create "$VERSION" \
+            gh release create "$RELEASE_NAME" \
               dist/* \
               thymio3-ts-api-dist.tar.gz \
               --target "$GITHUB_SHA" \
-              --title "$VERSION" \
+              --title "$RELEASE_NAME" \
               --notes-file release-notes.md
           fi
