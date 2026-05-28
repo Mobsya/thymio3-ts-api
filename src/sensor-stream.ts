@@ -72,21 +72,41 @@ export type OtherSensorData = {
 };
 
 /**
- * Start the sensor streaming. By default, only the main sensors are enabled.
- * @param other Enable/disable other sensors
+ * Start the main sensor streaming.
  */
-export async function startSensorStreaming(
+export async function startMainSensorStreaming(
   sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic,
-  other = false
 ) {
   const id = 0x01;
+  const body = 1;
 
-  let body = 0;
-  if (!other) {
-    body |= 0b00000001;
-  } else {
-    body |= 0b00000010;
-  }
+  const payload = new Uint8Array([id, body]);
+
+  return await sensorStreamCharacteristic.writeValueWithResponse(payload);
+}
+
+/**
+ * Start the secondary sensor streaming.
+ */
+export async function startSecondarySensorStreaming(
+  sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic,
+) {
+  const id = 0x01;
+  const body = 2;
+
+  const payload = new Uint8Array([id, body]);
+
+  return await sensorStreamCharacteristic.writeValueWithResponse(payload);
+}
+
+/**
+ * Start all sensor streaming (main and secondary).
+ */
+export async function startAllSensorStreaming(
+  sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic,
+) {
+  const id = 0x01;
+  const body = 3;
 
   const payload = new Uint8Array([id, body]);
 
@@ -100,8 +120,8 @@ export async function stopSensorStreaming(
   sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic,
 ) {
   const id = 0x01;
-
   const body = 0x00;
+
   const payload = new Uint8Array([id, body]);
 
   return await sensorStreamCharacteristic.writeValueWithResponse(payload);

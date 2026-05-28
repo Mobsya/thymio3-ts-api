@@ -26,6 +26,7 @@ __export(thymio_exports, {
   eraseAllFiles: () => eraseAllFiles2,
   executeLoadedScript: () => executeLoadedScript2,
   freeMemory: () => freeMemory2,
+  getDeviceName: () => getDeviceName,
   getFirmwareInfo: () => getFirmwareInfo2,
   getMemoryInfo: () => getMemoryInfo2,
   getNewFirmware: () => getNewFirmware2,
@@ -41,7 +42,9 @@ __export(thymio_exports, {
   sendPythonScript: () => sendPythonScript2,
   setActuatorState: () => setActuatorState2,
   softResetPythonInterpreter: () => softResetPythonInterpreter2,
-  startSensorStreaming: () => startSensorStreaming2,
+  startAllSensorStreaming: () => startAllSensorStreaming2,
+  startMainSensorStreaming: () => startMainSensorStreaming2,
+  startSecondarySensorStreaming: () => startSecondarySensorStreaming2,
   stopAudioFile: () => stopAudioFile2,
   stopFirmwareUpload: () => stopFirmwareUpload2,
   stopScriptExecution: () => stopScriptExecution2,
@@ -341,14 +344,21 @@ function dispatchExecutionStatusEvent(executing) {
 }
 
 // src/sensor-stream.ts
-async function startSensorStreaming(sensorStreamCharacteristic2, other = false) {
+async function startMainSensorStreaming(sensorStreamCharacteristic2) {
   const id = 1;
-  let body = 0;
-  if (!other) {
-    body |= 1;
-  } else {
-    body |= 2;
-  }
+  const body = 1;
+  const payload = new Uint8Array([id, body]);
+  return await sensorStreamCharacteristic2.writeValueWithResponse(payload);
+}
+async function startSecondarySensorStreaming(sensorStreamCharacteristic2) {
+  const id = 1;
+  const body = 2;
+  const payload = new Uint8Array([id, body]);
+  return await sensorStreamCharacteristic2.writeValueWithResponse(payload);
+}
+async function startAllSensorStreaming(sensorStreamCharacteristic2) {
+  const id = 1;
+  const body = 3;
   const payload = new Uint8Array([id, body]);
   return await sensorStreamCharacteristic2.writeValueWithResponse(payload);
 }
@@ -1369,6 +1379,9 @@ async function retryConnection() {
   disconnect();
   dispatchManualReconnectionEvent();
 }
+function getDeviceName() {
+  return device?.name || "Unknown device";
+}
 async function setActuatorState2(actuatorData) {
   await setActuatorState(commandCharacteristic, actuatorData);
 }
@@ -1387,8 +1400,14 @@ async function saveScriptToPartition2(scriptId) {
 async function softResetPythonInterpreter2() {
   await softResetPythonInterpreter(pythonCharacteristic);
 }
-async function startSensorStreaming2(other = false) {
-  return await startSensorStreaming(sensorStreamCharacteristic, other);
+async function startMainSensorStreaming2() {
+  return await startMainSensorStreaming(sensorStreamCharacteristic);
+}
+async function startSecondarySensorStreaming2() {
+  return await startSecondarySensorStreaming(sensorStreamCharacteristic);
+}
+async function startAllSensorStreaming2() {
+  return await startAllSensorStreaming(sensorStreamCharacteristic);
 }
 async function stopSensorStreaming2() {
   return await stopSensorStreaming(sensorStreamCharacteristic);
@@ -1490,6 +1509,7 @@ async function unsubscribeFromCharacteristics() {
   eraseAllFiles,
   executeLoadedScript,
   freeMemory,
+  getDeviceName,
   getFirmwareInfo,
   getMemoryInfo,
   getNewFirmware,
@@ -1505,7 +1525,9 @@ async function unsubscribeFromCharacteristics() {
   sendPythonScript,
   setActuatorState,
   softResetPythonInterpreter,
-  startSensorStreaming,
+  startAllSensorStreaming,
+  startMainSensorStreaming,
+  startSecondarySensorStreaming,
   stopAudioFile,
   stopFirmwareUpload,
   stopScriptExecution,

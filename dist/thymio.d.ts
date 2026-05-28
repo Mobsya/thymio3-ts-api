@@ -36,6 +36,7 @@ type MemoryInfo = {
 declare function requestAndConnect(): Promise<void>;
 declare function isConnected(): boolean;
 declare function disconnect(): Promise<void>;
+declare function getDeviceName(): string;
 /**
  * Set the state of the Thymio 3 actuators.
  * @param {*} actuatorData
@@ -46,11 +47,9 @@ declare function executeLoadedScript(): Promise<void>;
 declare function stopScriptExecution(): Promise<void>;
 declare function saveScriptToPartition(scriptId: number): Promise<void>;
 declare function softResetPythonInterpreter(): Promise<void>;
-/**
- * Start the sensor streaming. By default, only the main sensors are enabled.
- * @param other Enable/disable other sensors
- */
-declare function startSensorStreaming(other?: boolean): Promise<void>;
+declare function startMainSensorStreaming(): Promise<void>;
+declare function startSecondarySensorStreaming(): Promise<void>;
+declare function startAllSensorStreaming(): Promise<void>;
 /**
  * Stop all sensor streaming.
  */
@@ -128,4 +127,4 @@ declare function getFirmwareInfo(): Promise<FirmwareInfo>;
  */
 declare function getMemoryInfo(): Promise<MemoryInfo>;
 
-export { deleteFile, disconnect, downloadFile, eraseAllFiles, executeLoadedScript, freeMemory, getFirmwareInfo, getMemoryInfo, getNewFirmware, isConnected, isNewerFirmwareAvailable, listFiles, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, saveScriptToPartition, sendPythonScript, setActuatorState, softResetPythonInterpreter, startSensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, updateFirmware, uploadAudioFile, uploadFile, uploadFirmware };
+export { deleteFile, disconnect, downloadFile, eraseAllFiles, executeLoadedScript, freeMemory, getDeviceName, getFirmwareInfo, getMemoryInfo, getNewFirmware, isConnected, isNewerFirmwareAvailable, listFiles, playAudioFile, playFrequency, recordAudio, requestAndConnect, saveFile, saveScriptToPartition, sendPythonScript, setActuatorState, softResetPythonInterpreter, startAllSensorStreaming, startMainSensorStreaming, startSecondarySensorStreaming, stopAudioFile, stopFirmwareUpload, stopScriptExecution, stopSensorStreaming, updateFirmware, uploadAudioFile, uploadFile, uploadFirmware };

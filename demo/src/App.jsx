@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { PRESETS } from "./presets";
 import PythonEditor from "./python-editor";
 
@@ -96,8 +96,8 @@ function RGBInputs({ label, rgb, onChange }) {
 }
 
 export default function App() {
-  const thymio = useMemo(() => getThymio(), []);
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
+  const [deviceName, setDeviceName] = useState("");
   // possible values: "disconnected" | "connecting" | "connected"
   const [promptManualReconnection, setPromptManualReconnection] = useState(false);
 
@@ -105,7 +105,6 @@ export default function App() {
   const [code, setCode] = useState(DEFAULT_CODE);
   const [scriptIdToSave, setScriptIdToSave] = useState("");
   const [isExecuting, setIsExecuting] = useState(false);
-  const [execError, setExecError] = useState(""); // optional: show last error
 
 
   // Streams / output
@@ -163,13 +162,16 @@ export default function App() {
 
       if (isConnected) {
         setConnectionStatus("connected");
+        setDeviceName(getThymio()?.getDeviceName?.() ?? "Unknown device");
+        setPromptManualReconnection(false);
       } else {
         // If connection drops and library tries to auto-reconnect
         setConnectionStatus("connecting");
+        setDeviceName("");
       }
     };
 
-    const onManualReconn = (event) => {
+    const onManualReconn = () => {
       setPromptManualReconnection(true);
     }
 
@@ -217,6 +219,7 @@ export default function App() {
     if (!getThymio()?.disconnect) return;
     await getThymio().disconnect();
     setConnectionStatus("disconnected")
+    setDeviceName("");
   }
 
   async function executeCode() {
@@ -267,14 +270,20 @@ export default function App() {
 
   async function startMainSensors() {
     const t = getThymio();
-    if (!t?.startSensorStreaming) return;
-    await t.startSensorStreaming();
+    if (!t?.startMainSensorStreaming) return;
+    await t.startMainSensorStreaming();
   }
 
   async function startOtherSensors() {
     const t = getThymio();
-    if (!t?.startSensorStreaming) return;
-    await t.startSensorStreaming(true);
+    if (!t?.startSecondarySensorStreaming) return;
+    await t.startSecondarySensorStreaming();
+  }
+
+  async function startAllSensors() {
+    const t = getThymio();
+    if (!t?.startAllSensorStreaming) return;
+    await t.startAllSensorStreaming();
   }
 
   async function stopSensors() {
@@ -417,12 +426,19 @@ export default function App() {
       <header className="header">
         <div>
           <h1>Thymio 3 Test</h1>
+          <div className={`connection-summary ${connectionStatus}`}>
+            <div className="connection-status">
+              <span className="dot" />
+              {connectionStatus === "connected" && "Connected"}
+              {connectionStatus === "connecting" && "Connecting…"}
+              {connectionStatus === "disconnected" && "Disconnected"}
+            </div>
 
-          <div className={`status-pill ${connectionStatus}`}>
-            <span className="dot" />
-            {connectionStatus === "connected" && "Connected"}
-            {connectionStatus === "connecting" && "Connecting…"}
-            {connectionStatus === "disconnected" && "Disconnected"}
+            {connectionStatus === "connected" && deviceName ? (
+              <div className="connection-device">
+                <span className="device-name-value">{deviceName}</span>
+              </div>
+            ) : null}
           </div>
 
           <p className="muted">
@@ -580,6 +596,7 @@ export default function App() {
           <div className="row wrap">
             <button onClick={startMainSensors}>Start main sensor streaming</button>
             <button onClick={startOtherSensors}>Start other sensor streaming</button>
+            <button onClick={startAllSensors}>Start all sensor streaming</button>
             <button className="secondary" onClick={stopSensors}>
               Stop all sensor streaming
             </button>

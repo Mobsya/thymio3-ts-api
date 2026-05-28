@@ -65,7 +65,9 @@ And open the `localhost:5173` in your browser.
 
 ### Sensor data streaming
 
-`thymio.startSensorStreaming(other)` - starts sensor streaming\
+`thymio.startMainSensorStreaming()` - starts main sensor streaming\
+`thymio.startSecondarySensorStreaming()` - starts secondary sensor streaming\
+`thymio.startAllSensorStreaming()` - starts all sensor streaming\
 `thymio.stopSensorStreaming()` - stops sensor streaming
 
 #### Events

@@ -181,6 +181,12 @@ async function retryConnection() {
   dispatchManualReconnectionEvent();
 }
 
+// GET DEVICE NAME
+
+export function getDeviceName() {
+  return device?.name || "Unknown device";
+}
+
 // COMMAND CHARACTERISTIC
 
 /**
@@ -215,13 +221,18 @@ export async function softResetPythonInterpreter() {
 
 //// SENSOR STREAM CHARACTERISTIC
 
-/**
- * Start the sensor streaming. By default, only the main sensors are enabled.
- * @param other Enable/disable other sensors
- */
-export async function startSensorStreaming(other = false) {
-  return await sensorStream.startSensorStreaming(sensorStreamCharacteristic, other);
+export async function startMainSensorStreaming() {
+  return await sensorStream.startMainSensorStreaming(sensorStreamCharacteristic);
 }
+
+export async function startSecondarySensorStreaming() {
+  return await sensorStream.startSecondarySensorStreaming(sensorStreamCharacteristic);
+}
+
+export async function startAllSensorStreaming() {
+  return await sensorStream.startAllSensorStreaming(sensorStreamCharacteristic);
+}
+
 
 /**
  * Stop all sensor streaming.
