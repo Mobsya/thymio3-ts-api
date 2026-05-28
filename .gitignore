@@ -5,7 +5,7 @@ node_modules/
 *.tsbuildinfo
 
 # Output directories
-# dist/
+dist/
 # build/
 # out/
 

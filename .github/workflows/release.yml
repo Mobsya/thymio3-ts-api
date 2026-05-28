@@ -1,0 +1,64 @@
+name: Create release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run build
+
+      - name: Read package version
+        id: package-version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release notes
+        run: |
+          {
+            echo "## Changes"
+            echo
+            git log -1 --format="%s%n%n%b" "$GITHUB_SHA"
+            echo
+          } > release-notes.md
+
+      - name: Create dist archive
+        run: tar -czf thymio3-ts-api-dist.tar.gz -C dist .
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.package-version.outputs.version }}
+        run: |
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release edit "$VERSION" --title "$VERSION" --notes-file release-notes.md
+            gh release upload "$VERSION" dist/* thymio3-ts-api-dist.tar.gz --clobber
+          else
+            gh release create "$VERSION" \
+              dist/* \
+              thymio3-ts-api-dist.tar.gz \
+              --target "$GITHUB_SHA" \
+              --title "$VERSION" \
+              --notes-file release-notes.md
+          fi
