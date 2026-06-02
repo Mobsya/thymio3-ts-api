@@ -164,6 +164,23 @@ h3 { margin: 0; font-size: 16px; }
   font-weight: 900;
   line-height: 1.15;
 }
+.connection-firmware {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.connection-firmware-error {
+  margin-top: 8px;
+  color: #7f1d1d;
+  font-size: 13px;
+  font-weight: 700;
+}
 .subhead { font-weight: bold; margin: 10px 0 6px; }
 
 .card {

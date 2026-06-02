@@ -53,6 +53,10 @@ function Section({ title, children, actions }) {
   );
 }
 
+function formatFirmwareVersion(value) {
+  return Number.isFinite(value) ? String(value) : "Unknown";
+}
+
 export default function App() {
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [deviceName, setDeviceName] = useState("");
@@ -97,7 +101,8 @@ export default function App() {
   const [fileList, setFileList] = useState("Waiting for file listings...");
 
   // Device info
-  const [firmwareInfo, setFirmwareInfo] = useState("Waiting for firmware info...");
+  const [firmwareInfo, setFirmwareInfo] = useState(null);
+  const [firmwareInfoError, setFirmwareInfoError] = useState("");
   const [newFirmwareInfo, setNewFirmwareInfo] = useState("Waiting for firmware info...");
 
   // OTA
@@ -121,10 +126,23 @@ export default function App() {
         setConnectionStatus("connected");
         setDeviceName(getThymio()?.getDeviceName?.() ?? "Unknown device");
         setPromptManualReconnection(false);
+        setFirmwareInfo(null);
+        setFirmwareInfoError("");
+
+        void (async () => {
+          try {
+            const info = await getThymio()?.getFirmwareInfo?.();
+            if (info) setFirmwareInfo(info);
+          } catch (err) {
+            setFirmwareInfoError(err?.message ?? "Failed to read firmware info");
+          }
+        })();
       } else {
         // If connection drops and library tries to auto-reconnect
         setConnectionStatus("connecting");
         setDeviceName("");
+        setFirmwareInfo(null);
+        setFirmwareInfoError("");
       }
     };
 
@@ -346,13 +364,6 @@ export default function App() {
     setFileList(JSON.stringify(list, null, 2));
   }
 
-  async function getFirmwareInfo() {
-    const t = getThymio();
-    if (!t?.getFirmwareInfo) return;
-    const info = await t.getFirmwareInfo();
-    setFirmwareInfo(JSON.stringify(info, null, 2));
-  }
-
   async function checkForNewFirmware() {
     const t = getThymio();
     if (!t?.isNewerFirmwareAvailable) return;
@@ -420,6 +431,13 @@ export default function App() {
             {connectionStatus === "connected" && deviceName ? (
               <div className="connection-device">
                 <span className="device-name-value">{deviceName}</span>
+                <div className="connection-firmware">
+                  <span>ESP32 {formatFirmwareVersion(firmwareInfo?.esp32_ver)}</span>
+                  <span>STM32 {formatFirmwareVersion(firmwareInfo?.stm32_ver)}</span>
+                </div>
+                {firmwareInfoError ? (
+                  <div className="connection-firmware-error">{firmwareInfoError}</div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -652,15 +670,7 @@ export default function App() {
       </Section>
 
       <Section title="Device Info">
-        <div className="grid-2">
-          <div>
-            <div className="row wrap">
-              <button onClick={getFirmwareInfo}>Get firmware info</button>
-            </div>
-            <pre className="pre">{firmwareInfo}</pre>
-          </div>
-          <DeviceMemoryStatus isConnected={connectionStatus === "connected"} />
-        </div>
+        <DeviceMemoryStatus isConnected={connectionStatus === "connected"} />
       </Section>
 
       <Section title="Automatic Firmware update">
