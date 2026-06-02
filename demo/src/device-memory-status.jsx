@@ -33,8 +33,72 @@ function withTimeout(promise, timeoutMs, message) {
   });
 }
 
-export default function DeviceMemoryStatus({ isConnected, pollIntervalMs = 5000, requestTimeoutMs = 4000 }) {
+function getChartY(value, minValue, maxValue, height, padding) {
+  const drawableHeight = height - padding.top - padding.bottom;
+  const valueRange = Math.max(1, maxValue - minValue);
+  const normalized = (value - minValue) / valueRange;
+  return padding.top + drawableHeight - normalized * drawableHeight;
+}
+
+function buildPolylinePoints(samples, key, minValue, maxValue, width, height, padding) {
+  if (samples.length === 0) return "";
+
+  const drawableWidth = width - padding.left - padding.right;
+  const xStep = samples.length > 1 ? drawableWidth / (samples.length - 1) : 0;
+
+  return samples
+    .map((sample, index) => {
+      const x = padding.left + index * xStep;
+      const y = getChartY(sample[key], minValue, maxValue, height, padding);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+function MemorySparkline({ samples, keyName, label, colorClass }) {
+  const width = 320;
+  const height = 110;
+  const padding = { top: 12, right: 10, bottom: 16, left: 58 };
+  const values = samples.map((sample) => sample[keyName]);
+  const minValue = 0;
+  const maxValue = values.length ? Math.max(...values) : 1;
+  const points = buildPolylinePoints(samples, keyName, minValue, maxValue, width, height, padding);
+  const tickValues = [maxValue, (minValue + maxValue) / 2, minValue];
+
+  return (
+    <div className="device-memory-chart">
+      <div className="device-memory-chart-header">
+        <span className={`device-memory-legend ${colorClass}`}>{label}</span>
+      </div>
+      <svg aria-label={`${label} memory history`} viewBox={`0 0 ${width} ${height}`} role="img">
+        {tickValues.map((value, index) => {
+          const y = getChartY(value, minValue, maxValue, height, padding);
+
+          return (
+            <g key={`${label}-${index}`}>
+              <line className="device-memory-grid-line" x1={padding.left} y1={y} x2={width - padding.right} y2={y} />
+              <text className="device-memory-tick-label" x={padding.left - 8} y={y} textAnchor="end" dominantBaseline="middle">
+                {formatBytes(value)}
+              </text>
+            </g>
+          );
+        })}
+        <line className="device-memory-axis" x1={padding.left} y1={padding.top} x2={padding.left} y2={height - padding.bottom} />
+        <line className="device-memory-axis" x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} />
+        {samples.length > 1 ? (
+          <polyline className={`device-memory-line ${colorClass}`} points={points} />
+        ) : null}
+      </svg>
+      {samples.length < 2 ? (
+        <div className="muted device-memory-chart-empty">Waiting for graph samples...</div>
+      ) : null}
+    </div>
+  );
+}
+
+export default function DeviceMemoryStatus({ isConnected, pollIntervalMs = 1000, requestTimeoutMs = 4000 }) {
   const [memoryInfo, setMemoryInfo] = useState(null);
+  const [samples, setSamples] = useState([]);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
 
@@ -57,6 +121,14 @@ export default function DeviceMemoryStatus({ isConnected, pollIntervalMs = 5000,
         if (cancelled) return;
 
         setMemoryInfo(nextMemoryInfo);
+        setSamples((current) => [
+          ...current.slice(-29),
+          {
+            time: Date.now(),
+            ram: nextMemoryInfo.ram_bytes_free,
+            flash: nextMemoryInfo.flash_bytes_free,
+          },
+        ]);
         setError("");
         setLastUpdated(new Date());
       } catch (err) {
@@ -94,6 +166,11 @@ export default function DeviceMemoryStatus({ isConnected, pollIntervalMs = 5000,
         </div>
       </div>
 
+      <div className="device-memory-chart-grid">
+        <MemorySparkline samples={samples} keyName="ram" label="RAM" colorClass="ram" />
+        <MemorySparkline samples={samples} keyName="flash" label="Flash" colorClass="flash" />
+      </div>
+
       {lastUpdated ? (
         <div className="muted device-memory-footnote">
           Updated {lastUpdated.toLocaleTimeString()}
@@ -104,7 +181,7 @@ export default function DeviceMemoryStatus({ isConnected, pollIntervalMs = 5000,
         </div>
       )}
 
-      {/* {error ? <div className="error-box device-memory-error">{error}</div> : null} */}
+      {error ? <div className="error-box device-memory-error">{error}</div> : null}
     </div>
   );
 }
