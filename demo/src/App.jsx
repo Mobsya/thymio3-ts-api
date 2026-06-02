@@ -4,6 +4,7 @@ import ColourSlider from "./colour-slider";
 import LedIntensitySliders from "./led-intensity-sliders";
 import MotorSliders from "./motor-sliders";
 import PythonEditor from "./python-editor";
+import SoundPicker from "./sound-picker";
 
 /**
  * Assumes thymio.global.js exposes `window.thymio`.
@@ -255,6 +256,12 @@ export default function App() {
     if (typeof values.motorLeft === "number") setMotorLeft(values.motorLeft);
     if (typeof values.motorRight === "number") setMotorRight(values.motorRight);
     void sendActuatorData(values);
+  }
+
+  function updateSoundFromPicker(value) {
+    const nextSound = clampInt(value, 0, 19);
+    setSound(nextSound);
+    void sendActuatorData({ sound: nextSound });
   }
 
   async function startMainSensors() {
@@ -547,17 +554,7 @@ export default function App() {
 
             <div className="grid-2">
               <MotorSliders left={motorLeft} right={motorRight} onChange={updateMotorsFromSlider} />
-
-              <div className="grid-block">
-                <div className="grid-title">Sound (0-19)</div>
-                <input
-                  type="number"
-                  min={0}
-                  max={19}
-                  value={sound}
-                  onChange={(e) => setSound(parseInt(e.target.value, 10) || 0)}
-                />
-              </div>
+              <SoundPicker value={sound} onChange={updateSoundFromPicker} />
             </div>
 
             <div className="row">

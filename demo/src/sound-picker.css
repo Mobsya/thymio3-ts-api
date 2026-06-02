@@ -1,0 +1,39 @@
+.sound-picker {
+  min-width: 0;
+}
+
+.sound-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 32px);
+  gap: 6px;
+}
+
+.sound-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sound-button:hover {
+  filter: brightness(0.98);
+  border-color: rgba(25, 118, 210, 0.35);
+}
+
+.sound-button.selected {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+@media (max-width: 520px) {
+  .sound-grid {
+    grid-template-columns: repeat(5, 32px);
+  }
+}
