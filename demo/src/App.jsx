@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PRESETS } from "./presets";
+import ColourSlider from "./colour-slider";
 import PythonEditor from "./python-editor";
 
 /**
@@ -73,25 +74,6 @@ function NumberGrid({ label, values, min, max, onChange }) {
         ))}
       </div>
     </div>
-  );
-}
-
-function RGBInputs({ label, rgb, onChange }) {
-  const set = (k) => (e) =>
-    onChange({ ...rgb, [k]: clampInt(parseInt(e.target.value, 10), 0, 15) });
-
-  return (
-    <fieldset className="fieldset">
-      <legend>{label}</legend>
-      <div className="rgb-inputs">
-        <span>R:</span>
-        <input type="number" min="0" max="15" value={rgb.r} onChange={set("r")} />
-        <span>G:</span>
-        <input type="number" min="0" max="15" value={rgb.g} onChange={set("g")} />
-        <span>B:</span>
-        <input type="number" min="0" max="15" value={rgb.b} onChange={set("b")} />
-      </div>
-    </fieldset>
   );
 }
 
@@ -248,24 +230,40 @@ export default function App() {
     await t.softResetPythonInterpreter();
   }
 
-  async function submitActuatorData() {
-    const t = getThymio();
-    if (!t?.setActuatorState) return alert("thymio not loaded");
-
-    const data = {
-      circleLEDs,
-      frontLegoLEDs,
-      rearLegoLEDs,
-      flRGB,
-      frRGB,
-      blRGB,
-      brRGB,
-      motorLeft: clampInt(motorLeft, -1000, 1000),
-      motorRight: clampInt(motorRight, -1000, 1000),
-      sound: clampInt(sound, 0, 19),
+  function buildActuatorData(overrides = {}) {
+    return {
+      circleLEDs: overrides.circleLEDs ?? circleLEDs,
+      frontLegoLEDs: overrides.frontLegoLEDs ?? frontLegoLEDs,
+      rearLegoLEDs: overrides.rearLegoLEDs ?? rearLegoLEDs,
+      flRGB: overrides.flRGB ?? flRGB,
+      frRGB: overrides.frRGB ?? frRGB,
+      blRGB: overrides.blRGB ?? blRGB,
+      brRGB: overrides.brRGB ?? brRGB,
+      motorLeft: clampInt(overrides.motorLeft ?? motorLeft, -1000, 1000),
+      motorRight: clampInt(overrides.motorRight ?? motorRight, -1000, 1000),
+      sound: clampInt(overrides.sound ?? sound, 0, 19),
     };
+  }
 
-    await t.setActuatorState(data);
+  async function sendActuatorData(overrides = {}, { alertIfMissing = false } = {}) {
+    const t = getThymio();
+    if (!t?.setActuatorState) {
+      if (alertIfMissing) alert("thymio not loaded");
+      return;
+    }
+
+    await t.setActuatorState(buildActuatorData(overrides));
+  }
+
+  async function submitActuatorData() {
+    await sendActuatorData({}, { alertIfMissing: true });
+  }
+
+  function updateRgbFromSlider(key, setRgb) {
+    return (rgb) => {
+      setRgb(rgb);
+      void sendActuatorData({ [key]: rgb });
+    };
   }
 
   async function startMainSensors() {
@@ -536,10 +534,10 @@ export default function App() {
             <NumberGrid label="Rear LEGO LEDs (0-15)" values={rearLegoLEDs} min={0} max={15} onChange={setRearLegoLEDs} />
 
             <div className="grid-2">
-              <RGBInputs label="FL RGB" rgb={flRGB} onChange={setFlRGB} />
-              <RGBInputs label="FR RGB" rgb={frRGB} onChange={setFrRGB} />
-              <RGBInputs label="BL RGB" rgb={blRGB} onChange={setBlRGB} />
-              <RGBInputs label="BR RGB" rgb={brRGB} onChange={setBrRGB} />
+              <ColourSlider label="FL RGB" rgb={flRGB} onChange={updateRgbFromSlider("flRGB", setFlRGB)} />
+              <ColourSlider label="FR RGB" rgb={frRGB} onChange={updateRgbFromSlider("frRGB", setFrRGB)} />
+              <ColourSlider label="BL RGB" rgb={blRGB} onChange={updateRgbFromSlider("blRGB", setBlRGB)} />
+              <ColourSlider label="BR RGB" rgb={brRGB} onChange={updateRgbFromSlider("brRGB", setBrRGB)} />
             </div>
 
             <div className="grid-2">
