@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PRESETS } from "./presets";
 import ColourSlider from "./colour-slider";
+import MotorSliders from "./motor-sliders";
 import PythonEditor from "./python-editor";
 
 /**
@@ -264,6 +265,12 @@ export default function App() {
       setRgb(rgb);
       void sendActuatorData({ [key]: rgb });
     };
+  }
+
+  function updateMotorsFromSlider(values) {
+    if (typeof values.motorLeft === "number") setMotorLeft(values.motorLeft);
+    if (typeof values.motorRight === "number") setMotorRight(values.motorRight);
+    void sendActuatorData(values);
   }
 
   async function startMainSensors() {
@@ -541,31 +548,7 @@ export default function App() {
             </div>
 
             <div className="grid-2">
-              <div className="grid-block">
-                <div className="grid-title">Motors</div>
-                <div className="row wrap">
-                  <label className="inline">
-                    Left:
-                    <input
-                      type="number"
-                      min={-1000}
-                      max={1000}
-                      value={motorLeft}
-                      onChange={(e) => setMotorLeft(parseInt(e.target.value, 10) || 0)}
-                    />
-                  </label>
-                  <label className="inline">
-                    Right:
-                    <input
-                      type="number"
-                      min={-1000}
-                      max={1000}
-                      value={motorRight}
-                      onChange={(e) => setMotorRight(parseInt(e.target.value, 10) || 0)}
-                    />
-                  </label>
-                </div>
-              </div>
+              <MotorSliders left={motorLeft} right={motorRight} onChange={updateMotorsFromSlider} />
 
               <div className="grid-block">
                 <div className="grid-title">Sound (0-19)</div>
