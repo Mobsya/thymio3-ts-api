@@ -55,7 +55,7 @@ function buildPolylinePoints(samples, key, minValue, maxValue, width, height, pa
     .join(" ");
 }
 
-function MemorySparkline({ samples, keyName, label, colorClass }) {
+function MemorySparkline({ samples, keyName, label, colorClass, value }) {
   const width = 320;
   const height = 110;
   const padding = { top: 12, right: 10, bottom: 16, left: 58 };
@@ -69,6 +69,7 @@ function MemorySparkline({ samples, keyName, label, colorClass }) {
     <div className="device-memory-chart">
       <div className="device-memory-chart-header">
         <span className={`device-memory-legend ${colorClass}`}>{label}</span>
+        <strong className="device-memory-chart-value">{formatBytes(value)}</strong>
       </div>
       <svg aria-label={`${label} memory history`} viewBox={`0 0 ${width} ${height}`} role="img">
         {tickValues.map((value, index) => {
@@ -155,20 +156,21 @@ export default function DeviceMemoryStatus({ isConnected, pollIntervalMs = 1000,
         </span>
       </div>
 
-      <div className="device-memory-grid">
-        <div className="device-memory-metric">
-          <span>RAM free</span>
-          <strong>{formatBytes(memoryInfo?.ram_bytes_free)}</strong>
-        </div>
-        <div className="device-memory-metric">
-          <span>Flash free</span>
-          <strong>{formatBytes(memoryInfo?.flash_bytes_free)}</strong>
-        </div>
-      </div>
-
       <div className="device-memory-chart-grid">
-        <MemorySparkline samples={samples} keyName="ram" label="RAM" colorClass="ram" />
-        <MemorySparkline samples={samples} keyName="flash" label="Flash" colorClass="flash" />
+        <MemorySparkline
+          samples={samples}
+          keyName="ram"
+          label="RAM free"
+          colorClass="ram"
+          value={memoryInfo?.ram_bytes_free}
+        />
+        <MemorySparkline
+          samples={samples}
+          keyName="flash"
+          label="Flash free"
+          colorClass="flash"
+          value={memoryInfo?.flash_bytes_free}
+        />
       </div>
 
       {lastUpdated ? (
