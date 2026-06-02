@@ -407,6 +407,8 @@ export default function App() {
     if (typeof preset.motorLeft === "number") setMotorLeft(preset.motorLeft);
     if (typeof preset.motorRight === "number") setMotorRight(preset.motorRight);
     if (typeof preset.sound === "number") setSound(preset.sound);
+
+    void sendActuatorData(preset);
   }
 
 
