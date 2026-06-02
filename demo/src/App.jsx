@@ -5,6 +5,7 @@ import DeviceMemoryStatus from "./device-memory-status";
 import LedIntensitySliders from "./led-intensity-sliders";
 import MotorSliders from "./motor-sliders";
 import PythonEditor from "./python-editor";
+import RobotStatusCard from "./robot-status-card";
 import SoundPicker from "./sound-picker";
 import { clampInt } from "./utils";
 
@@ -51,10 +52,6 @@ function Section({ title, children, actions }) {
       <div className="card-body">{children}</div>
     </section>
   );
-}
-
-function formatFirmwareVersion(value) {
-  return Number.isFinite(value) ? String(value) : "Unknown";
 }
 
 export default function App() {
@@ -420,27 +417,12 @@ export default function App() {
       <header className="header">
         <div>
           <h1>Thymio 3 Test</h1>
-          <div className={`connection-summary ${connectionStatus}`}>
-            <div className="connection-status">
-              <span className="dot" />
-              {connectionStatus === "connected" && "Connected"}
-              {connectionStatus === "connecting" && "Connecting…"}
-              {connectionStatus === "disconnected" && "Disconnected"}
-            </div>
-
-            {connectionStatus === "connected" && deviceName ? (
-              <div className="connection-device">
-                <span className="device-name-value">{deviceName}</span>
-                <div className="connection-firmware">
-                  <span>ESP32 {formatFirmwareVersion(firmwareInfo?.esp32_ver)}</span>
-                  <span>STM32 {formatFirmwareVersion(firmwareInfo?.stm32_ver)}</span>
-                </div>
-                {firmwareInfoError ? (
-                  <div className="connection-firmware-error">{firmwareInfoError}</div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+          <RobotStatusCard
+            connectionStatus={connectionStatus}
+            deviceName={deviceName}
+            firmwareInfo={firmwareInfo}
+            firmwareInfoError={firmwareInfoError}
+          />
 
           <p className="muted">
             Reactive UI for Thymio Web API (global <code>thymio</code>)
