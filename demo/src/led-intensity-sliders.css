@@ -1,0 +1,38 @@
+.led-intensity-sliders {
+  min-width: 0;
+}
+
+.led-intensity-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 10px 16px;
+}
+
+.led-intensity-slider {
+  display: grid;
+  grid-template-columns: 52px minmax(120px, 1fr) 24px;
+  align-items: center;
+  gap: 10px;
+}
+
+.led-intensity-label {
+  font-weight: 700;
+}
+
+.led-intensity-range {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.led-intensity-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+@media (max-width: 700px) {
+  .led-intensity-list {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PRESETS } from "./presets";
 import ColourSlider from "./colour-slider";
+import LedIntensitySliders from "./led-intensity-sliders";
 import MotorSliders from "./motor-sliders";
 import PythonEditor from "./python-editor";
 
@@ -51,30 +52,6 @@ function Section({ title, children, actions }) {
       </div>
       <div className="card-body">{children}</div>
     </section>
-  );
-}
-
-function NumberGrid({ label, values, min, max, onChange }) {
-  return (
-    <div className="grid-block">
-      <div className="grid-title">{label}</div>
-      <div className="grid">
-        {values.map((v, i) => (
-          <input
-            key={i}
-            type="number"
-            value={v}
-            min={min}
-            max={max}
-            onChange={(e) => {
-              const next = [...values];
-              next[i] = clampInt(parseInt(e.target.value, 10), min, max);
-              onChange(next);
-            }}
-          />
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -264,6 +241,13 @@ export default function App() {
     return (rgb) => {
       setRgb(rgb);
       void sendActuatorData({ [key]: rgb });
+    };
+  }
+
+  function updateLedIntensitiesFromSlider(key, setValues) {
+    return (values) => {
+      setValues(values);
+      void sendActuatorData({ [key]: values });
     };
   }
 
@@ -536,9 +520,21 @@ export default function App() {
               </div>
             </div>
 
-            <NumberGrid label="Circle LEDs (0-15)" values={circleLEDs} min={0} max={15} onChange={setCircleLEDs} />
-            <NumberGrid label="Front LEGO LEDs (0-15)" values={frontLegoLEDs} min={0} max={15} onChange={setFrontLegoLEDs} />
-            <NumberGrid label="Rear LEGO LEDs (0-15)" values={rearLegoLEDs} min={0} max={15} onChange={setRearLegoLEDs} />
+            <LedIntensitySliders
+              label="Circle LEDs"
+              values={circleLEDs}
+              onChange={updateLedIntensitiesFromSlider("circleLEDs", setCircleLEDs)}
+            />
+            <LedIntensitySliders
+              label="Front LEGO LEDs"
+              values={frontLegoLEDs}
+              onChange={updateLedIntensitiesFromSlider("frontLegoLEDs", setFrontLegoLEDs)}
+            />
+            <LedIntensitySliders
+              label="Rear LEGO LEDs"
+              values={rearLegoLEDs}
+              onChange={updateLedIntensitiesFromSlider("rearLegoLEDs", setRearLegoLEDs)}
+            />
 
             <div className="grid-2">
               <ColourSlider label="FL RGB" rgb={flRGB} onChange={updateRgbFromSlider("flRGB", setFlRGB)} />
