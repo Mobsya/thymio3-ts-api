@@ -1,9 +1,5 @@
 import "./led-intensity-sliders.css";
-
-function clampInt(n, min, max) {
-  const x = Number.isFinite(n) ? Math.trunc(n) : 0;
-  return Math.min(max, Math.max(min, x));
-}
+import { clampInt } from "./utils";
 
 export default function LedIntensitySliders({ label, values, onChange }) {
   function updateValue(index, value) {

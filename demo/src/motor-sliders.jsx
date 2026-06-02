@@ -1,9 +1,5 @@
 import "./motor-sliders.css";
-
-function clampInt(n, min, max) {
-  const x = Number.isFinite(n) ? Math.trunc(n) : 0;
-  return Math.min(max, Math.max(min, x));
-}
+import { clampInt } from "./utils";
 
 function MotorSlider({ label, value, onChange }) {
   const motorValue = clampInt(value, -1000, 1000);

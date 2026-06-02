@@ -1,9 +1,5 @@
 import "./colour-slider.css";
-
-function clampInt(n, min, max) {
-  const x = Number.isFinite(n) ? Math.trunc(n) : 0;
-  return Math.min(max, Math.max(min, x));
-}
+import { clampInt } from "./utils";
 
 function rgbToCss(rgb) {
   const toHex = (value) => (clampInt(value, 0, 15) * 17).toString(16).padStart(2, "0");

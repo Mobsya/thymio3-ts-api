@@ -5,6 +5,7 @@ import LedIntensitySliders from "./led-intensity-sliders";
 import MotorSliders from "./motor-sliders";
 import PythonEditor from "./python-editor";
 import SoundPicker from "./sound-picker";
+import { clampInt } from "./utils";
 
 /**
  * Assumes thymio.global.js exposes `window.thymio`.
@@ -27,11 +28,6 @@ while 1:
     rgb_fl.set_intensity(0, 0, 1)
     time.sleep(0.2)
 `;
-
-function clampInt(n, min, max) {
-  const x = Number.isFinite(n) ? Math.trunc(n) : 0;
-  return Math.min(max, Math.max(min, x));
-}
 
 function ProgressBar({ value }) {
   const pct = clampInt(value ?? 0, 0, 100);
@@ -232,10 +228,6 @@ export default function App() {
     }
 
     await t.setActuatorState(buildActuatorData(overrides));
-  }
-
-  async function submitActuatorData() {
-    await sendActuatorData({}, { alertIfMissing: true });
   }
 
   function updateRgbFromSlider(key, setRgb) {
@@ -523,10 +515,6 @@ export default function App() {
                   </button>
                 ))}
               </div>
-
-              <div className="muted preset-hint">
-                Tip: click a preset to fill the form, then “Apply to robot”.
-              </div>
             </div>
 
             <LedIntensitySliders
@@ -555,10 +543,6 @@ export default function App() {
             <div className="grid-2">
               <MotorSliders left={motorLeft} right={motorRight} onChange={updateMotorsFromSlider} />
               <SoundPicker value={sound} onChange={updateSoundFromPicker} />
-            </div>
-
-            <div className="row">
-              <button onClick={submitActuatorData}>Submit actuator state</button>
             </div>
           </>
         ) : (

@@ -1,11 +1,7 @@
 import "./sound-picker.css";
+import { clampInt } from "./utils";
 
 const SOUNDS = Array.from({ length: 20 }, (_, sound) => sound);
-
-function clampInt(n, min, max) {
-  const x = Number.isFinite(n) ? Math.trunc(n) : 0;
-  return Math.min(max, Math.max(min, x));
-}
 
 export default function SoundPicker({ value, onChange }) {
   const selectedSound = clampInt(value, 0, 19);
