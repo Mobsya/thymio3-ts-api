@@ -1,0 +1,71 @@
+.device-memory-status {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-memory-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.device-memory-state {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(156, 163, 175, 0.12);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.device-memory-state.connected {
+  background: rgba(34, 197, 94, 0.12);
+  color: #14532d;
+}
+
+.device-memory-state.disconnected {
+  background: rgba(239, 68, 68, 0.10);
+  color: #7f1d1d;
+}
+
+.device-memory-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.device-memory-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.device-memory-metric span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.device-memory-metric strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-memory-footnote {
+  font-size: 13px;
+}
+
+.device-memory-error {
+  padding: 8px 10px;
+}
+
+@media (max-width: 520px) {
+  .device-memory-grid {
+    grid-template-columns: 1fr;
+  }
+}

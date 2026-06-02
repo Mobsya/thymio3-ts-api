@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PRESETS } from "./presets";
 import ColourSlider from "./colour-slider";
+import DeviceMemoryStatus from "./device-memory-status";
 import LedIntensitySliders from "./led-intensity-sliders";
 import MotorSliders from "./motor-sliders";
 import PythonEditor from "./python-editor";
@@ -97,7 +98,6 @@ export default function App() {
 
   // Device info
   const [firmwareInfo, setFirmwareInfo] = useState("Waiting for firmware info...");
-  const [memoryInfo, setMemoryInfo] = useState("Waiting for memory info...");
   const [newFirmwareInfo, setNewFirmwareInfo] = useState("Waiting for firmware info...");
 
   // OTA
@@ -351,13 +351,6 @@ export default function App() {
     if (!t?.getFirmwareInfo) return;
     const info = await t.getFirmwareInfo();
     setFirmwareInfo(JSON.stringify(info, null, 2));
-  }
-
-  async function getMemoryInfo() {
-    const t = getThymio();
-    if (!t?.getMemoryInfo) return;
-    const info = await t.getMemoryInfo();
-    setMemoryInfo(JSON.stringify(info, null, 2));
   }
 
   async function checkForNewFirmware() {
@@ -666,12 +659,7 @@ export default function App() {
             </div>
             <pre className="pre">{firmwareInfo}</pre>
           </div>
-          <div>
-            <div className="row wrap">
-              <button onClick={getMemoryInfo}>Get memory info</button>
-            </div>
-            <pre className="pre">{memoryInfo}</pre>
-          </div>
+          <DeviceMemoryStatus isConnected={connectionStatus === "connected"} />
         </div>
       </Section>
 
