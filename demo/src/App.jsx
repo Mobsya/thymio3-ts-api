@@ -6,6 +6,7 @@ import LedIntensitySliders from "./led-intensity-sliders";
 import MotorSliders from "./motor-sliders";
 import PythonEditor from "./python-editor";
 import RobotStatusCard from "./robot-status-card";
+import SensorFocusPanel, { SENSOR_FOCUS_SENSOR_IDS } from "./sensor-focus-panel";
 import SoundPicker from "./sound-picker";
 import { clampInt } from "./utils";
 
@@ -68,8 +69,9 @@ export default function App() {
 
   // Streams / output
   const [stdOut, setStdOut] = useState("Waiting for the std out data...");
-  const [mainSensors, setMainSensors] = useState("Waiting for main sensor data...");
-  const [otherSensors, setOtherSensors] = useState("Waiting for other sensor data...");
+  const [mainSensors, setMainSensors] = useState(null);
+  const [otherSensors, setOtherSensors] = useState(null);
+  const [focusedSensors, setFocusedSensors] = useState(SENSOR_FOCUS_SENSOR_IDS);
 
   // Actuators
   const [showActuators, setShowActuators] = useState(true);
@@ -109,8 +111,8 @@ export default function App() {
   // --- Event listeners from thymio.global.js ---
   useEffect(() => {
     const onStdOut = (event) => setStdOut(String(event.detail ?? ""));
-    const onSensors = (event) => setMainSensors(JSON.stringify(event.detail, null, 2));
-    const onOtherSensors = (event) => setOtherSensors(JSON.stringify(event.detail, null, 2));
+    const onSensors = (event) => setMainSensors(event.detail ?? null);
+    const onOtherSensors = (event) => setOtherSensors(event.detail ?? null);
 
     const onAudioProgress = (e) => setAudioProgress(clampInt(e.detail?.percentage ?? 0, 0, 100));
     const onFileProgress = (e) => setFileProgress(clampInt(e.detail?.percentage ?? 0, 0, 100));
@@ -556,16 +558,12 @@ export default function App() {
           </div>
         }
       >
-        <div className="grid-2">
-          <div>
-            <div className="subhead">Main Sensor Data</div>
-            <pre className="pre">{mainSensors}</pre>
-          </div>
-          <div>
-            <div className="subhead">Other Sensor Data</div>
-            <pre className="pre">{otherSensors}</pre>
-          </div>
-        </div>
+        <SensorFocusPanel
+          mainSensors={mainSensors}
+          otherSensors={otherSensors}
+          focusedSensors={focusedSensors}
+          onFocusedSensorsChange={setFocusedSensors}
+        />
       </Section>
 
       <Section title="Audio">

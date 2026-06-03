@@ -1,0 +1,121 @@
+.sensor-focus-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sensor-focus-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sensor-focus-control {
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+.sensor-focus-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sensor-focus-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sensor-focus-option:has(input:checked) {
+  border-color: rgba(25, 118, 210, 0.35);
+  background: rgba(25, 118, 210, 0.08);
+  color: var(--primary);
+}
+
+.sensor-focus-option input {
+  margin: 0;
+}
+
+.sensor-focus-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--card);
+}
+
+.sensor-focus-empty {
+  padding: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sensor-focus-row {
+  display: grid;
+  grid-template-columns: 150px 74px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sensor-focus-row:last-child {
+  border-bottom: none;
+}
+
+.sensor-focus-row-label {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.sensor-focus-row-source {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sensor-focus-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.sensor-focus-value {
+  display: inline-flex;
+  gap: 4px;
+  align-items: baseline;
+}
+
+.sensor-focus-key {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.sensor-focus-reading {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+}
+
+@media (max-width: 760px) {
+  .sensor-focus-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    align-items: start;
+  }
+}
