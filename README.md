@@ -39,7 +39,8 @@ And open the `localhost:5173` in your browser.
 
 `thymio.requestAndConnect()` - requests the Thymio through Bluetooth and pairs it to the browser\
 `thymio.isConnected()` - returns true if Thymio device is connected\
-`thymio.disconnect()` - disconnects the Thymio device
+`thymio.disconnect()` - disconnects the Thymio device\
+`thymio.getAPIVersion()` - returns the API firmware version from `package.json`
 
 #### Events
 

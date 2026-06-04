@@ -5,6 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "Node",
     "lib": ["ES2020", "DOM"],
+    "resolveJsonModule": true,
     "declaration": true,
     "declarationDir": "dist",
     "outDir": "./dist",
