@@ -1,6 +1,6 @@
 export type FirmwareInfo = {
-  esp32_ver: number,
-  stm32_ver: number
+  esp32_ver: string,
+  stm32_ver: string
 };
 
 export type MemoryInfo = {

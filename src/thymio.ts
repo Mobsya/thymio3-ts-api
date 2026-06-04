@@ -15,6 +15,7 @@ import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSO
 import type { FileListing } from "./files";
 import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
+import { checkFirmwareCompatibility } from "./firmware-compatibility";
 
 let device: BluetoothDevice | undefined;
 let reconnecting = false;
@@ -129,6 +130,11 @@ async function connect() {
     otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
     await otaCommandCharacteristic.startNotifications();
     otaCommandCharacteristic.addEventListener('characteristicvaluechanged', ota.otaCommandNotificationHandler);
+
+    // Get the device firmware version and check the version compatibility
+    const firmwareInfo = await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic);
+    const firmwareVersion = firmwareInfo.esp32_ver;
+    await checkFirmwareCompatibility(firmwareVersion);
 
     dispatchConnectedEvent(true);
 

@@ -35,6 +35,10 @@ And open the `localhost:5173` in your browser.
 
 ## Documentation
 
+### Device firmware version compatibility
+
+The API checks the connected ESP32 firmware version against the compatibility range declared in `package.json` and logs a warning if the device firmware is outside that range.
+
 ### Connection
 
 `thymio.requestAndConnect()` - requests the Thymio through Bluetooth and pairs it to the browser\
