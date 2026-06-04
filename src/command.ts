@@ -17,7 +17,7 @@ export type ActuatorData = {
   sound: number,               // Integer 0 to 19
   smallBottomRGB: RGB,         // { r: 0-15, g: 0-15, b: 0-15 }
   smallBackRGB: RGB,           // { r: 0-15, g: 0-15, b: 0-15 }
-  buttonLEDS: number[],        // Array of 4 numbers (0-15)
+  buttonLEDs: number[],        // Array of 4 numbers (0-15)
   receiverLED : number,        // 0-15 brightness/intensity
   microphoneLED: boolean       // on/off
 }
@@ -33,8 +33,8 @@ export async function setActuatorState(
   const commandArray = createCommandByteArray(actuatorData);
   const secondaryCommandArray = createSecondaryCommandByteArray(actuatorData);
 
-  await commandCharacteristic.writeValue(commandArray);
-  await commandCharacteristic.writeValue(secondaryCommandArray);
+  await commandCharacteristic.writeValueWithResponse(commandArray);
+  await commandCharacteristic.writeValueWithResponse(secondaryCommandArray);
 }
 
 /**
@@ -98,7 +98,7 @@ function createCommandByteArray({
 function createSecondaryCommandByteArray({
   smallBottomRGB,
   smallBackRGB,
-  buttonLEDS,
+  buttonLEDs,
   receiverLED,
   microphoneLED
 }: ActuatorData) {
@@ -113,7 +113,7 @@ function createSecondaryCommandByteArray({
 
     view.setUint16(offset, packRGB(smallBackRGB), true); offset += 2;
 
-    pack4bitArrayTo2Bytes(buttonLEDS).forEach(byte => view.setUint8(offset++, byte));
+    pack4bitArrayTo2Bytes(buttonLEDs).forEach(byte => view.setUint8(offset++, byte));
 
     view.setUint8(offset++, packReceiverAndMicrophoneLED(receiverLED, microphoneLED)); offset++;
 
