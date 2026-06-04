@@ -85,6 +85,11 @@ export default function App() {
   const [motorLeft, setMotorLeft] = useState(0);
   const [motorRight, setMotorRight] = useState(0);
   const [sound, setSound] = useState(0);
+  const [smallBottomRGB, setSmallBottomRGB] = useState({ r: 0, g: 0, b: 0 });
+  const [smallBackRGB, setSmallBackRGB] = useState({ r: 0, g: 0, b: 0 });
+  const [buttonLEDS, setButtonLEDS] = useState(Array(4).fill(0));
+  const [receiverLED, setReceiverLED] = useState(0);
+  const [microphoneLED, setMicrophoneLED] = useState(false);
 
   // Audio
   const audioRef = useRef(null);
@@ -234,6 +239,11 @@ export default function App() {
       motorLeft: clampInt(overrides.motorLeft ?? motorLeft, -1000, 1000),
       motorRight: clampInt(overrides.motorRight ?? motorRight, -1000, 1000),
       sound: clampInt(overrides.sound ?? sound, 0, 19),
+      smallBottomRGB: overrides.smallBottomRGB ?? smallBottomRGB,
+      smallBackRGB: overrides.smallBackRGB ?? smallBackRGB,
+      buttonLEDs: overrides.buttonLEDS ?? buttonLEDS,
+      receiverLED: clampInt(overrides.receiverLED ?? receiverLED, 0, 15),
+      microphoneLED: overrides.microphoneLED ?? microphoneLED,
     };
   }
 
@@ -409,6 +419,11 @@ export default function App() {
     if (typeof preset.motorLeft === "number") setMotorLeft(preset.motorLeft);
     if (typeof preset.motorRight === "number") setMotorRight(preset.motorRight);
     if (typeof preset.sound === "number") setSound(preset.sound);
+    if (preset.smallBottomRGB) setSmallBottomRGB(preset.smallBottomRGB);
+    if (preset.smallBackRGB) setSmallBackRGB(preset.smallBackRGB);
+    if (preset.buttonLEDS) setButtonLEDS(preset.buttonLEDS);
+    if (typeof preset.receiverLED === "number") setReceiverLED(preset.receiverLED);
+    if (typeof preset.microphoneLED === "boolean") setMicrophoneLED(preset.microphoneLED);
 
     void sendActuatorData(preset);
   }
@@ -538,6 +553,71 @@ export default function App() {
             <div className="grid-2">
               <MotorSliders left={motorLeft} right={motorRight} onChange={updateMotorsFromSlider} />
               <SoundPicker value={sound} onChange={updateSoundFromPicker} />
+            </div>
+
+            <div className="grid-2">
+              <ColourSlider
+                label="Small bottom RGB"
+                rgb={smallBottomRGB}
+                onChange={(rgb) => {
+                  setSmallBottomRGB(rgb);
+                  void sendActuatorData({ smallBottomRGB: rgb });
+                }}
+              />
+              <ColourSlider
+                label="Small back RGB"
+                rgb={smallBackRGB}
+                onChange={(rgb) => {
+                  setSmallBackRGB(rgb);
+                  void sendActuatorData({ smallBackRGB: rgb });
+                }}
+              />
+            </div>
+
+            <LedIntensitySliders
+              label="Button LEDs"
+              values={buttonLEDS}
+              onChange={(values) => {
+                setButtonLEDS(values);
+                void sendActuatorData({ buttonLEDS: values });
+              }}
+            />
+
+            <div className="grid-2">
+              <div className="grid-block extra-actuator-receiver">
+                <div className="grid-title">Receiver LED</div>
+                <label className="extra-actuator-slider">
+                  <span>Intensity</span>
+                  <input
+                    aria-label="Receiver LED intensity"
+                    type="range"
+                    min="0"
+                    max="15"
+                    value={clampInt(receiverLED, 0, 15)}
+                    onChange={(e) => {
+                      const nextReceiverLED = clampInt(parseInt(e.target.value, 10), 0, 15);
+                      setReceiverLED(nextReceiverLED);
+                      void sendActuatorData({ receiverLED: nextReceiverLED });
+                    }}
+                  />
+                  <strong>{clampInt(receiverLED, 0, 15)}</strong>
+                </label>
+              </div>
+
+              <div className="grid-block extra-actuator-microphone">
+                <div className="grid-title">Microphone LED</div>
+                <label className="extra-actuator-toggle">
+                  <input
+                    checked={microphoneLED}
+                    type="checkbox"
+                    onChange={(e) => {
+                      setMicrophoneLED(e.target.checked);
+                      void sendActuatorData({ microphoneLED: e.target.checked });
+                    }}
+                  />
+                  <span>{microphoneLED ? "On" : "Off"}</span>
+                </label>
+              </div>
             </div>
           </>
         ) : (
