@@ -1,0 +1,142 @@
+.device-memory-status {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-memory-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.device-memory-state {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(156, 163, 175, 0.12);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.device-memory-state.connected {
+  background: rgba(34, 197, 94, 0.12);
+  color: #14532d;
+}
+
+.device-memory-state.disconnected {
+  background: rgba(239, 68, 68, 0.10);
+  color: #7f1d1d;
+}
+
+.device-memory-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.device-memory-chart {
+  position: relative;
+  min-height: 112px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.device-memory-chart-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.device-memory-chart-value {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-memory-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.device-memory-legend::before {
+  width: 10px;
+  height: 3px;
+  border-radius: 999px;
+  content: "";
+}
+
+.device-memory-legend.ram::before {
+  background: var(--primary);
+}
+
+.device-memory-legend.flash::before {
+  background: #22c55e;
+}
+
+.device-memory-chart svg {
+  display: block;
+  width: 100%;
+  height: 78px;
+}
+
+.device-memory-axis {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.device-memory-grid-line {
+  stroke: var(--border);
+  stroke-dasharray: 3 4;
+  stroke-width: 1;
+}
+
+.device-memory-tick-label {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.device-memory-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.device-memory-line.ram {
+  stroke: var(--primary);
+}
+
+.device-memory-line.flash {
+  stroke: #22c55e;
+}
+
+.device-memory-chart-empty {
+  position: absolute;
+  inset: 44px 10px 10px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+}
+
+.device-memory-footnote {
+  font-size: 13px;
+}
+
+.device-memory-error {
+  padding: 8px 10px;
+}
+
+@media (max-width: 520px) {
+  .device-memory-chart-grid {
+    grid-template-columns: 1fr;
+  }
+}

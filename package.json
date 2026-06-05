@@ -1,14 +1,20 @@
 {
   "name": "thymio3-ts-api",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Thymio 3 API",
+  "thymio": {
+    "firmwareCompatibility": {
+      "min": "v1.8.0",
+      "max": "v1.8.0"
+    }
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup",
     "install-demo": "npm install --prefix demo",
-    "build-demo": "npm run build --prefix demo",
-    "run-demo": "npm run dev --prefix demo"
+    "build-demo": "tsup && npm run build --prefix demo",
+    "run-demo": "tsup && npm run dev --prefix demo"
   },
   "author": "",
   "license": "ISC",

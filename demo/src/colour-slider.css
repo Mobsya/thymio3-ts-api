@@ -1,0 +1,43 @@
+.colour-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.colour-slider-row {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.colour-swatch {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45);
+}
+
+.colour-range {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.colour-range::-webkit-slider-runnable-track {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+
+.colour-range::-moz-range-track {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+
+.colour-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-weight: 700;
+}

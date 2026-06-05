@@ -1,6 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PRESETS } from "./presets";
+import ColourSlider from "./colour-slider";
+import DeviceMemoryStatus from "./device-memory-status";
+import LedIntensitySliders from "./led-intensity-sliders";
+import MotorSliders from "./motor-sliders";
 import PythonEditor from "./python-editor";
+import RobotStatusCard from "./robot-status-card";
+import SensorFocusPanel, { SENSOR_FOCUS_SENSOR_IDS } from "./sensor-focus-panel";
+import SoundPicker from "./sound-picker";
+import { clampInt } from "./utils";
 
 /**
  * Assumes thymio.global.js exposes `window.thymio`.
@@ -23,11 +31,6 @@ while 1:
     rgb_fl.set_intensity(0, 0, 1)
     time.sleep(0.2)
 `;
-
-function clampInt(n, min, max) {
-  const x = Number.isFinite(n) ? Math.trunc(n) : 0;
-  return Math.min(max, Math.max(min, x));
-}
 
 function ProgressBar({ value }) {
   const pct = clampInt(value ?? 0, 0, 100);
@@ -52,49 +55,6 @@ function Section({ title, children, actions }) {
   );
 }
 
-function NumberGrid({ label, values, min, max, onChange }) {
-  return (
-    <div className="grid-block">
-      <div className="grid-title">{label}</div>
-      <div className="grid">
-        {values.map((v, i) => (
-          <input
-            key={i}
-            type="number"
-            value={v}
-            min={min}
-            max={max}
-            onChange={(e) => {
-              const next = [...values];
-              next[i] = clampInt(parseInt(e.target.value, 10), min, max);
-              onChange(next);
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RGBInputs({ label, rgb, onChange }) {
-  const set = (k) => (e) =>
-    onChange({ ...rgb, [k]: clampInt(parseInt(e.target.value, 10), 0, 15) });
-
-  return (
-    <fieldset className="fieldset">
-      <legend>{label}</legend>
-      <div className="rgb-inputs">
-        <span>R:</span>
-        <input type="number" min="0" max="15" value={rgb.r} onChange={set("r")} />
-        <span>G:</span>
-        <input type="number" min="0" max="15" value={rgb.g} onChange={set("g")} />
-        <span>B:</span>
-        <input type="number" min="0" max="15" value={rgb.b} onChange={set("b")} />
-      </div>
-    </fieldset>
-  );
-}
-
 export default function App() {
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [deviceName, setDeviceName] = useState("");
@@ -109,8 +69,9 @@ export default function App() {
 
   // Streams / output
   const [stdOut, setStdOut] = useState("Waiting for the std out data...");
-  const [mainSensors, setMainSensors] = useState("Waiting for main sensor data...");
-  const [otherSensors, setOtherSensors] = useState("Waiting for other sensor data...");
+  const [mainSensors, setMainSensors] = useState(null);
+  const [otherSensors, setOtherSensors] = useState(null);
+  const [focusedSensors, setFocusedSensors] = useState(SENSOR_FOCUS_SENSOR_IDS);
 
   // Actuators
   const [showActuators, setShowActuators] = useState(true);
@@ -139,8 +100,8 @@ export default function App() {
   const [fileList, setFileList] = useState("Waiting for file listings...");
 
   // Device info
-  const [firmwareInfo, setFirmwareInfo] = useState("Waiting for firmware info...");
-  const [memoryInfo, setMemoryInfo] = useState("Waiting for memory info...");
+  const [firmwareInfo, setFirmwareInfo] = useState(null);
+  const [firmwareInfoError, setFirmwareInfoError] = useState("");
   const [newFirmwareInfo, setNewFirmwareInfo] = useState("Waiting for firmware info...");
 
   // OTA
@@ -150,8 +111,8 @@ export default function App() {
   // --- Event listeners from thymio.global.js ---
   useEffect(() => {
     const onStdOut = (event) => setStdOut(String(event.detail ?? ""));
-    const onSensors = (event) => setMainSensors(JSON.stringify(event.detail, null, 2));
-    const onOtherSensors = (event) => setOtherSensors(JSON.stringify(event.detail, null, 2));
+    const onSensors = (event) => setMainSensors(event.detail ?? null);
+    const onOtherSensors = (event) => setOtherSensors(event.detail ?? null);
 
     const onAudioProgress = (e) => setAudioProgress(clampInt(e.detail?.percentage ?? 0, 0, 100));
     const onFileProgress = (e) => setFileProgress(clampInt(e.detail?.percentage ?? 0, 0, 100));
@@ -164,10 +125,23 @@ export default function App() {
         setConnectionStatus("connected");
         setDeviceName(getThymio()?.getDeviceName?.() ?? "Unknown device");
         setPromptManualReconnection(false);
+        setFirmwareInfo(null);
+        setFirmwareInfoError("");
+
+        void (async () => {
+          try {
+            const info = await getThymio()?.getFirmwareInfo?.();
+            if (info) setFirmwareInfo(info);
+          } catch (err) {
+            setFirmwareInfoError(err?.message ?? "Failed to read firmware info");
+          }
+        })();
       } else {
         // If connection drops and library tries to auto-reconnect
         setConnectionStatus("connecting");
         setDeviceName("");
+        setFirmwareInfo(null);
+        setFirmwareInfoError("");
       }
     };
 
@@ -248,24 +222,55 @@ export default function App() {
     await t.softResetPythonInterpreter();
   }
 
-  async function submitActuatorData() {
-    const t = getThymio();
-    if (!t?.setActuatorState) return alert("thymio not loaded");
-
-    const data = {
-      circleLEDs,
-      frontLegoLEDs,
-      rearLegoLEDs,
-      flRGB,
-      frRGB,
-      blRGB,
-      brRGB,
-      motorLeft: clampInt(motorLeft, -1000, 1000),
-      motorRight: clampInt(motorRight, -1000, 1000),
-      sound: clampInt(sound, 0, 19),
+  function buildActuatorData(overrides = {}) {
+    return {
+      circleLEDs: overrides.circleLEDs ?? circleLEDs,
+      frontLegoLEDs: overrides.frontLegoLEDs ?? frontLegoLEDs,
+      rearLegoLEDs: overrides.rearLegoLEDs ?? rearLegoLEDs,
+      flRGB: overrides.flRGB ?? flRGB,
+      frRGB: overrides.frRGB ?? frRGB,
+      blRGB: overrides.blRGB ?? blRGB,
+      brRGB: overrides.brRGB ?? brRGB,
+      motorLeft: clampInt(overrides.motorLeft ?? motorLeft, -1000, 1000),
+      motorRight: clampInt(overrides.motorRight ?? motorRight, -1000, 1000),
+      sound: clampInt(overrides.sound ?? sound, 0, 19),
     };
+  }
 
-    await t.setActuatorState(data);
+  async function sendActuatorData(overrides = {}, { alertIfMissing = false } = {}) {
+    const t = getThymio();
+    if (!t?.setActuatorState) {
+      if (alertIfMissing) alert("thymio not loaded");
+      return;
+    }
+
+    await t.setActuatorState(buildActuatorData(overrides));
+  }
+
+  function updateRgbFromSlider(key, setRgb) {
+    return (rgb) => {
+      setRgb(rgb);
+      void sendActuatorData({ [key]: rgb });
+    };
+  }
+
+  function updateLedIntensitiesFromSlider(key, setValues) {
+    return (values) => {
+      setValues(values);
+      void sendActuatorData({ [key]: values });
+    };
+  }
+
+  function updateMotorsFromSlider(values) {
+    if (typeof values.motorLeft === "number") setMotorLeft(values.motorLeft);
+    if (typeof values.motorRight === "number") setMotorRight(values.motorRight);
+    void sendActuatorData(values);
+  }
+
+  function updateSoundFromPicker(value) {
+    const nextSound = clampInt(value, 0, 19);
+    setSound(nextSound);
+    void sendActuatorData({ sound: nextSound });
   }
 
   async function startMainSensors() {
@@ -358,20 +363,6 @@ export default function App() {
     setFileList(JSON.stringify(list, null, 2));
   }
 
-  async function getFirmwareInfo() {
-    const t = getThymio();
-    if (!t?.getFirmwareInfo) return;
-    const info = await t.getFirmwareInfo();
-    setFirmwareInfo(JSON.stringify(info, null, 2));
-  }
-
-  async function getMemoryInfo() {
-    const t = getThymio();
-    if (!t?.getMemoryInfo) return;
-    const info = await t.getMemoryInfo();
-    setMemoryInfo(JSON.stringify(info, null, 2));
-  }
-
   async function checkForNewFirmware() {
     const t = getThymio();
     if (!t?.isNewerFirmwareAvailable) return;
@@ -418,6 +409,8 @@ export default function App() {
     if (typeof preset.motorLeft === "number") setMotorLeft(preset.motorLeft);
     if (typeof preset.motorRight === "number") setMotorRight(preset.motorRight);
     if (typeof preset.sound === "number") setSound(preset.sound);
+
+    void sendActuatorData(preset);
   }
 
 
@@ -426,20 +419,12 @@ export default function App() {
       <header className="header">
         <div>
           <h1>Thymio 3 Test</h1>
-          <div className={`connection-summary ${connectionStatus}`}>
-            <div className="connection-status">
-              <span className="dot" />
-              {connectionStatus === "connected" && "Connected"}
-              {connectionStatus === "connecting" && "Connecting…"}
-              {connectionStatus === "disconnected" && "Disconnected"}
-            </div>
-
-            {connectionStatus === "connected" && deviceName ? (
-              <div className="connection-device">
-                <span className="device-name-value">{deviceName}</span>
-              </div>
-            ) : null}
-          </div>
+          <RobotStatusCard
+            connectionStatus={connectionStatus}
+            deviceName={deviceName}
+            firmwareInfo={firmwareInfo}
+            firmwareInfoError={firmwareInfoError}
+          />
 
           <p className="muted">
             Reactive UI for Thymio Web API (global <code>thymio</code>)
@@ -525,64 +510,34 @@ export default function App() {
                   </button>
                 ))}
               </div>
-
-              <div className="muted preset-hint">
-                Tip: click a preset to fill the form, then “Apply to robot”.
-              </div>
             </div>
 
-            <NumberGrid label="Circle LEDs (0-15)" values={circleLEDs} min={0} max={15} onChange={setCircleLEDs} />
-            <NumberGrid label="Front LEGO LEDs (0-15)" values={frontLegoLEDs} min={0} max={15} onChange={setFrontLegoLEDs} />
-            <NumberGrid label="Rear LEGO LEDs (0-15)" values={rearLegoLEDs} min={0} max={15} onChange={setRearLegoLEDs} />
+            <LedIntensitySliders
+              label="Circle LEDs"
+              values={circleLEDs}
+              onChange={updateLedIntensitiesFromSlider("circleLEDs", setCircleLEDs)}
+            />
+            <LedIntensitySliders
+              label="Front LEGO LEDs"
+              values={frontLegoLEDs}
+              onChange={updateLedIntensitiesFromSlider("frontLegoLEDs", setFrontLegoLEDs)}
+            />
+            <LedIntensitySliders
+              label="Rear LEGO LEDs"
+              values={rearLegoLEDs}
+              onChange={updateLedIntensitiesFromSlider("rearLegoLEDs", setRearLegoLEDs)}
+            />
 
             <div className="grid-2">
-              <RGBInputs label="FL RGB" rgb={flRGB} onChange={setFlRGB} />
-              <RGBInputs label="FR RGB" rgb={frRGB} onChange={setFrRGB} />
-              <RGBInputs label="BL RGB" rgb={blRGB} onChange={setBlRGB} />
-              <RGBInputs label="BR RGB" rgb={brRGB} onChange={setBrRGB} />
+              <ColourSlider label="FL RGB" rgb={flRGB} onChange={updateRgbFromSlider("flRGB", setFlRGB)} />
+              <ColourSlider label="FR RGB" rgb={frRGB} onChange={updateRgbFromSlider("frRGB", setFrRGB)} />
+              <ColourSlider label="BL RGB" rgb={blRGB} onChange={updateRgbFromSlider("blRGB", setBlRGB)} />
+              <ColourSlider label="BR RGB" rgb={brRGB} onChange={updateRgbFromSlider("brRGB", setBrRGB)} />
             </div>
 
             <div className="grid-2">
-              <div className="grid-block">
-                <div className="grid-title">Motors</div>
-                <div className="row wrap">
-                  <label className="inline">
-                    Left:
-                    <input
-                      type="number"
-                      min={-1000}
-                      max={1000}
-                      value={motorLeft}
-                      onChange={(e) => setMotorLeft(parseInt(e.target.value, 10) || 0)}
-                    />
-                  </label>
-                  <label className="inline">
-                    Right:
-                    <input
-                      type="number"
-                      min={-1000}
-                      max={1000}
-                      value={motorRight}
-                      onChange={(e) => setMotorRight(parseInt(e.target.value, 10) || 0)}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="grid-block">
-                <div className="grid-title">Sound (0-19)</div>
-                <input
-                  type="number"
-                  min={0}
-                  max={19}
-                  value={sound}
-                  onChange={(e) => setSound(parseInt(e.target.value, 10) || 0)}
-                />
-              </div>
-            </div>
-
-            <div className="row">
-              <button onClick={submitActuatorData}>Submit actuator state</button>
+              <MotorSliders left={motorLeft} right={motorRight} onChange={updateMotorsFromSlider} />
+              <SoundPicker value={sound} onChange={updateSoundFromPicker} />
             </div>
           </>
         ) : (
@@ -603,16 +558,12 @@ export default function App() {
           </div>
         }
       >
-        <div className="grid-2">
-          <div>
-            <div className="subhead">Main Sensor Data</div>
-            <pre className="pre">{mainSensors}</pre>
-          </div>
-          <div>
-            <div className="subhead">Other Sensor Data</div>
-            <pre className="pre">{otherSensors}</pre>
-          </div>
-        </div>
+        <SensorFocusPanel
+          mainSensors={mainSensors}
+          otherSensors={otherSensors}
+          focusedSensors={focusedSensors}
+          onFocusedSensorsChange={setFocusedSensors}
+        />
       </Section>
 
       <Section title="Audio">
@@ -699,20 +650,7 @@ export default function App() {
       </Section>
 
       <Section title="Device Info">
-        <div className="grid-2">
-          <div>
-            <div className="row wrap">
-              <button onClick={getFirmwareInfo}>Get firmware info</button>
-            </div>
-            <pre className="pre">{firmwareInfo}</pre>
-          </div>
-          <div>
-            <div className="row wrap">
-              <button onClick={getMemoryInfo}>Get memory info</button>
-            </div>
-            <pre className="pre">{memoryInfo}</pre>
-          </div>
-        </div>
+        <DeviceMemoryStatus isConnected={connectionStatus === "connected"} />
       </Section>
 
       <Section title="Automatic Firmware update">

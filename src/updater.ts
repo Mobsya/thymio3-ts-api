@@ -1,4 +1,5 @@
 import { getFirmwareInfo } from "./device-info";
+import { compareVersions } from "./firmware-compatibility";
 import { uploadFirmware } from "./ota";
 
 const FIRMWARE_VERSIONS_URL = "https://mobsya.github.io/thymio-3-firmware/versions.json";
@@ -76,33 +77,12 @@ async function getLatestRelease() {
 	const firmwareVersions = await fetchFirmwareVersions();
 
 	const latestVersion = firmwareVersions.reduce((prev, current) => {
-		const prevValue = prev.version.substring(1);
-		const currentValue = prev.version.substring(1);
-
-		return (prevValue && prevValue > currentValue) ? prev : current;
+		return compareVersions(prev.version, current.version) > 0 ? prev : current;
 	});
 
 	return latestVersion;
 }
 
-function isNewerVersion(remoteTagName: string, localVersion: number): boolean {
-  // Remove the "v" character from the tag
-  const remoteVersion = Number(remoteTagName.substring(1));
-  return remoteVersion > localVersion;
-}
-
-/*
 function isNewerVersion(remoteVersion: string, localVersion: string): boolean {
-	const parse = (v: string) => v.replace(/^v/, "").split(".").map(Number);
-
-	const [r, l] = [parse(remoteVersion), parse(localVersion)];
-
-	for (let i = 0; i < r.length; i++) {
-		if (r[i] > (l[i] || 0)) return true;
-
-		if (r[i] < (l[i] || 0)) return false;
-	}
-
-	return false;
+	return compareVersions(remoteVersion, localVersion) > 0;
 }
-*/
