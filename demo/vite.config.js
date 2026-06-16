@@ -37,7 +37,7 @@ export default defineConfig({
     viteStaticCopy({
       targets: [
         {
-          src: resolve(__dirname, "../dist/thymio.global.js"),
+          src: resolve(__dirname, "../dist/thymio.iife.js"),
           dest: "libs"
         }
       ]

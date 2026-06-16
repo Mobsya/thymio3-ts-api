@@ -11,7 +11,7 @@ import SoundPicker from "./sound-picker";
 import { clampInt } from "./utils";
 
 /**
- * Assumes thymio.global.js exposes `window.thymio`.
+ * Assumes thymio.iife.js exposes `window.thymio`.
  * We keep this app defensive in case the script isn't loaded yet.
  */
 function getThymio() {
