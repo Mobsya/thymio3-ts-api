@@ -14,7 +14,12 @@ export type ActuatorData = {
   brRGB: RGB,              // { r: 0-15, g: 0-15, b: 0-15 }
   motorLeft: number,          // Integer -1000 to 1000
   motorRight: number,         // Integer -1000 to 1000
-  sound: number               // Integer 0 to 19
+  sound: number,               // Integer 0 to 19
+  smallBottomRGB: RGB,         // { r: 0-15, g: 0-15, b: 0-15 }
+  smallBackRGB: RGB,           // { r: 0-15, g: 0-15, b: 0-15 }
+  buttonLEDs: number[],        // Array of 4 numbers (0-15)
+  receiverLED : number,        // 0-15 brightness/intensity
+  microphoneLED: boolean       // on/off
 }
 
 /**
@@ -26,8 +31,10 @@ export async function setActuatorState(
   actuatorData: ActuatorData
 ) {
   const commandArray = createCommandByteArray(actuatorData);
+  const secondaryCommandArray = createSecondaryCommandByteArray(actuatorData);
 
-  await commandCharacteristic.writeValue(commandArray);
+  await commandCharacteristic.writeValueWithResponse(commandArray);
+  await commandCharacteristic.writeValueWithResponse(secondaryCommandArray);
 }
 
 /**
@@ -54,35 +61,14 @@ function createCommandByteArray({
     // ID (1 byte)
     view.setUint8(offset, 0x01); offset++;
 
-    // Helper to pack 8 4-bit values into 4 bytes
-    function pack4bitArray(arr: number[]) {
-        const packed = new Uint8Array(4);
-        for (let i = 0; i < 8; i++) {
-            const val = arr[i] & 0x0F;
-            const byteIndex = Math.floor(i / 2);
-            if (i % 2 === 0) {
-                packed[byteIndex] |= val;
-            } else {
-                packed[byteIndex] |= val << 4;
-            }
-        }
-        return packed;
-    }
-
     // Circle LEDs (4 bytes)
-    pack4bitArray(circleLEDs).forEach(byte => view.setUint8(offset++, byte));
+    pack4bitArrayto4Bytes(circleLEDs).forEach(byte => view.setUint8(offset++, byte));
 
     // Front Lego LEDs (4 bytes)
-    pack4bitArray(frontLegoLEDs).forEach(byte => view.setUint8(offset++, byte));
+    pack4bitArrayto4Bytes(frontLegoLEDs).forEach(byte => view.setUint8(offset++, byte));
 
     // Rear Lego LEDs (4 bytes)
-    pack4bitArray(rearLegoLEDs).forEach(byte => view.setUint8(offset++, byte));
-
-    // Helper to pack RGB values into 2 bytes
-    function packRGB({ r, g, b }: RGB) {
-        let rgb = ((b & 0x0F) << 8) | ((g & 0x0F) << 4) | (r & 0x0F);
-        return rgb;
-    }
+    pack4bitArrayto4Bytes(rearLegoLEDs).forEach(byte => view.setUint8(offset++, byte));
 
     // FL RGB (2 bytes)
     // Little-endian (explicite) for RGB values
@@ -107,4 +93,69 @@ function createCommandByteArray({
     view.setUint8(offset, sound); offset++;
 
     return new Uint8Array(buffer);
+}
+
+function createSecondaryCommandByteArray({
+  smallBottomRGB,
+  smallBackRGB,
+  buttonLEDs,
+  receiverLED,
+  microphoneLED
+}: ActuatorData) {
+    const buffer = new ArrayBuffer(8);
+    const view = new DataView(buffer);
+    let offset = 0;
+
+    // ID (1 byte)
+    view.setUint8(offset, 0x02); offset++;
+
+    view.setUint16(offset, packRGB(smallBottomRGB), true); offset += 2;
+
+    view.setUint16(offset, packRGB(smallBackRGB), true); offset += 2;
+
+    pack4bitArrayTo2Bytes(buttonLEDs).forEach(byte => view.setUint8(offset++, byte));
+
+    view.setUint8(offset++, packReceiverAndMicrophoneLED(receiverLED, microphoneLED)); offset++;
+
+    return new Uint8Array(buffer);
+}
+
+// Helper to pack 8 4-bit values into 4 bytes
+function pack4bitArrayto4Bytes(arr: number[]) {
+    const packed = new Uint8Array(4);
+    for (let i = 0; i < 8; i++) {
+        const val = arr[i] & 0x0F;
+        const byteIndex = Math.floor(i / 2);
+        if (i % 2 === 0) {
+            packed[byteIndex] |= val;
+        } else {
+            packed[byteIndex] |= val << 4;
+        }
+    }
+    return packed;
+}
+
+// Helper to pack 4 4-bit values into 2 bytes
+function pack4bitArrayTo2Bytes(arr: number[]) {
+    const packed = new Uint8Array(2);
+    for (let i = 0; i < 4; i++) {
+        const val = arr[i] & 0x0F;
+        const byteIndex = Math.floor(i / 2);
+        if (i % 2 === 0) {
+            packed[byteIndex] |= val;
+        } else {
+            packed[byteIndex] |= val << 4;
+        }
+    }
+    return packed;
+}
+
+// Helper to pack RGB values into 2 bytes
+function packRGB({ r, g, b }: RGB) {
+    let rgb = ((b & 0x0F) << 8) | ((g & 0x0F) << 4) | (r & 0x0F);
+    return rgb;
+}
+
+function packReceiverAndMicrophoneLED(receiverLED: number, microphoneLED: boolean) {
+  return (receiverLED & 0x0F) | (microphoneLED ? 0x10 : 0x00);
 }

@@ -14,6 +14,11 @@ export const PRESETS = [
       motorLeft: 0,
       motorRight: 0,
       sound: 0,
+      smallBottomRGB: { r: 0, g: 0, b: 0 },
+      smallBackRGB: { r: 0, g: 0, b: 0 },
+      buttonLEDS: Array(4).fill(0),
+      receiverLED: 0,
+      microphoneLED: false,
     },
   },
   {
@@ -84,6 +89,11 @@ export const PRESETS = [
       motorLeft: 0,
       motorRight: 0,
       sound: 10,
+      smallBottomRGB: { r: 15, g: 0, b: 0 },
+      smallBackRGB: { r: 15, g: 0, b: 0 },
+      buttonLEDS: Array(4).fill(15),
+      receiverLED: 15,
+      microphoneLED: true,
     },
   },
 ];

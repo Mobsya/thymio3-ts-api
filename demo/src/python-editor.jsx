@@ -3,10 +3,10 @@ import Editor from "@monaco-editor/react";
 
 // Lazy-load pyodide once
 async function loadPyodideOnce() {
-  // pyodide package exports loadPyodide
-  const { loadPyodide } = await import("pyodide");
+  const { loadPyodide } = await import(
+    /* @vite-ignore */ new URL("./assets/pyodide.mjs", window.location.href).toString()
+  );
   return await loadPyodide({
-    // optional: choose a local path if you self-host pyodide assets
     indexURL: new URL("./assets/", window.location.href).toString()
   });
 }

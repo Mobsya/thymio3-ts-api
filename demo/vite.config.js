@@ -5,11 +5,12 @@ import { viteStaticCopy } from "vite-plugin-static-copy";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 
-const PYODIDE_EXCLUDE = [
-  "!**/*.{md,html}",
-  "!**/*.d.ts",
-  "!**/*.whl",
-  "!**/node_modules",
+const PYODIDE_RUNTIME_FILES = [
+  "pyodide-lock.json",
+  "pyodide.mjs",
+  "pyodide.asm.mjs",
+  "pyodide.asm.wasm",
+  "python_stdlib.zip",
 ];
 
 export function viteStaticCopyPyodide() {
@@ -17,8 +18,9 @@ export function viteStaticCopyPyodide() {
   return viteStaticCopy({
     targets: [
       {
-        src: [join(pyodideDir, "*")].concat(PYODIDE_EXCLUDE),
+        src: PYODIDE_RUNTIME_FILES.map((file) => join(pyodideDir, file)),
         dest: "assets",
+        rename: { stripBase: true },
       },
     ],
   });
@@ -27,9 +29,6 @@ export function viteStaticCopyPyodide() {
 // https://vite.dev/config/
 export default defineConfig({
   base: "./",
-  optimizeDeps: {
-    exclude: ["pyodide"]
-  },
   plugins: [
     react(),
     viteSingleFile(),
@@ -37,8 +36,9 @@ export default defineConfig({
     viteStaticCopy({
       targets: [
         {
-          src: resolve(__dirname, "../dist/thymio.global.js"),
-          dest: "libs"
+          src: resolve(__dirname, "../dist/thymio.iife.js"),
+          dest: "libs",
+          rename: { stripBase: true },
         }
       ]
     })
@@ -46,10 +46,5 @@ export default defineConfig({
   build: {
     assetsInlineLimit: 100000000, // inline everything
     cssCodeSplit: false,
-    rollupOptions: {
-      output: {
-        inlineDynamicImports: true
-      }
-    }
   }
 })
