@@ -102,7 +102,7 @@ function createSecondaryCommandByteArray({
   receiverLED,
   microphoneLED
 }: ActuatorData) {
-    const buffer = new ArrayBuffer(26);
+    const buffer = new ArrayBuffer(8);
     const view = new DataView(buffer);
     let offset = 0;
 
