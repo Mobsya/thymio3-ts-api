@@ -5,11 +5,11 @@ import { viteStaticCopy } from "vite-plugin-static-copy";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 
-const PYODIDE_EXCLUDE = [
-  "!**/*.{md,html}",
-  "!**/*.d.ts",
-  "!**/*.whl",
-  "!**/node_modules",
+const PYODIDE_RUNTIME_FILES = [
+  "pyodide-lock.json",
+  "pyodide.asm.mjs",
+  "pyodide.asm.wasm",
+  "python_stdlib.zip",
 ];
 
 export function viteStaticCopyPyodide() {
@@ -17,8 +17,9 @@ export function viteStaticCopyPyodide() {
   return viteStaticCopy({
     targets: [
       {
-        src: [join(pyodideDir, "*")].concat(PYODIDE_EXCLUDE),
+        src: PYODIDE_RUNTIME_FILES.map((file) => join(pyodideDir, file)),
         dest: "assets",
+        rename: { stripBase: true },
       },
     ],
   });
@@ -38,7 +39,8 @@ export default defineConfig({
       targets: [
         {
           src: resolve(__dirname, "../dist/thymio.iife.js"),
-          dest: "libs"
+          dest: "libs",
+          rename: { stripBase: true },
         }
       ]
     })
