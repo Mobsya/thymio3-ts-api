@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 
 const PYODIDE_RUNTIME_FILES = [
   "pyodide-lock.json",
+  "pyodide.mjs",
   "pyodide.asm.mjs",
   "pyodide.asm.wasm",
   "python_stdlib.zip",
@@ -28,9 +29,6 @@ export function viteStaticCopyPyodide() {
 // https://vite.dev/config/
 export default defineConfig({
   base: "./",
-  optimizeDeps: {
-    exclude: ["pyodide"]
-  },
   plugins: [
     react(),
     viteSingleFile(),
@@ -48,10 +46,5 @@ export default defineConfig({
   build: {
     assetsInlineLimit: 100000000, // inline everything
     cssCodeSplit: false,
-    rollupOptions: {
-      output: {
-        inlineDynamicImports: true
-      }
-    }
   }
 })
