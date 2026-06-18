@@ -87,6 +87,14 @@
   font-weight: 800;
 }
 
+.sensor-focus-value-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  min-width: 0;
+}
+
 .sensor-focus-values {
   display: flex;
   flex-wrap: wrap;

@@ -1,25 +1,6 @@
 import "./sensor-focus-panel.css";
-
-const SENSOR_OPTIONS = [
-  { id: "colorSensor", label: "Color HSV", source: "main", path: ["colorSensor"] },
-  { id: "groundSensors", label: "Ground", source: "main", path: ["groundSensors"] },
-  { id: "accelerationRaw", label: "Acceleration", source: "main", path: ["accelerationRaw"] },
-  { id: "gyroRaw", label: "Gyro", source: "main", path: ["gyroRaw"] },
-  { id: "buttons", label: "Buttons", source: "main", path: ["buttons"] },
-  { id: "microphoneVolume", label: "Microphone", source: "main", path: ["microphoneVolume"] },
-  { id: "proximitySensors", label: "Proximity", source: "main", path: ["proximitySensors"] },
-  { id: "tvRemote", label: "TV remote", source: "main", path: ["tvRemote"] },
-  { id: "colorRaw", label: "Color raw", source: "secondary", path: ["colorRaw"] },
-  { id: "colorDetected", label: "Color detected", source: "secondary", path: ["colorDetected"] },
-  { id: "groundAmbient", label: "Ground ambient", source: "secondary", path: ["groundAmbient"] },
-  { id: "groundReflected", label: "Ground reflected", source: "secondary", path: ["groundReflected"] },
-  { id: "angleDegrees", label: "Angle", source: "secondary", path: ["angleDegrees"] },
-  { id: "eventFlags", label: "Events", source: "secondary", path: ["eventFlags"] },
-  { id: "motor", label: "Motor feedback", source: "secondary", path: ["motor"] },
-  { id: "batteryVoltage", label: "Battery", source: "secondary", path: ["batteryVoltage"] },
-];
-
-export const SENSOR_FOCUS_SENSOR_IDS = SENSOR_OPTIONS.map((option) => option.id);
+import SensorColourPreview from "./sensor-colour-preview";
+import { SENSOR_FOCUS_SENSOR_IDS, SENSOR_OPTIONS } from "./sensor-options";
 
 function getValue(data, path) {
   return path.reduce((current, key) => current?.[key], data);
@@ -37,21 +18,37 @@ function formatValue(value) {
   return String(value);
 }
 
-function SensorValue({ value }) {
+function SensorValue({ value, colourPreviewMode }) {
+  const colourPreview = colourPreviewMode ? <SensorColourPreview mode={colourPreviewMode} value={value} /> : null;
+
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return (
-      <div className="sensor-focus-values">
-        {Object.entries(value).map(([key, entryValue]) => (
-          <span className="sensor-focus-value" key={key}>
-            <span className="sensor-focus-key">{formatKey(key)}</span>
-            <span className="sensor-focus-reading">{formatValue(entryValue)}</span>
-          </span>
-        ))}
+      <div className="sensor-focus-value-display">
+        <div className="sensor-focus-values">
+          {Object.entries(value).map(([key, entryValue]) => (
+            <span className="sensor-focus-value" key={key}>
+              <span className="sensor-focus-key">{formatKey(key)}</span>
+              <span className="sensor-focus-reading">{formatValue(entryValue)}</span>
+            </span>
+          ))}
+        </div>
+        {colourPreview}
       </div>
     );
   }
 
-  return <span className="sensor-focus-reading">{formatValue(value)}</span>;
+  return (
+    <span className="sensor-focus-value-display">
+      <span className="sensor-focus-reading">{formatValue(value)}</span>
+      {colourPreview}
+    </span>
+  );
+}
+
+function getColourPreviewMode(sensorId) {
+  if (sensorId === "colorSensor") return "hsv";
+  if (sensorId === "colorRaw") return "raw";
+  return null;
 }
 
 export default function SensorFocusPanel({ mainSensors, otherSensors, focusedSensors, onFocusedSensorsChange }) {
@@ -103,7 +100,7 @@ export default function SensorFocusPanel({ mainSensors, otherSensors, focusedSen
             <div className="sensor-focus-row" key={option.id}>
               <span className="sensor-focus-row-label">{option.label}</span>
               <span className="sensor-focus-row-source">{option.source}</span>
-              <SensorValue value={value} />
+              <SensorValue colourPreviewMode={getColourPreviewMode(option.id)} value={value} />
             </div>
           );
         })}
