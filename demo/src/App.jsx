@@ -8,6 +8,7 @@ import PythonEditor from "./python-editor";
 import RobotStatusCard from "./robot-status-card";
 import SensorFocusPanel, { SENSOR_FOCUS_SENSOR_IDS } from "./sensor-focus-panel";
 import SoundPicker from "./sound-picker";
+import StdoutConsole from "./stdout-console";
 import { clampInt } from "./utils";
 
 /**
@@ -68,7 +69,7 @@ export default function App() {
 
 
   // Streams / output
-  const [stdOut, setStdOut] = useState("Waiting for the std out data...");
+  const [stdOut, setStdOut] = useState([]);
   const [mainSensors, setMainSensors] = useState(null);
   const [otherSensors, setOtherSensors] = useState(null);
   const [focusedSensors, setFocusedSensors] = useState(SENSOR_FOCUS_SENSOR_IDS);
@@ -96,6 +97,7 @@ export default function App() {
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioFreq, setAudioFreq] = useState(0);
   const [audioFreqDuration, setAudioFreqDuration] = useState(0);
+  const stdOutEntryId = useRef(0);
 
   // Files
   const fileUploadRef = useRef(null);
@@ -115,7 +117,13 @@ export default function App() {
 
   // --- Event listeners from thymio.global.js ---
   useEffect(() => {
-    const onStdOut = (event) => setStdOut(String(event.detail ?? ""));
+    const onStdOut = (event) => {
+      const value = String(event.detail ?? "");
+      setStdOut((entries) => [
+        ...entries,
+        { id: ++stdOutEntryId.current, value },
+      ]);
+    };
     const onSensors = (event) => setMainSensors(event.detail ?? null);
     const onOtherSensors = (event) => setOtherSensors(event.detail ?? null);
 
@@ -496,7 +504,7 @@ export default function App() {
       </Section>
 
       <Section title="STD OUT">
-        <pre className="pre">{stdOut}</pre>
+        <StdoutConsole entries={stdOut} />
       </Section>
 
       <Section
