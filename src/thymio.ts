@@ -16,6 +16,7 @@ import type { FileListing } from "./files";
 import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
 import { checkFirmwareCompatibility } from "./firmware-compatibility";
+import { bluetoothPromiseQueue } from "./bluetooth-queue";
 
 let device: BluetoothDevice | undefined;
 let reconnecting = false;
@@ -63,7 +64,7 @@ export async function requestAndConnect(): Promise<void> {
   // To handle the reconnects
   device.addEventListener('gattserverdisconnected', onDisconnected);
 
-  await connect();
+  await bluetoothPromiseQueue.add(connect);
 
   console.log("done")
 }
@@ -77,16 +78,18 @@ export function isConnected(): boolean {
 }
 
 export async function disconnect(): Promise<void> {
-  if (device) {
-    device.removeEventListener('gattserverdisconnected', onDisconnected);
-    await device.gatt?.disconnect();
+  return await bluetoothPromiseQueue.add(async () => {
+    if (device) {
+      device.removeEventListener('gattserverdisconnected', onDisconnected);
+      await device.gatt?.disconnect();
 
-    dispatchConnectedEvent(false);
+      dispatchConnectedEvent(false);
 
-    console.log("✅ Disconnected from Thymio 3.");
-  } else {
-    throw new Error('Bluetooth device is undefined');
-  }
+      console.log("✅ Disconnected from Thymio 3.");
+    } else {
+      throw new Error('Bluetooth device is undefined');
+    }
+  });
 }
 
 /**
@@ -171,7 +174,7 @@ async function retryConnection() {
     try {
       await delay(3000);  // Wait 2 seconds before retry
       if (!device.gatt!.connected) {
-        await connect();
+        await bluetoothPromiseQueue.add(connect);
         reconnecting = false;
         return;
       }
@@ -205,43 +208,61 @@ export function getAPIVersion(): string {
  * @param {*} actuatorData
  */
 export async function setActuatorState(actuatorData: ActuatorData) {
-  await command.setActuatorState(commandCharacteristic, actuatorData)
+  return await bluetoothPromiseQueue.add(() =>
+    command.setActuatorState(commandCharacteristic, actuatorData)
+  );
 }
 
 // PYTHON CHARACTERISTIC
 
 export async function sendPythonScript(script: string) {
-  await python.sendPythonScript(pythonCharacteristic, script);
+  return await bluetoothPromiseQueue.add(() =>
+    python.sendPythonScript(pythonCharacteristic, script)
+  );
 }
 
 export async function executeLoadedScript() {
-  await python.executeLoadedScript(pythonCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    python.executeLoadedScript(pythonCharacteristic)
+  );
 }
 
 export async function stopScriptExecution() {
-  await python.stopScriptExecution(pythonCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    python.stopScriptExecution(pythonCharacteristic)
+  );
 }
 
 export async function saveScriptToPartition(scriptId: number) {
-	await python.saveScriptToPartition(pythonCharacteristic, scriptId);
+	return await bluetoothPromiseQueue.add(() =>
+    python.saveScriptToPartition(pythonCharacteristic, scriptId)
+  );
 }
 
 export async function softResetPythonInterpreter() {
-	await python.softResetPythonInterpreter(pythonCharacteristic);
+	return await bluetoothPromiseQueue.add(() =>
+    python.softResetPythonInterpreter(pythonCharacteristic)
+  );
 }
 
 //// SENSOR STREAM CHARACTERISTIC
 
 export async function startMainSensorStreaming() {
-  return await sensorStream.startMainSensorStreaming(sensorStreamCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    sensorStream.startMainSensorStreaming(sensorStreamCharacteristic)
+  );
 }
 
 export async function startSecondarySensorStreaming() {
-  return await sensorStream.startSecondarySensorStreaming(sensorStreamCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    sensorStream.startSecondarySensorStreaming(sensorStreamCharacteristic)
+  );
 }
 
 export async function startAllSensorStreaming() {
-  return await sensorStream.startAllSensorStreaming(sensorStreamCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    sensorStream.startAllSensorStreaming(sensorStreamCharacteristic)
+  );
 }
 
 
@@ -249,45 +270,57 @@ export async function startAllSensorStreaming() {
  * Stop all sensor streaming.
  */
 export async function stopSensorStreaming() {
-  return await sensorStream.stopSensorStreaming(sensorStreamCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    sensorStream.stopSensorStreaming(sensorStreamCharacteristic)
+  );
 }
 
 //// FIRMWARE UPDATE
 
 export async function isNewerFirmwareAvailable(): Promise<boolean> {
-  return await updater.isNewerFirmwareAvailable(deviceInfoCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    updater.isNewerFirmwareAvailable(deviceInfoCharacteristic)
+  );
 }
 
 export async function getNewFirmware(): Promise<ArrayBuffer> {
-  return await updater.getNewFirmware(deviceInfoCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    updater.getNewFirmware(deviceInfoCharacteristic)
+  );
 }
 
 export async function updateFirmware(): Promise<void> {
   // Temporary fix for the OTA slowdown
-  unsubscribeFromCharacteristics();
+  return await bluetoothPromiseQueue.add(async () => {
+    await unsubscribeFromCharacteristics();
 
-  return await updater.updateFirmware(
-    deviceInfoCharacteristic,
-    otaCommandCharacteristic,
-    otaFirmwareCharacteristic
-  );
+    return await updater.updateFirmware(
+      deviceInfoCharacteristic,
+      otaCommandCharacteristic,
+      otaFirmwareCharacteristic
+    );
+  });
 }
 
 //// OTA CHARACTERISTIC
 
 export async function uploadFirmware(firmware: ArrayBuffer): Promise<void> {
-  // Temporary fix for the OTA slowdown
-  unsubscribeFromCharacteristics();
+  return await bluetoothPromiseQueue.add(async () => {
+    // Temporary fix for the OTA slowdown
+    await unsubscribeFromCharacteristics();
 
-  return await ota.uploadFirmware(
-    otaCommandCharacteristic,
-    otaFirmwareCharacteristic,
-    firmware
-  );
+    return await ota.uploadFirmware(
+      otaCommandCharacteristic,
+      otaFirmwareCharacteristic,
+      firmware
+    );
+  });
 }
 
 export async function stopFirmwareUpload(): Promise<void> {
-  return await ota.stopFirmwareUpload(otaCommandCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    ota.stopFirmwareUpload(otaCommandCharacteristic)
+  );
 }
 
 //// AUDIO CHARACTERISTIC
@@ -297,21 +330,27 @@ export async function stopFirmwareUpload(): Promise<void> {
  * @param file The audio file to upload.
  */
 export async function uploadAudioFile(file: File) {
-  return await audio.uploadAudioFile(audioCharacteristic, file)
+  return await bluetoothPromiseQueue.add(() =>
+    audio.uploadAudioFile(audioCharacteristic, file)
+  );
 }
 
 /**
  * Play the audio file that is currently in memory.
  */
 export async function playAudioFile() {
-  return await audio.playAudioFile(audioCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    audio.playAudioFile(audioCharacteristic)
+  );
 }
 
 /**
  * Stop the audio file that is currently playing.
  */
 export async function stopAudioFile() {
-  return await audio.stopAudioFile(audioCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    audio.stopAudioFile(audioCharacteristic)
+  );
 }
 
 /**
@@ -319,7 +358,9 @@ export async function stopAudioFile() {
  * @param duration The duration of the recording (maximum 10 seconds).
  */
 export async function recordAudio(duration: number) {
-  return await audio.recordAudio(audioCharacteristic, duration);
+  return await bluetoothPromiseQueue.add(() =>
+    audio.recordAudio(audioCharacteristic, duration)
+  );
 }
 
 /**
@@ -331,7 +372,9 @@ export async function playFrequency(
   frequency: number,
   duration: number
 ) {
-  return await audio.playFrequency(audioCharacteristic, frequency, duration);
+  return await bluetoothPromiseQueue.add(() =>
+    audio.playFrequency(audioCharacteristic, frequency, duration)
+  );
 }
 
 //// FILES CHARACTERISTIC
@@ -341,7 +384,9 @@ export async function playFrequency(
  * @param file File to upload
  */
 export async function uploadFile(file: File): Promise<void> {
-  return await files.uploadFile(fileCharacteristic, file);
+  return await bluetoothPromiseQueue.add(() =>
+    files.uploadFile(fileCharacteristic, file)
+  );
 }
 
 /**
@@ -349,7 +394,9 @@ export async function uploadFile(file: File): Promise<void> {
  * @param filename Name of the file new file.
  */
 export async function saveFile(filename: string): Promise<void> {
-  return await files.saveFile(fileCharacteristic, filename);
+  return await bluetoothPromiseQueue.add(() =>
+    files.saveFile(fileCharacteristic, filename)
+  );
 }
 
 /**
@@ -358,7 +405,9 @@ export async function saveFile(filename: string): Promise<void> {
  * @returns
  */
 export async function deleteFile(filename: string): Promise<void> {
-  return await files.deleteFile(fileCharacteristic, filename);
+  return await bluetoothPromiseQueue.add(() =>
+    files.deleteFile(fileCharacteristic, filename)
+  );
 }
 
 /**
@@ -366,14 +415,18 @@ export async function deleteFile(filename: string): Promise<void> {
  * @returns A listing of files with their names and sizes.
  */
 export async function listFiles(): Promise<FileListing[]> {
-  return await files.listFiles(fileCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    files.listFiles(fileCharacteristic)
+  );
 }
 
 /**
  * Erase all files from the Thymio storage.
  */
 export async function eraseAllFiles(): Promise<void> {
-  return await files.eraseAllFiles(fileCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    files.eraseAllFiles(fileCharacteristic)
+  );
 }
 
 /**
@@ -382,14 +435,18 @@ export async function eraseAllFiles(): Promise<void> {
  * @returns An byte array of the downloaded file.
  */
 export async function downloadFile(filename: string): Promise<Uint8Array<ArrayBuffer>> {
-  return await files.downloadFile(fileCharacteristic, filename);
+  return await bluetoothPromiseQueue.add(() =>
+    files.downloadFile(fileCharacteristic, filename)
+  );
 }
 
 /**
  * Free the RAM from the uploaded files.
  */
 export async function freeMemory(): Promise<void> {
-  return await files.freeMemory(fileCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    files.freeMemory(fileCharacteristic)
+  );
 }
 
 //// DEVICE INFO CHARACTERISTIC
@@ -398,14 +455,18 @@ export async function freeMemory(): Promise<void> {
  * Get the device firmware info.
  */
 export async function getFirmwareInfo(): Promise<FirmwareInfo> {
-  return await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)
+  );
 }
 
 /**
  * Get the device memory info.
  */
 export async function getMemoryInfo(): Promise<MemoryInfo> {
-  return await deviceInfo.getMemoryInfo(deviceInfoCharacteristic);
+  return await bluetoothPromiseQueue.add(() =>
+    deviceInfo.getMemoryInfo(deviceInfoCharacteristic)
+  );
 }
 
 function dispatchManualReconnectionEvent() {
