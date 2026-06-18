@@ -144,6 +144,14 @@ export default function App() {
 
         void (async () => {
           try {
+            await getThymio()?.startAllSensorStreaming?.();
+          } catch (err) {
+            console.warn("Failed to start sensor streaming", err);
+          }
+        })();
+
+        void (async () => {
+          try {
             const info = await getThymio()?.getFirmwareInfo?.();
             if (info) setFirmwareInfo(info);
           } catch (err) {
