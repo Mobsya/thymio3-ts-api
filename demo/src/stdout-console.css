@@ -3,11 +3,12 @@
   flex-direction: column;
   max-height: 360px;
   overflow: auto;
-  padding: 12px;
+  padding: 7px;
   border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 12px;
+  border-radius: 7px;
   background: #0b1220;
   color: #e5e7eb;
+  font-size: 12px;
 }
 
 .stdout-console-empty {
@@ -18,12 +19,12 @@
 
 .stdout-console-line {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 7px;
   align-items: baseline;
-  min-height: 20px;
+  min-height: 16px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  line-height: 1.4;
+  line-height: 1.25;
 }
 
 .stdout-console-line-number {

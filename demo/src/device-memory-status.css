@@ -1,7 +1,8 @@
 .device-memory-status {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  min-height: 0;
 }
 
 .device-memory-header {
@@ -12,11 +13,11 @@
 }
 
 .device-memory-state {
-  padding: 4px 8px;
+  padding: 3px 7px;
   border-radius: 999px;
   background: rgba(156, 163, 175, 0.12);
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -33,27 +34,28 @@
 .device-memory-chart-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(140px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .device-memory-chart {
   position: relative;
-  min-height: 112px;
-  padding: 10px;
+  min-height: 96px;
+  padding: 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
+  overflow: hidden;
 }
 
 .device-memory-chart-header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 6px;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .device-memory-chart-value {
-  font-size: 18px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -84,7 +86,7 @@
 .device-memory-chart svg {
   display: block;
   width: 100%;
-  height: 78px;
+  height: 62px;
 }
 
 .device-memory-axis {
@@ -100,7 +102,7 @@
 
 .device-memory-tick-label {
   fill: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -108,7 +110,7 @@
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 3;
+  stroke-width: 2.5;
 }
 
 .device-memory-line.ram {
@@ -121,14 +123,14 @@
 
 .device-memory-chart-empty {
   position: absolute;
-  inset: 44px 10px 10px;
+  inset: 38px 8px 8px;
   display: grid;
   place-items: center;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .device-memory-footnote {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .device-memory-error {

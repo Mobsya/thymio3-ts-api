@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 
 // Lazy-load pyodide once
@@ -22,6 +22,7 @@ function debounce(fn, ms) {
 export default function PythonEditor({ value, onChange, height = 260 }) {
   const monacoRef = useRef(null);
   const editorRef = useRef(null);
+  const validateRef = useRef(() => {});
 
   const [pyodide, setPyodide] = useState(null);
   const [pyodideReady, setPyodideReady] = useState(false);
@@ -44,9 +45,8 @@ export default function PythonEditor({ value, onChange, height = 260 }) {
     };
   }, []);
 
-  const validate = useMemo(
-    () =>
-      debounce(async (code) => {
+  useEffect(() => {
+    validateRef.current = debounce(async (code) => {
         const monaco = monacoRef.current;
         const editor = editorRef.current;
         const model = editor?.getModel?.();
@@ -105,7 +105,7 @@ _syntax_check(___code___)
               endColumn: col + 1,
             },
           ]);
-        } catch (err) {
+        } catch {
           // If Pyodide itself failed (rare), clear markers or show generic error
           monaco.editor.setModelMarkers(model, "python-syntax", [
             {
@@ -120,11 +120,12 @@ _syntax_check(___code___)
         } finally {
           try {
             pyodide?.globals?.delete("___code___");
-          } catch {}
+          } catch {
+            // Pyodide globals cleanup is best-effort.
+          }
         }
-      }, 250),
-    [pyodide]
-  );
+      }, 250);
+  }, [pyodide]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -139,7 +140,7 @@ _syntax_check(___code___)
         onChange={(v) => {
           const next = v ?? "";
           onChange(next);
-          validate(next);
+          validateRef.current(next);
         }}
         onMount={(editor, monaco) => {
           editorRef.current = editor;
@@ -156,7 +157,7 @@ _syntax_check(___code___)
           });
 
           // run initial validation
-          validate(value ?? "");
+          validateRef.current(value ?? "");
         }}
         options={{
           scrollBeyondLastLine: false,

@@ -45,15 +45,32 @@ function ProgressBar({ value }) {
   );
 }
 
-function Section({ title, children, actions }) {
+function Panel({ title, children, actions, className = "" }) {
   return (
-    <section className="card">
-      <div className="card-header">
+    <section className={`dashboard-panel ${className}`.trim()}>
+      <div className="panel-header">
         <h3>{title}</h3>
         {actions ? <div className="actions">{actions}</div> : null}
       </div>
-      <div className="card-body">{children}</div>
+      <div className="panel-body">{children}</div>
     </section>
+  );
+}
+
+function TabButton({ id, activeTab, onSelect, children }) {
+  const isSelected = activeTab === id;
+
+  return (
+    <button
+      aria-controls={`dashboard-tab-${id}`}
+      aria-selected={isSelected}
+      className={`tab-button ${isSelected ? "selected" : ""}`}
+      onClick={() => onSelect(id)}
+      role="tab"
+      type="button"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -68,15 +85,12 @@ export default function App() {
   const [scriptIdToSave, setScriptIdToSave] = useState("");
   const [isExecuting, setIsExecuting] = useState(false);
 
-
   // Streams / output
   const [stdOut, setStdOut] = useState([]);
   const [mainSensors, setMainSensors] = useState(null);
   const [otherSensors, setOtherSensors] = useState(null);
-  const [focusedSensors, setFocusedSensors] = useState(SENSOR_FOCUS_SENSOR_IDS);
 
   // Actuators
-  const [showActuators, setShowActuators] = useState(true);
   const [circleLEDs, setCircleLEDs] = useState(Array(8).fill(0));
   const [frontLegoLEDs, setFrontLegoLEDs] = useState(Array(8).fill(0));
   const [rearLegoLEDs, setRearLegoLEDs] = useState(Array(8).fill(0));
@@ -111,6 +125,7 @@ export default function App() {
   const [firmwareInfo, setFirmwareInfo] = useState(null);
   const [firmwareInfoError, setFirmwareInfoError] = useState("");
   const [newFirmwareInfo, setNewFirmwareInfo] = useState("Waiting for firmware info...");
+  const [activeTab, setActiveTab] = useState("actuators");
 
   // OTA
   const firmwareRef = useRef(null);
@@ -169,16 +184,16 @@ export default function App() {
 
     const onManualReconn = () => {
       setPromptManualReconnection(true);
-    }
+    };
 
     const onPythonExecStatus = (event) => {
-      console.log(event)
+      console.log(event);
       const isExecuting = Boolean(event.detail);
       setIsExecuting(isExecuting);
-    }
+    };
 
     document.addEventListener("thymio-connected", onConnected);
-    document.addEventListener("thymio-prompt-manual-reconnection", onManualReconn)
+    document.addEventListener("thymio-prompt-manual-reconnection", onManualReconn);
     document.addEventListener("thymio-python-execution-status", onPythonExecStatus);
     document.addEventListener("thymio-std-out-values", onStdOut);
     document.addEventListener("thymio-sensor-values", onSensors);
@@ -191,7 +206,7 @@ export default function App() {
 
     return () => {
       document.removeEventListener("thymio-connected", onConnected);
-      document.removeEventListener("thymio-prompt-manual-reconnection", onManualReconn)
+      document.removeEventListener("thymio-prompt-manual-reconnection", onManualReconn);
       document.removeEventListener("thymio-python-execution-status", onPythonExecStatus);
       document.removeEventListener("thymio-std-out-values", onStdOut);
       document.removeEventListener("thymio-sensor-values", onSensors);
@@ -207,14 +222,14 @@ export default function App() {
   // --- Actions ---
   async function connect() {
     if (!getThymio()?.requestAndConnect) return alert("thymio not loaded");
-    setConnectionStatus("connecting")
+    setConnectionStatus("connecting");
     await getThymio().requestAndConnect();
   }
 
   async function disconnect() {
     if (!getThymio()?.disconnect) return;
     await getThymio().disconnect();
-    setConnectionStatus("disconnected")
+    setConnectionStatus("disconnected");
     setDeviceName("");
   }
 
@@ -258,7 +273,7 @@ export default function App() {
       sound: clampInt(overrides.sound ?? sound, 0, 19),
       smallBottomRGB: overrides.smallBottomRGB ?? smallBottomRGB,
       smallBackRGB: overrides.smallBackRGB ?? smallBackRGB,
-      buttonLEDs: overrides.buttonLEDS ?? buttonLEDS,
+      buttonLEDs: overrides.buttonLEDs ?? overrides.buttonLEDS ?? buttonLEDS,
       receiverLED: clampInt(overrides.receiverLED ?? receiverLED, 0, 15),
       microphoneLED: overrides.microphoneLED ?? microphoneLED,
     };
@@ -445,31 +460,28 @@ export default function App() {
     void sendActuatorData(preset);
   }
 
-
   return (
     <div className="page">
-      <header className="header">
-        <div>
+      <header className="dashboard-header">
+        <div className="brand-block">
           <h1>Thymio 3 Test</h1>
-          <RobotStatusCard
-            connectionStatus={connectionStatus}
-            deviceName={deviceName}
-            firmwareInfo={firmwareInfo}
-            firmwareInfoError={firmwareInfoError}
-          />
-
           <p className="muted">
             Reactive UI for Thymio Web API (global <code>thymio</code>)
           </p>
         </div>
 
-        {promptManualReconnection &&
-          <div>
-            <p>Please reconnect manually</p>
-          </div>
-        }
+        <RobotStatusCard
+          connectionStatus={connectionStatus}
+          deviceName={deviceName}
+          firmwareInfo={firmwareInfo}
+          firmwareInfoError={firmwareInfoError}
+        />
 
-        <div className="row">
+        {promptManualReconnection ? (
+          <div className="manual-reconnect">Please reconnect manually</div>
+        ) : null}
+
+        <div className="row connection-actions">
           <button onClick={connect}>{connectionStatus === "connected" ? "Reconnect" : "Connect"}</button>
           <button className="secondary" onClick={disconnect}>
             Disconnect
@@ -477,308 +489,329 @@ export default function App() {
         </div>
       </header>
 
-      <Section
-        title="Python"
-        actions={
-          <div className="row">
-            <div className={`exec-pill ${isExecuting ? "running" : "idle"}`}>
-              <span className="dot" />
-              {isExecuting ? "Executing…" : "Idle"}
+      <main className="dashboard-grid">
+        <div className="telemetry-stack">
+          <Panel
+            title="Sensors"
+            className="telemetry-panel sensors-panel"
+            actions={
+              <div className="row wrap compact-actions">
+                <button onClick={startMainSensors}>Main</button>
+                <button onClick={startOtherSensors}>Other</button>
+                <button onClick={startAllSensors}>All</button>
+                <button className="secondary" onClick={stopSensors}>
+                  Stop
+                </button>
+              </div>
+            }
+          >
+            <div className="panel-scroll sensor-panel-scroll">
+              <SensorFocusPanel
+                mainSensors={mainSensors}
+                otherSensors={otherSensors}
+                focusedSensors={SENSOR_FOCUS_SENSOR_IDS}
+                onFocusedSensorsChange={() => {}}
+                showSelector={false}
+              />
             </div>
+          </Panel>
 
-            <button onClick={executeCode}>Execute code</button>
-            <button className="secondary" onClick={stopCode}>
-              Stop code execution
-            </button>
-          </div>
-        }
-      >
-        <PythonEditor
-          value={code}
-          onChange={setCode}
-          height={280}
-        />
-        <div className="row wrap">
-          <input
-            type="number"
-            placeholder="script id"
-            value={scriptIdToSave}
-            onChange={(e) => setScriptIdToSave(e.target.value)}
-          />
-          <button onClick={saveToPartition}>Save to partition</button>
-          <button className="secondary" onClick={resetInterpreter}>
-            Reset interpreter
-          </button>
+          <Panel title="STD OUT" className="telemetry-panel stdout-panel">
+            <div className="panel-scroll stdout-panel-scroll">
+              <StdoutConsole entries={stdOut} />
+            </div>
+          </Panel>
         </div>
-      </Section>
 
-      <Section title="STD OUT">
-        <StdoutConsole entries={stdOut} />
-      </Section>
+        <Panel title="Memory" className="telemetry-panel memory-panel">
+          <div className="panel-scroll memory-panel-scroll">
+            <DeviceMemoryStatus isConnected={connectionStatus === "connected"} />
+          </div>
+        </Panel>
 
-      <Section
-        title="Actuators"
-        actions={
-          <button className="secondary" onClick={() => setShowActuators((s) => !s)}>
-            {showActuators ? "Hide actuator form" : "Show actuator form"}
-          </button>
-        }
-      >
-        {showActuators ? (
-          <>
-            <div className="preset-bar">
-              <div className="preset-title">Presets</div>
+        <Panel title="Controls" className="workbench-panel">
+          <div className="tab-list" role="tablist" aria-label="Demo controls">
+            <TabButton id="actuators" activeTab={activeTab} onSelect={setActiveTab}>
+              Actuators
+            </TabButton>
+            <TabButton id="python" activeTab={activeTab} onSelect={setActiveTab}>
+              Python
+            </TabButton>
+            <TabButton id="files" activeTab={activeTab} onSelect={setActiveTab}>
+              Files & Firmware
+            </TabButton>
+          </div>
 
-              <div className="preset-buttons">
-                {PRESETS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="secondary"
-                    onClick={() => applyPreset(p.data)}
-                    title={p.desc}
-                  >
-                    {p.label}
+          <div className="tab-panel panel-scroll" id={`dashboard-tab-${activeTab}`} role="tabpanel">
+            {activeTab === "actuators" ? (
+              <div className="tab-stack">
+                <div className="preset-bar">
+                  <div className="preset-title">Presets</div>
+
+                  <div className="preset-buttons">
+                    {PRESETS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="secondary"
+                        onClick={() => applyPreset(p.data)}
+                        title={p.desc}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid-2 dense-grid">
+                  <LedIntensitySliders
+                    label="Circle LEDs"
+                    values={circleLEDs}
+                    onChange={updateLedIntensitiesFromSlider("circleLEDs", setCircleLEDs)}
+                  />
+                  <LedIntensitySliders
+                    label="Button LEDs"
+                    values={buttonLEDS}
+                    onChange={(values) => {
+                      setButtonLEDS(values);
+                      void sendActuatorData({ buttonLEDs: values });
+                    }}
+                  />
+                </div>
+
+                <div className="grid-2 dense-grid">
+                  <LedIntensitySliders
+                    label="Front LEGO LEDs"
+                    values={frontLegoLEDs}
+                    onChange={updateLedIntensitiesFromSlider("frontLegoLEDs", setFrontLegoLEDs)}
+                  />
+                  <LedIntensitySliders
+                    label="Rear LEGO LEDs"
+                    values={rearLegoLEDs}
+                    onChange={updateLedIntensitiesFromSlider("rearLegoLEDs", setRearLegoLEDs)}
+                  />
+                </div>
+
+                <div className="grid-2 dense-grid">
+                  <MotorSliders left={motorLeft} right={motorRight} onChange={updateMotorsFromSlider} />
+                  <SoundPicker value={sound} onChange={updateSoundFromPicker} />
+                </div>
+
+                <div className="grid-2 dense-grid">
+                  <ColourSlider label="FL RGB" rgb={flRGB} onChange={updateRgbFromSlider("flRGB", setFlRGB)} />
+                  <ColourSlider label="FR RGB" rgb={frRGB} onChange={updateRgbFromSlider("frRGB", setFrRGB)} />
+                  <ColourSlider label="BL RGB" rgb={blRGB} onChange={updateRgbFromSlider("blRGB", setBlRGB)} />
+                  <ColourSlider label="BR RGB" rgb={brRGB} onChange={updateRgbFromSlider("brRGB", setBrRGB)} />
+                </div>
+
+                <div className="grid-2 dense-grid">
+                  <ColourSlider
+                    label="Small bottom RGB"
+                    rgb={smallBottomRGB}
+                    onChange={(rgb) => {
+                      setSmallBottomRGB(rgb);
+                      void sendActuatorData({ smallBottomRGB: rgb });
+                    }}
+                  />
+                  <ColourSlider
+                    label="Small back RGB"
+                    rgb={smallBackRGB}
+                    onChange={(rgb) => {
+                      setSmallBackRGB(rgb);
+                      void sendActuatorData({ smallBackRGB: rgb });
+                    }}
+                  />
+                </div>
+
+                <div className="grid-2 dense-grid">
+                  <div className="grid-block extra-actuator-receiver">
+                    <div className="grid-title">Receiver LED</div>
+                    <label className="extra-actuator-slider">
+                      <span>Intensity</span>
+                      <input
+                        aria-label="Receiver LED intensity"
+                        type="range"
+                        min="0"
+                        max="15"
+                        value={clampInt(receiverLED, 0, 15)}
+                        onChange={(e) => {
+                          const nextReceiverLED = clampInt(parseInt(e.target.value, 10), 0, 15);
+                          setReceiverLED(nextReceiverLED);
+                          void sendActuatorData({ receiverLED: nextReceiverLED });
+                        }}
+                      />
+                      <strong>{clampInt(receiverLED, 0, 15)}</strong>
+                    </label>
+                  </div>
+
+                  <div className="grid-block extra-actuator-microphone">
+                    <div className="grid-title">Microphone LED</div>
+                    <label className="extra-actuator-toggle">
+                      <input
+                        checked={microphoneLED}
+                        type="checkbox"
+                        onChange={(e) => {
+                          setMicrophoneLED(e.target.checked);
+                          void sendActuatorData({ microphoneLED: e.target.checked });
+                        }}
+                      />
+                      <span>{microphoneLED ? "On" : "Off"}</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {activeTab === "python" ? (
+              <div className="tab-stack">
+                <div className="row wrap python-actions">
+                  <div className={`exec-pill ${isExecuting ? "running" : "idle"}`}>
+                    <span className="dot" />
+                    {isExecuting ? "Executing…" : "Idle"}
+                  </div>
+
+                  <button onClick={executeCode}>Execute code</button>
+                  <button className="secondary" onClick={stopCode}>
+                    Stop code execution
                   </button>
-                ))}
-              </div>
-            </div>
+                </div>
 
-            <LedIntensitySliders
-              label="Circle LEDs"
-              values={circleLEDs}
-              onChange={updateLedIntensitiesFromSlider("circleLEDs", setCircleLEDs)}
-            />
-            <LedIntensitySliders
-              label="Front LEGO LEDs"
-              values={frontLegoLEDs}
-              onChange={updateLedIntensitiesFromSlider("frontLegoLEDs", setFrontLegoLEDs)}
-            />
-            <LedIntensitySliders
-              label="Rear LEGO LEDs"
-              values={rearLegoLEDs}
-              onChange={updateLedIntensitiesFromSlider("rearLegoLEDs", setRearLegoLEDs)}
-            />
+                <PythonEditor
+                  value={code}
+                  onChange={setCode}
+                  height={310}
+                />
 
-            <div className="grid-2">
-              <ColourSlider label="FL RGB" rgb={flRGB} onChange={updateRgbFromSlider("flRGB", setFlRGB)} />
-              <ColourSlider label="FR RGB" rgb={frRGB} onChange={updateRgbFromSlider("frRGB", setFrRGB)} />
-              <ColourSlider label="BL RGB" rgb={blRGB} onChange={updateRgbFromSlider("blRGB", setBlRGB)} />
-              <ColourSlider label="BR RGB" rgb={brRGB} onChange={updateRgbFromSlider("brRGB", setBrRGB)} />
-            </div>
-
-            <div className="grid-2">
-              <MotorSliders left={motorLeft} right={motorRight} onChange={updateMotorsFromSlider} />
-              <SoundPicker value={sound} onChange={updateSoundFromPicker} />
-            </div>
-
-            <div className="grid-2">
-              <ColourSlider
-                label="Small bottom RGB"
-                rgb={smallBottomRGB}
-                onChange={(rgb) => {
-                  setSmallBottomRGB(rgb);
-                  void sendActuatorData({ smallBottomRGB: rgb });
-                }}
-              />
-              <ColourSlider
-                label="Small back RGB"
-                rgb={smallBackRGB}
-                onChange={(rgb) => {
-                  setSmallBackRGB(rgb);
-                  void sendActuatorData({ smallBackRGB: rgb });
-                }}
-              />
-            </div>
-
-            <LedIntensitySliders
-              label="Button LEDs"
-              values={buttonLEDS}
-              onChange={(values) => {
-                setButtonLEDS(values);
-                void sendActuatorData({ buttonLEDS: values });
-              }}
-            />
-
-            <div className="grid-2">
-              <div className="grid-block extra-actuator-receiver">
-                <div className="grid-title">Receiver LED</div>
-                <label className="extra-actuator-slider">
-                  <span>Intensity</span>
+                <div className="row wrap">
                   <input
-                    aria-label="Receiver LED intensity"
-                    type="range"
-                    min="0"
-                    max="15"
-                    value={clampInt(receiverLED, 0, 15)}
-                    onChange={(e) => {
-                      const nextReceiverLED = clampInt(parseInt(e.target.value, 10), 0, 15);
-                      setReceiverLED(nextReceiverLED);
-                      void sendActuatorData({ receiverLED: nextReceiverLED });
-                    }}
+                    type="number"
+                    placeholder="script id"
+                    value={scriptIdToSave}
+                    onChange={(e) => setScriptIdToSave(e.target.value)}
                   />
-                  <strong>{clampInt(receiverLED, 0, 15)}</strong>
-                </label>
+                  <button onClick={saveToPartition}>Save to partition</button>
+                  <button className="secondary" onClick={resetInterpreter}>
+                    Reset interpreter
+                  </button>
+                </div>
               </div>
+            ) : null}
 
-              <div className="grid-block extra-actuator-microphone">
-                <div className="grid-title">Microphone LED</div>
-                <label className="extra-actuator-toggle">
-                  <input
-                    checked={microphoneLED}
-                    type="checkbox"
-                    onChange={(e) => {
-                      setMicrophoneLED(e.target.checked);
-                      void sendActuatorData({ microphoneLED: e.target.checked });
-                    }}
-                  />
-                  <span>{microphoneLED ? "On" : "Off"}</span>
-                </label>
+            {activeTab === "files" ? (
+              <div className="tab-stack">
+                <div className="compact-group">
+                  <div className="grid-title">Files</div>
+                  <div className="row wrap">
+                    <input ref={fileUploadRef} type="file" />
+                    <button onClick={uploadFile}>Upload file</button>
+                  </div>
+
+                  <div className="row wrap">
+                    <input
+                      type="text"
+                      value={fileDownloadName}
+                      onChange={(e) => setFileDownloadName(e.target.value)}
+                      placeholder="filename to download"
+                    />
+                    <button onClick={downloadFile}>Download file</button>
+                  </div>
+
+                  <div className="subhead">Upload/Download progress</div>
+                  <ProgressBar value={fileProgress} />
+
+                  <div className="row wrap">
+                    <input
+                      type="text"
+                      value={filename}
+                      onChange={(e) => setFilename(e.target.value)}
+                      placeholder="filename"
+                    />
+                    <button onClick={saveFile}>Save file</button>
+                    <button className="secondary" onClick={deleteFile}>
+                      Delete file
+                    </button>
+                    <button className="secondary" onClick={eraseAllFiles}>
+                      Erase all files
+                    </button>
+                    <button className="secondary" onClick={freeMemory}>
+                      Free memory
+                    </button>
+                    <button className="secondary" onClick={listFiles}>
+                      List files
+                    </button>
+                  </div>
+                  <pre className="pre compact-pre">{fileList}</pre>
+                </div>
+
+                <div className="compact-group">
+                  <div className="grid-title">Automatic Firmware Update</div>
+                  <div className="row wrap">
+                    <button onClick={checkForNewFirmware}>Check for newer firmware</button>
+                    <button className="secondary" onClick={updateFirmware}>
+                      Update Firmware
+                    </button>
+                  </div>
+                  <pre className="pre compact-pre">{newFirmwareInfo}</pre>
+
+                  <div className="subhead">Upload progress</div>
+                  <ProgressBar value={otaProgress} />
+                </div>
+
+                <div className="compact-group">
+                  <div className="grid-title">Manual Firmware Update</div>
+                  <div className="row wrap">
+                    <input ref={firmwareRef} type="file" />
+                    <button onClick={startOtaUpload}>Start OTA</button>
+                    <button className="secondary" onClick={stopOtaUpload}>
+                      Stop OTA Upload
+                    </button>
+                  </div>
+                </div>
+
+                <div className="compact-group">
+                  <div className="grid-title">Audio</div>
+                  <div className="row wrap">
+                    <input ref={audioRef} type="file" />
+                    <button onClick={uploadAudio}>Upload Audio file</button>
+                    <button className="secondary" onClick={() => getThymio()?.playAudioFile?.()}>
+                      Play
+                    </button>
+                    <button className="secondary" onClick={() => getThymio()?.stopAudioFile?.()}>
+                      Stop
+                    </button>
+                    <button className="secondary" onClick={() => getThymio()?.recordAudio?.(3)}>
+                      Record (3s)
+                    </button>
+                  </div>
+
+                  <div className="subhead">Upload progress</div>
+                  <ProgressBar value={audioProgress} />
+
+                  <div className="row wrap">
+                    <input
+                      type="number"
+                      min={0}
+                      max={300}
+                      value={audioFreq}
+                      onChange={(e) => setAudioFreq(parseInt(e.target.value, 10) || 0)}
+                      placeholder="frequency"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={1000}
+                      value={audioFreqDuration}
+                      onChange={(e) => setAudioFreqDuration(parseInt(e.target.value, 10) || 0)}
+                      placeholder="duration"
+                    />
+                    <button onClick={playFrequency}>Play Frequency</button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </>
-        ) : (
-          <p className="muted">Actuator form hidden.</p>
-        )}
-      </Section>
-
-      <Section
-        title="Sensors"
-        actions={
-          <div className="row wrap">
-            <button onClick={startMainSensors}>Start main sensor streaming</button>
-            <button onClick={startOtherSensors}>Start other sensor streaming</button>
-            <button onClick={startAllSensors}>Start all sensor streaming</button>
-            <button className="secondary" onClick={stopSensors}>
-              Stop all sensor streaming
-            </button>
+            ) : null}
           </div>
-        }
-      >
-        <SensorFocusPanel
-          mainSensors={mainSensors}
-          otherSensors={otherSensors}
-          focusedSensors={focusedSensors}
-          onFocusedSensorsChange={setFocusedSensors}
-        />
-      </Section>
-
-      <Section title="Audio">
-        <div className="row wrap">
-          <input ref={audioRef} type="file" />
-          <button onClick={uploadAudio}>Upload Audio file</button>
-          <button className="secondary" onClick={() => getThymio()?.playAudioFile?.()}>
-            Play
-          </button>
-          <button className="secondary" onClick={() => getThymio()?.stopAudioFile?.()}>
-            Stop
-          </button>
-          <button className="secondary" onClick={() => getThymio()?.recordAudio?.(3)}>
-            Record (3s)
-          </button>
-        </div>
-
-        <div className="subhead">Upload progress</div>
-        <ProgressBar value={audioProgress} />
-
-        <div className="row wrap">
-          <input
-            type="number"
-            min={0}
-            max={300}
-            value={audioFreq}
-            onChange={(e) => setAudioFreq(parseInt(e.target.value, 10) || 0)}
-            placeholder="frequency"
-          />
-          <input
-            type="number"
-            min={0}
-            max={1000}
-            value={audioFreqDuration}
-            onChange={(e) => setAudioFreqDuration(parseInt(e.target.value, 10) || 0)}
-            placeholder="duration"
-          />
-          <button onClick={playFrequency}>Play Frequency</button>
-        </div>
-      </Section>
-
-      <Section title="Files">
-        <div className="row wrap">
-          <input ref={fileUploadRef} type="file" />
-          <button onClick={uploadFile}>Upload file</button>
-        </div>
-
-        <div className="row wrap">
-          <input
-            type="text"
-            value={fileDownloadName}
-            onChange={(e) => setFileDownloadName(e.target.value)}
-            placeholder="filename to download"
-          />
-          <button onClick={downloadFile}>Download file</button>
-        </div>
-
-        <div className="subhead">Upload/Download progress</div>
-        <ProgressBar value={fileProgress} />
-
-        <div className="row wrap">
-          <input
-            type="text"
-            value={filename}
-            onChange={(e) => setFilename(e.target.value)}
-            placeholder="filename"
-          />
-          <button onClick={saveFile}>Save file</button>
-          <button className="secondary" onClick={deleteFile}>
-            Delete file
-          </button>
-          <button className="secondary" onClick={eraseAllFiles}>
-            Erase all files
-          </button>
-          <button className="secondary" onClick={freeMemory}>
-            Free memory
-          </button>
-        </div>
-
-        <div className="row wrap">
-          <button onClick={listFiles}>List files</button>
-        </div>
-        <pre className="pre">{fileList}</pre>
-      </Section>
-
-      <Section title="Device Info">
-        <DeviceMemoryStatus isConnected={connectionStatus === "connected"} />
-      </Section>
-
-      <Section title="Automatic Firmware update">
-        <div className="row wrap">
-          <button onClick={checkForNewFirmware}>Check for newer firmware</button>
-          <button className="secondary" onClick={updateFirmware}>
-            Update Firmware
-          </button>
-        </div>
-        <pre className="pre">{newFirmwareInfo}</pre>
-
-        <div className="subhead">Upload progress</div>
-        <ProgressBar value={otaProgress} />
-      </Section>
-
-      <Section title="Manual Firmware update">
-        <div className="row wrap">
-          <input ref={firmwareRef} type="file" />
-          <button onClick={startOtaUpload}>Start OTA</button>
-          <button className="secondary" onClick={stopOtaUpload}>
-            Stop OTA Upload
-          </button>
-        </div>
-
-        <div className="subhead">Upload progress</div>
-        <ProgressBar value={otaProgress} />
-      </Section>
-
-      <footer className="footer muted">
-        Tip: open DevTools console for any download responses (we log the result).
-      </footer>
+        </Panel>
+      </main>
     </div>
   );
 }

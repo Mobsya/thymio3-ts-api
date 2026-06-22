@@ -12,6 +12,7 @@ const PYODIDE_RUNTIME_FILES = [
   "pyodide.asm.wasm",
   "python_stdlib.zip",
 ];
+const demoDir = dirname(fileURLToPath(import.meta.url));
 
 export function viteStaticCopyPyodide() {
   const pyodideDir = dirname(fileURLToPath(import.meta.resolve("pyodide")));
@@ -36,7 +37,7 @@ export default defineConfig({
     viteStaticCopy({
       targets: [
         {
-          src: resolve(__dirname, "../dist/thymio.iife.js"),
+          src: resolve(demoDir, "../dist/thymio.iife.js"),
           dest: "libs",
           rename: { stripBase: true },
         }

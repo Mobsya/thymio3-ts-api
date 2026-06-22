@@ -51,7 +51,13 @@ function getColourPreviewMode(sensorId) {
   return null;
 }
 
-export default function SensorFocusPanel({ mainSensors, otherSensors, focusedSensors, onFocusedSensorsChange }) {
+export default function SensorFocusPanel({
+  mainSensors,
+  otherSensors,
+  focusedSensors,
+  onFocusedSensorsChange,
+  showSelector = true,
+}) {
   function toggleSensor(sensorId) {
     if (focusedSensors.includes(sensorId)) {
       onFocusedSensorsChange(focusedSensors.filter((id) => id !== sensorId));
@@ -65,27 +71,31 @@ export default function SensorFocusPanel({ mainSensors, otherSensors, focusedSen
 
   return (
     <div className="sensor-focus-panel">
-      <div className="sensor-focus-controls">
-        <button type="button" className="secondary sensor-focus-control" onClick={() => onFocusedSensorsChange(SENSOR_FOCUS_SENSOR_IDS)}>
-          Select all
-        </button>
-        <button type="button" className="secondary sensor-focus-control" onClick={() => onFocusedSensorsChange([])}>
-          Deselect all
-        </button>
-      </div>
+      {showSelector ? (
+        <>
+          <div className="sensor-focus-controls">
+            <button type="button" className="secondary sensor-focus-control" onClick={() => onFocusedSensorsChange(SENSOR_FOCUS_SENSOR_IDS)}>
+              Select all
+            </button>
+            <button type="button" className="secondary sensor-focus-control" onClick={() => onFocusedSensorsChange([])}>
+              Deselect all
+            </button>
+          </div>
 
-      <div className="sensor-focus-selector">
-        {SENSOR_OPTIONS.map((option) => (
-          <label className="sensor-focus-option" key={option.id}>
-            <input
-              checked={focusedSensors.includes(option.id)}
-              onChange={() => toggleSensor(option.id)}
-              type="checkbox"
-            />
-            <span>{option.label}</span>
-          </label>
-        ))}
-      </div>
+          <div className="sensor-focus-selector">
+            {SENSOR_OPTIONS.map((option) => (
+              <label className="sensor-focus-option" key={option.id}>
+                <input
+                  checked={focusedSensors.includes(option.id)}
+                  onChange={() => toggleSensor(option.id)}
+                  type="checkbox"
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       <div className="sensor-focus-table">
         {selectedOptions.length === 0 ? (
