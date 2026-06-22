@@ -56,7 +56,7 @@ h3 {
 
 .dashboard-header {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto auto;
+  grid-template-columns: minmax(220px, 1fr) auto;
   align-items: center;
   gap: 10px;
   min-height: 76px;
@@ -88,14 +88,10 @@ h3 {
   font-weight: 800;
 }
 
-.connection-actions {
-  justify-content: flex-end;
-}
-
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(620px, 1fr) minmax(360px, 0.42fr);
-  grid-template-rows: minmax(170px, 0.28fr) minmax(460px, 0.72fr);
+  grid-template-rows: 96px minmax(0, 1fr);
   gap: 10px;
   min-height: 640px;
   height: calc(100vh - 110px);
@@ -161,6 +157,7 @@ h3 {
 .memory-panel {
   grid-column: 1;
   grid-row: 1;
+  height: 96px;
 }
 
 .workbench-panel {
@@ -208,6 +205,100 @@ h3 {
 
 .memory-panel-scroll {
   overflow: hidden;
+}
+
+.memory-panel .panel-header {
+  display: none;
+}
+
+.memory-panel .panel-body {
+  padding: 4px;
+}
+
+.memory-panel-scroll {
+  display: grid;
+  grid-template-columns: minmax(170px, 210px) minmax(320px, 1fr);
+  align-items: stretch;
+  gap: 6px;
+  min-height: 0;
+}
+
+.memory-panel .robot-status-card {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  justify-content: center;
+  padding: 4px 7px;
+  gap: 2px;
+}
+
+.memory-panel .robot-status {
+  font-size: 11px;
+}
+
+.memory-panel .robot-status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.memory-panel .robot-device-name {
+  font-size: 13px;
+}
+
+.memory-panel .robot-firmware {
+  gap: 4px 8px;
+  font-size: 10px;
+}
+
+.memory-panel .device-memory-status {
+  height: 100%;
+  gap: 0;
+  min-width: 0;
+}
+
+.memory-panel .device-memory-header {
+  display: none;
+}
+
+.memory-panel .device-memory-chart-grid {
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 6px;
+  min-height: 0;
+}
+
+.memory-panel .device-memory-chart {
+  min-height: 0;
+  padding: 4px 5px;
+}
+
+.memory-panel .device-memory-chart-header {
+  margin-bottom: 1px;
+}
+
+.memory-panel .device-memory-chart-value {
+  font-size: 12px;
+}
+
+.memory-panel .device-memory-legend {
+  font-size: 10px;
+}
+
+.memory-panel .device-memory-chart svg {
+  height: 36px;
+}
+
+.memory-panel .device-memory-tick-label {
+  font-size: 8px;
+}
+
+.memory-panel .device-memory-chart-empty {
+  inset: 26px 6px 6px;
+  font-size: 10px;
+}
+
+.memory-panel .device-memory-footnote {
+  display: none;
 }
 
 .muted { color: var(--muted); }
@@ -534,7 +625,7 @@ input[type="file"] {
     height: auto;
     min-height: 0;
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: minmax(170px, auto) minmax(520px, auto);
+    grid-template-rows: 96px minmax(520px, auto);
   }
 
   .telemetry-stack {
@@ -600,6 +691,11 @@ input[type="file"] {
   .preset-bar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .memory-panel-scroll {
+    grid-template-columns: 1fr;
+    overflow: auto;
   }
 }
 

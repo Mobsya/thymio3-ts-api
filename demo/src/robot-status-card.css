@@ -37,6 +37,33 @@
   font-weight: 800;
 }
 
+.robot-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.robot-status-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.robot-status-actions button {
+  min-height: 24px;
+  padding: 4px 7px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+
+.robot-status-actions button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .robot-status-card.connected .robot-status {
   color: #14532d;
 }

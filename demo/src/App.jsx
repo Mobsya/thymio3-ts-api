@@ -462,33 +462,6 @@ export default function App() {
 
   return (
     <div className="page">
-      <header className="dashboard-header">
-        <div className="brand-block">
-          <h1>Thymio 3 Test</h1>
-          <p className="muted">
-            Reactive UI for Thymio Web API (global <code>thymio</code>)
-          </p>
-        </div>
-
-        <RobotStatusCard
-          connectionStatus={connectionStatus}
-          deviceName={deviceName}
-          firmwareInfo={firmwareInfo}
-          firmwareInfoError={firmwareInfoError}
-        />
-
-        {promptManualReconnection ? (
-          <div className="manual-reconnect">Please reconnect manually</div>
-        ) : null}
-
-        <div className="row connection-actions">
-          <button onClick={connect}>{connectionStatus === "connected" ? "Reconnect" : "Connect"}</button>
-          <button className="secondary" onClick={disconnect}>
-            Disconnect
-          </button>
-        </div>
-      </header>
-
       <main className="dashboard-grid">
         <div className="telemetry-stack">
           <Panel
@@ -523,8 +496,16 @@ export default function App() {
           </Panel>
         </div>
 
-        <Panel title="Memory" className="telemetry-panel memory-panel">
+        <Panel title="Device & Memory" className="telemetry-panel memory-panel">
           <div className="panel-scroll memory-panel-scroll">
+            <RobotStatusCard
+              connectionStatus={connectionStatus}
+              deviceName={deviceName}
+              firmwareInfo={firmwareInfo}
+              firmwareInfoError={firmwareInfoError}
+              onConnect={connect}
+              onDisconnect={disconnect}
+            />
             <DeviceMemoryStatus isConnected={connectionStatus === "connected"} />
           </div>
         </Panel>
