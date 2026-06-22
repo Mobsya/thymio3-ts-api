@@ -503,6 +503,7 @@ export default function App() {
               deviceName={deviceName}
               firmwareInfo={firmwareInfo}
               firmwareInfoError={firmwareInfoError}
+              promptManualReconnection={promptManualReconnection}
               onConnect={connect}
               onDisconnect={disconnect}
             />

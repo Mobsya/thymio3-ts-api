@@ -10,6 +10,12 @@
   --primary-soft: rgba(25, 118, 210, 0.1);
   --danger: #ef4444;
   --success: #22c55e;
+  --dashboard-max-width: 1600px;
+  --dashboard-gap: clamp(8px, 0.7vw, 12px);
+  --dashboard-padding: clamp(8px, 1vw, 14px);
+  --telemetry-width: clamp(360px, 28vw, 480px);
+  --memory-strip-height: clamp(88px, 9vh, 108px);
+  --sensor-panel-height: clamp(500px, calc(100dvh - 260px), 640px);
 }
 
 * { box-sizing: border-box; }
@@ -45,13 +51,14 @@ h3 {
 }
 
 .page {
-  width: min(100%, 1480px);
-  min-height: 100vh;
+  width: min(100%, var(--dashboard-max-width));
+  height: 100dvh;
+  min-height: 0;
   margin: 0 auto;
-  padding: 12px;
+  padding: var(--dashboard-padding);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--dashboard-gap);
 }
 
 .dashboard-header {
@@ -90,11 +97,12 @@ h3 {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(620px, 1fr) minmax(360px, 0.42fr);
-  grid-template-rows: 96px minmax(0, 1fr);
-  gap: 10px;
-  min-height: 640px;
-  height: calc(100vh - 110px);
+  grid-template-columns: minmax(0, 1fr) var(--telemetry-width);
+  grid-template-rows: var(--memory-strip-height) minmax(0, 1fr);
+  gap: var(--dashboard-gap);
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .dashboard-panel {
@@ -142,11 +150,11 @@ h3 {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--dashboard-gap);
 }
 
 .sensors-panel {
-  flex: 0 0 540px;
+  flex: 0 0 var(--sensor-panel-height);
 }
 
 .stdout-panel {
@@ -157,7 +165,7 @@ h3 {
 .memory-panel {
   grid-column: 1;
   grid-row: 1;
-  height: 96px;
+  height: var(--memory-strip-height);
 }
 
 .workbench-panel {
@@ -611,7 +619,18 @@ input[type="file"] {
   grid-template-columns: repeat(5, 32px);
 }
 
-@media (max-width: 1180px) {
+@media (min-width: 1601px) {
+  .page {
+    border-inline: 1px solid rgba(148, 163, 184, 0.45);
+  }
+}
+
+@media (max-width: 1120px) {
+  :root {
+    --telemetry-width: minmax(0, 1fr);
+    --sensor-panel-height: clamp(480px, 58vh, 600px);
+  }
+
   .dashboard-header {
     grid-template-columns: 1fr auto;
   }
@@ -622,10 +641,10 @@ input[type="file"] {
   }
 
   .dashboard-grid {
-    height: auto;
+    height: 100%;
     min-height: 0;
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: 96px minmax(520px, auto);
+    grid-template-rows: var(--memory-strip-height) minmax(0, 1fr);
   }
 
   .telemetry-stack {
@@ -634,7 +653,7 @@ input[type="file"] {
   }
 
   .sensors-panel {
-    flex-basis: 540px;
+    flex-basis: var(--sensor-panel-height);
   }
 
   .memory-panel {
@@ -649,7 +668,7 @@ input[type="file"] {
   }
 
   .panel-scroll {
-    max-height: 520px;
+    max-height: none;
   }
 }
 
@@ -666,12 +685,18 @@ input[type="file"] {
   }
 
   .dashboard-grid {
+    height: auto;
     display: flex;
     flex-direction: column;
   }
 
   .dashboard-panel {
     min-height: 280px;
+  }
+
+  .memory-panel {
+    height: auto;
+    min-height: var(--memory-strip-height);
   }
 
   .manual-reconnect,

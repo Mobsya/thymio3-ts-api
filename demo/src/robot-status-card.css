@@ -128,3 +128,10 @@
   font-size: 13px;
   font-weight: 700;
 }
+
+.robot-reconnect-warning {
+  color: #854d0e;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+}

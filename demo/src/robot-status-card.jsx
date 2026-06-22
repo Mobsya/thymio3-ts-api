@@ -5,6 +5,7 @@ export default function RobotStatusCard({
   deviceName,
   firmwareInfo,
   firmwareInfoError,
+  promptManualReconnection,
   onConnect,
   onDisconnect,
 }) {
@@ -44,6 +45,10 @@ export default function RobotStatusCard({
             <div className="robot-firmware-error">{firmwareInfoError}</div>
           ) : null}
         </div>
+      ) : null}
+
+      {promptManualReconnection ? (
+        <div className="robot-reconnect-warning">Reconnect manually</div>
       ) : null}
     </div>
   );
