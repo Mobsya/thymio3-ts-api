@@ -58,7 +58,7 @@ function buildPolylinePoints(samples, key, minValue, maxValue, width, height, pa
 function MemorySparkline({ samples, keyName, label, colorClass, value }) {
   const width = 320;
   const height = 110;
-  const padding = { top: 12, right: 10, bottom: 16, left: 58 };
+  const padding = { top: 14, right: 8, bottom: 8, left: 46 };
   const values = samples.map((sample) => sample[keyName]);
   const minValue = 0;
   const maxValue = values.length ? Math.max(...values) : 1;
@@ -67,9 +67,9 @@ function MemorySparkline({ samples, keyName, label, colorClass, value }) {
 
   return (
     <div className="device-memory-chart">
-      <div className="device-memory-chart-header">
-        <span className={`device-memory-legend ${colorClass}`}>{label}</span>
-        <strong className="device-memory-chart-value">{formatBytes(value)}</strong>
+      <div className="device-memory-graph-label">
+        <span>{label}</span>
+        <strong>{formatBytes(value)}</strong>
       </div>
       <svg aria-label={`${label} memory history`} viewBox={`0 0 ${width} ${height}`} role="img">
         {tickValues.map((value, index) => {
@@ -78,14 +78,12 @@ function MemorySparkline({ samples, keyName, label, colorClass, value }) {
           return (
             <g key={`${label}-${index}`}>
               <line className="device-memory-grid-line" x1={padding.left} y1={y} x2={width - padding.right} y2={y} />
-              <text className="device-memory-tick-label" x={padding.left - 8} y={y} textAnchor="end" dominantBaseline="middle">
+              <text className="device-memory-tick-label" x={padding.left - 5} y={y} textAnchor="end" dominantBaseline="middle">
                 {formatBytes(value)}
               </text>
             </g>
           );
         })}
-        <line className="device-memory-axis" x1={padding.left} y1={padding.top} x2={padding.left} y2={height - padding.bottom} />
-        <line className="device-memory-axis" x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} />
         {samples.length > 1 ? (
           <polyline className={`device-memory-line ${colorClass}`} points={points} />
         ) : null}

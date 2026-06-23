@@ -277,31 +277,11 @@ h3 {
 
 .memory-panel .device-memory-chart {
   min-height: 0;
-  padding: 4px 5px;
-}
-
-.memory-panel .device-memory-chart-header {
-  margin-bottom: 1px;
-}
-
-.memory-panel .device-memory-chart-value {
-  font-size: 12px;
-}
-
-.memory-panel .device-memory-legend {
-  font-size: 10px;
-}
-
-.memory-panel .device-memory-chart svg {
-  height: 36px;
-}
-
-.memory-panel .device-memory-tick-label {
-  font-size: 8px;
+  padding: 0;
 }
 
 .memory-panel .device-memory-chart-empty {
-  inset: 26px 6px 6px;
+  inset: 18px 6px 6px;
   font-size: 10px;
 }
 
