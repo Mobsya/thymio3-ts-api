@@ -1,0 +1,20 @@
+.python-editor,
+.python-editor-region {
+  min-height: 0;
+}
+
+.python-editor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.python-editor-region {
+  flex: 1 1 auto;
+}
+
+.python-editor-status {
+  font-size: 12px;
+  opacity: 0.7;
+}

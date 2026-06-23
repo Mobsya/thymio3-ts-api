@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
+import "./python-editor.css";
 
 // Lazy-load pyodide once
 async function loadPyodideOnce() {
@@ -19,7 +20,7 @@ function debounce(fn, ms) {
   };
 }
 
-export default function PythonEditor({ value, onChange, height = 260 }) {
+export default function PythonEditor({ value, onChange, height }) {
   const monacoRef = useRef(null);
   const editorRef = useRef(null);
   const validateRef = useRef(() => {});
@@ -128,13 +129,13 @@ _syntax_check(___code___)
   }, [pyodide]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ fontSize: 12, opacity: 0.7 }}>
+    <div className="python-editor">
+      <div className="python-editor-status">
         Python syntax check: {pyodideReady ? "ready" : "loading…"}
       </div>
 
       <Editor
-        height={height}
+        height={height ?? "100%"}
         defaultLanguage="python"
         value={value}
         onChange={(v) => {

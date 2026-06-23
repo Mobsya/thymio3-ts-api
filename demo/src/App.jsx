@@ -572,7 +572,7 @@ export default function App() {
             ) : null}
 
             {activeTab === "python" ? (
-              <div className="tab-stack">
+              <div className="tab-stack python-tab-stack">
                 <div className="row wrap python-actions">
                   <div className={`exec-pill ${isExecuting ? "running" : "idle"}`}>
                     <span className="dot" />
@@ -585,11 +585,12 @@ export default function App() {
                   </button>
                 </div>
 
-                <PythonEditor
-                  value={code}
-                  onChange={setCode}
-                  height={310}
-                />
+                <div className="python-editor-region">
+                  <PythonEditor
+                    value={code}
+                    onChange={setCode}
+                  />
+                </div>
 
                 <div className="row wrap">
                   <input

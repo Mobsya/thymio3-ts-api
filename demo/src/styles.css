@@ -426,6 +426,11 @@ input[type="file"] {
   padding-right: 2px;
 }
 
+.python-tab-stack {
+  height: 100%;
+  min-height: 0;
+}
+
 .python-actions {
   justify-content: flex-start;
 }
