@@ -321,10 +321,6 @@ h3 {
   gap: 10px;
 }
 
-.dense-grid {
-  align-items: start;
-}
-
 button {
   min-height: 30px;
   padding: 7px 10px;
@@ -486,53 +482,6 @@ input[type="file"] {
   flex-wrap: wrap;
 }
 
-.extra-actuator-slider {
-  display: grid;
-  grid-template-columns: 64px minmax(100px, 1fr) 24px;
-  align-items: center;
-  gap: 8px;
-}
-
-.extra-actuator-slider span {
-  font-weight: 800;
-  font-size: 13px;
-}
-
-.extra-actuator-slider input {
-  width: 100%;
-  accent-color: var(--primary);
-}
-
-.extra-actuator-slider strong {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.extra-actuator-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  min-height: 32px;
-  padding: 6px 9px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  font-weight: 800;
-}
-
-.extra-actuator-toggle:has(input:checked) {
-  border-color: rgba(25, 118, 210, 0.35);
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.extra-actuator-toggle input {
-  margin: 0;
-}
-
 .progress-container {
   width: 100%;
   background-color: #eef2f7;
@@ -562,42 +511,6 @@ input[type="file"] {
   color: #991b1b;
 }
 
-.preset-bar {
-  padding: 9px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--panel-soft);
-}
-
-.preset-title {
-  flex: 0 0 auto;
-  font-weight: 900;
-  font-size: 13px;
-}
-
-.preset-buttons {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.dense-grid .led-intensity-list {
-  grid-template-columns: 1fr;
-  gap: 7px;
-}
-
-.dense-grid .led-intensity-slider {
-  grid-template-columns: 50px minmax(90px, 1fr) 22px;
-  gap: 7px;
-}
-
-.dense-grid .sound-grid {
-  grid-template-columns: repeat(5, 32px);
-}
 
 @media (min-width: 1601px) {
   .page {
@@ -650,6 +563,7 @@ input[type="file"] {
   .panel-scroll {
     max-height: none;
   }
+
 }
 
 @media (max-width: 760px) {
@@ -693,24 +607,8 @@ input[type="file"] {
     flex: 1;
   }
 
-  .preset-bar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .memory-panel-scroll {
     grid-template-columns: 1fr;
     overflow: auto;
-  }
-}
-
-@media (max-width: 520px) {
-  .extra-actuator-slider {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-
-  .extra-actuator-slider strong {
-    text-align: left;
   }
 }

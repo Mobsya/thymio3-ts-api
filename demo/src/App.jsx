@@ -1,14 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { PRESETS } from "./presets";
-import ColourSlider from "./colour-slider";
+import ActuatorPanel from "./actuator-panel";
 import DeviceMemoryStatus from "./device-memory-status";
-import LedIntensitySliders from "./led-intensity-sliders";
-import MotorSliders from "./motor-sliders";
 import PythonEditor from "./python-editor";
 import RobotStatusCard from "./robot-status-card";
 import { SENSOR_FOCUS_SENSOR_IDS } from "./sensor-options";
 import SensorFocusPanel from "./sensor-focus-panel";
-import SoundPicker from "./sound-picker";
 import StdoutConsole from "./stdout-console";
 import { clampInt } from "./utils";
 
@@ -526,122 +522,53 @@ export default function App() {
 
           <div className="tab-panel panel-scroll" id={`dashboard-tab-${activeTab}`} role="tabpanel">
             {activeTab === "actuators" ? (
-              <div className="tab-stack">
-                <div className="preset-bar">
-                  <div className="preset-title">Presets</div>
-
-                  <div className="preset-buttons">
-                    {PRESETS.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className="secondary"
-                        onClick={() => applyPreset(p.data)}
-                        title={p.desc}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid-2 dense-grid">
-                  <LedIntensitySliders
-                    label="Circle LEDs"
-                    values={circleLEDs}
-                    onChange={updateLedIntensitiesFromSlider("circleLEDs", setCircleLEDs)}
-                  />
-                  <LedIntensitySliders
-                    label="Button LEDs"
-                    values={buttonLEDS}
-                    onChange={(values) => {
-                      setButtonLEDS(values);
-                      void sendActuatorData({ buttonLEDs: values });
-                    }}
-                  />
-                </div>
-
-                <div className="grid-2 dense-grid">
-                  <LedIntensitySliders
-                    label="Front LEGO LEDs"
-                    values={frontLegoLEDs}
-                    onChange={updateLedIntensitiesFromSlider("frontLegoLEDs", setFrontLegoLEDs)}
-                  />
-                  <LedIntensitySliders
-                    label="Rear LEGO LEDs"
-                    values={rearLegoLEDs}
-                    onChange={updateLedIntensitiesFromSlider("rearLegoLEDs", setRearLegoLEDs)}
-                  />
-                </div>
-
-                <div className="grid-2 dense-grid">
-                  <MotorSliders left={motorLeft} right={motorRight} onChange={updateMotorsFromSlider} />
-                  <SoundPicker value={sound} onChange={updateSoundFromPicker} />
-                </div>
-
-                <div className="grid-2 dense-grid">
-                  <ColourSlider label="FL RGB" rgb={flRGB} onChange={updateRgbFromSlider("flRGB", setFlRGB)} />
-                  <ColourSlider label="FR RGB" rgb={frRGB} onChange={updateRgbFromSlider("frRGB", setFrRGB)} />
-                  <ColourSlider label="BL RGB" rgb={blRGB} onChange={updateRgbFromSlider("blRGB", setBlRGB)} />
-                  <ColourSlider label="BR RGB" rgb={brRGB} onChange={updateRgbFromSlider("brRGB", setBrRGB)} />
-                </div>
-
-                <div className="grid-2 dense-grid">
-                  <ColourSlider
-                    label="Small bottom RGB"
-                    rgb={smallBottomRGB}
-                    onChange={(rgb) => {
-                      setSmallBottomRGB(rgb);
-                      void sendActuatorData({ smallBottomRGB: rgb });
-                    }}
-                  />
-                  <ColourSlider
-                    label="Small back RGB"
-                    rgb={smallBackRGB}
-                    onChange={(rgb) => {
-                      setSmallBackRGB(rgb);
-                      void sendActuatorData({ smallBackRGB: rgb });
-                    }}
-                  />
-                </div>
-
-                <div className="grid-2 dense-grid">
-                  <div className="grid-block extra-actuator-receiver">
-                    <div className="grid-title">Receiver LED</div>
-                    <label className="extra-actuator-slider">
-                      <span>Intensity</span>
-                      <input
-                        aria-label="Receiver LED intensity"
-                        type="range"
-                        min="0"
-                        max="15"
-                        value={clampInt(receiverLED, 0, 15)}
-                        onChange={(e) => {
-                          const nextReceiverLED = clampInt(parseInt(e.target.value, 10), 0, 15);
-                          setReceiverLED(nextReceiverLED);
-                          void sendActuatorData({ receiverLED: nextReceiverLED });
-                        }}
-                      />
-                      <strong>{clampInt(receiverLED, 0, 15)}</strong>
-                    </label>
-                  </div>
-
-                  <div className="grid-block extra-actuator-microphone">
-                    <div className="grid-title">Microphone LED</div>
-                    <label className="extra-actuator-toggle">
-                      <input
-                        checked={microphoneLED}
-                        type="checkbox"
-                        onChange={(e) => {
-                          setMicrophoneLED(e.target.checked);
-                          void sendActuatorData({ microphoneLED: e.target.checked });
-                        }}
-                      />
-                      <span>{microphoneLED ? "On" : "Off"}</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
+              <ActuatorPanel
+                circleLEDs={circleLEDs}
+                frontLegoLEDs={frontLegoLEDs}
+                rearLegoLEDs={rearLegoLEDs}
+                buttonLEDS={buttonLEDS}
+                flRGB={flRGB}
+                frRGB={frRGB}
+                blRGB={blRGB}
+                brRGB={brRGB}
+                smallBottomRGB={smallBottomRGB}
+                smallBackRGB={smallBackRGB}
+                motorLeft={motorLeft}
+                motorRight={motorRight}
+                sound={sound}
+                receiverLED={receiverLED}
+                microphoneLED={microphoneLED}
+                onApplyPreset={applyPreset}
+                onCircleLEDsChange={updateLedIntensitiesFromSlider("circleLEDs", setCircleLEDs)}
+                onFrontLegoLEDsChange={updateLedIntensitiesFromSlider("frontLegoLEDs", setFrontLegoLEDs)}
+                onRearLegoLEDsChange={updateLedIntensitiesFromSlider("rearLegoLEDs", setRearLegoLEDs)}
+                onButtonLEDsChange={(values) => {
+                  setButtonLEDS(values);
+                  void sendActuatorData({ buttonLEDs: values });
+                }}
+                onFlRGBChange={updateRgbFromSlider("flRGB", setFlRGB)}
+                onFrRGBChange={updateRgbFromSlider("frRGB", setFrRGB)}
+                onBlRGBChange={updateRgbFromSlider("blRGB", setBlRGB)}
+                onBrRGBChange={updateRgbFromSlider("brRGB", setBrRGB)}
+                onSmallBottomRGBChange={(rgb) => {
+                  setSmallBottomRGB(rgb);
+                  void sendActuatorData({ smallBottomRGB: rgb });
+                }}
+                onSmallBackRGBChange={(rgb) => {
+                  setSmallBackRGB(rgb);
+                  void sendActuatorData({ smallBackRGB: rgb });
+                }}
+                onMotorsChange={updateMotorsFromSlider}
+                onSoundChange={updateSoundFromPicker}
+                onReceiverLEDChange={(nextReceiverLED) => {
+                  setReceiverLED(nextReceiverLED);
+                  void sendActuatorData({ receiverLED: nextReceiverLED });
+                }}
+                onMicrophoneLEDChange={(nextMicrophoneLED) => {
+                  setMicrophoneLED(nextMicrophoneLED);
+                  void sendActuatorData({ microphoneLED: nextMicrophoneLED });
+                }}
+              />
             ) : null}
 
             {activeTab === "python" ? (
