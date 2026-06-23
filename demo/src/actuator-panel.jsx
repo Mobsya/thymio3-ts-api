@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PRESETS } from "./presets";
 import MotorSliders from "./motor-sliders";
 import { clampInt } from "./utils";
@@ -58,20 +59,58 @@ function rgb15ToHue(rgb) {
   return Math.round(60 * ((r - g) / delta + 4));
 }
 
+function areIntensitiesEqual(left, right) {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => clampInt(value, 0, 15) === clampInt(right[index], 0, 15))
+  );
+}
+
+function areRgbEqual(left, right) {
+  return (
+    clampInt(left.r, 0, 15) === clampInt(right.r, 0, 15) &&
+    clampInt(left.g, 0, 15) === clampInt(right.g, 0, 15) &&
+    clampInt(left.b, 0, 15) === clampInt(right.b, 0, 15)
+  );
+}
+
 function LedMatrixRow({ label, values, onChange }) {
+  const [draftValues, setDraftValues] = useState(null);
   const normalizedValues = values.map((value) => clampInt(value, 0, 15));
+  const displayedValues = draftValues ?? normalizedValues;
   const allValue = Math.round(
-    normalizedValues.reduce((total, value) => total + value, 0) / Math.max(1, normalizedValues.length)
+    displayedValues.reduce((total, value) => total + value, 0) / Math.max(1, displayedValues.length)
   );
 
-  function updateValue(index, value) {
-    const next = [...normalizedValues];
+  function updateDraftValue(index, value) {
+    const next = [...displayedValues];
     next[index] = clampInt(value, 0, 15);
-    onChange(next);
+    setDraftValues(next);
   }
 
-  function updateAll(value) {
-    onChange(Array(normalizedValues.length).fill(clampInt(value, 0, 15)));
+  function updateDraftAll(value) {
+    setDraftValues(Array(normalizedValues.length).fill(clampInt(value, 0, 15)));
+  }
+
+  function commitValues(next) {
+    const committedValues = next.map((value) => clampInt(value, 0, 15));
+    setDraftValues(null);
+
+    if (areIntensitiesEqual(committedValues, normalizedValues)) {
+      return;
+    }
+
+    onChange(committedValues);
+  }
+
+  function commitValue(index, value) {
+    const next = [...displayedValues];
+    next[index] = clampInt(value, 0, 15);
+    commitValues(next);
+  }
+
+  function commitAll(value) {
+    commitValues(Array(normalizedValues.length).fill(clampInt(value, 0, 15)));
   }
 
   return (
@@ -81,13 +120,16 @@ function LedMatrixRow({ label, values, onChange }) {
         aria-label={`${label} all LED intensity`}
         max="15"
         min="0"
-        onChange={(e) => updateAll(parseInt(e.target.value, 10))}
+        onBlur={(e) => commitAll(parseInt(e.currentTarget.value, 10))}
+        onChange={(e) => updateDraftAll(parseInt(e.target.value, 10))}
+        onKeyUp={(e) => commitAll(parseInt(e.currentTarget.value, 10))}
+        onPointerUp={(e) => commitAll(parseInt(e.currentTarget.value, 10))}
         type="range"
         value={allValue}
       />
       <div className="led-matrix-cells">
         {Array.from({ length: 8 }, (_, index) => {
-          const value = normalizedValues[index];
+          const value = displayedValues[index];
 
           return (
             <label className={`led-matrix-cell ${value === undefined ? "empty" : ""}`} key={index}>
@@ -100,7 +142,10 @@ function LedMatrixRow({ label, values, onChange }) {
                     aria-label={`${label} LED ${index + 1} intensity`}
                     max="15"
                     min="0"
-                    onChange={(e) => updateValue(index, parseInt(e.target.value, 10))}
+                    onBlur={(e) => commitValue(index, parseInt(e.currentTarget.value, 10))}
+                    onChange={(e) => updateDraftValue(index, parseInt(e.target.value, 10))}
+                    onKeyUp={(e) => commitValue(index, parseInt(e.currentTarget.value, 10))}
+                    onPointerUp={(e) => commitValue(index, parseInt(e.currentTarget.value, 10))}
                     type="range"
                     value={value}
                   />
@@ -142,11 +187,25 @@ function LedMatrix({ rows }) {
 
 function RgbChip({ label, rgb, onChange }) {
   const hue = rgb15ToHue(rgb);
+  const [draftHue, setDraftHue] = useState(null);
+  const displayedHue = draftHue ?? hue;
+  const displayedRgb = draftHue === null ? rgb : hueToRgb15(draftHue);
+
+  function commitHue(value) {
+    const nextRgb = hueToRgb15(parseInt(value, 10));
+    setDraftHue(null);
+
+    if (areRgbEqual(nextRgb, rgb)) {
+      return;
+    }
+
+    onChange(nextRgb);
+  }
 
   return (
     <label className="rgb-chip">
       <span className="rgb-chip-header">
-        <span className="rgb-chip-swatch" style={{ backgroundColor: rgbToCss(rgb) }} />
+        <span className="rgb-chip-swatch" style={{ backgroundColor: rgbToCss(displayedRgb) }} />
         <span>{label}</span>
       </span>
       <input
@@ -154,12 +213,49 @@ function RgbChip({ label, rgb, onChange }) {
         className="rgb-chip-range"
         max="360"
         min="0"
-        onChange={(e) => onChange(hueToRgb15(parseInt(e.target.value, 10)))}
+        onBlur={(e) => commitHue(e.currentTarget.value)}
+        onChange={(e) => setDraftHue(clampInt(parseInt(e.target.value, 10), 0, 360))}
+        onKeyUp={(e) => commitHue(e.currentTarget.value)}
+        onPointerUp={(e) => commitHue(e.currentTarget.value)}
         type="range"
-        value={hue}
+        value={displayedHue}
       />
-      <span className="rgb-chip-values">R {rgb.r} G {rgb.g} B {rgb.b}</span>
+      <span className="rgb-chip-values">R {displayedRgb.r} G {displayedRgb.g} B {displayedRgb.b}</span>
     </label>
+  );
+}
+
+function ReceiverLedSlider({ receiverLED, onChange }) {
+  const normalizedValue = clampInt(receiverLED, 0, 15);
+  const [draftValue, setDraftValue] = useState(null);
+  const displayedValue = draftValue ?? normalizedValue;
+
+  function commitValue(value) {
+    const nextValue = clampInt(parseInt(value, 10), 0, 15);
+    setDraftValue(null);
+
+    if (nextValue === normalizedValue) {
+      return;
+    }
+
+    onChange(nextValue);
+  }
+
+  return (
+    <>
+      <input
+        aria-label="Receiver LED intensity"
+        max="15"
+        min="0"
+        onBlur={(e) => commitValue(e.currentTarget.value)}
+        onChange={(e) => setDraftValue(clampInt(parseInt(e.target.value, 10), 0, 15))}
+        onKeyUp={(e) => commitValue(e.currentTarget.value)}
+        onPointerUp={(e) => commitValue(e.currentTarget.value)}
+        type="range"
+        value={displayedValue}
+      />
+      <strong>{displayedValue}</strong>
+    </>
   );
 }
 
@@ -253,15 +349,7 @@ export default function ActuatorPanel({
 
             <label className="compact-field grow">
               <span>Receiver</span>
-              <input
-                aria-label="Receiver LED intensity"
-                max="15"
-                min="0"
-                onChange={(e) => onReceiverLEDChange(clampInt(parseInt(e.target.value, 10), 0, 15))}
-                type="range"
-                value={clampInt(receiverLED, 0, 15)}
-              />
-              <strong>{clampInt(receiverLED, 0, 15)}</strong>
+              <ReceiverLedSlider receiverLED={receiverLED} onChange={onReceiverLEDChange} />
             </label>
 
             <label className="extra-actuator-toggle compact-toggle">
