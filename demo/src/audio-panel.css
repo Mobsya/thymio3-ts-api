@@ -1,0 +1,74 @@
+.audio-panel {
+  min-width: 0;
+}
+
+.audio-transport-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+}
+
+.audio-transport-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.audio-transport-icon {
+  width: 1em;
+  line-height: 1;
+  text-align: center;
+  font-size: 12px;
+}
+
+.audio-transport-icon.record {
+  color: var(--danger);
+}
+
+.audio-frequency-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.audio-slider-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.audio-slider-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text);
+}
+
+.audio-slider-header strong {
+  white-space: nowrap;
+}
+
+.audio-frequency-help {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.audio-play-frequency-button {
+  align-self: center;
+}
+
+@media (max-width: 760px) {
+  .audio-frequency-controls {
+    grid-template-columns: 1fr;
+  }
+}
