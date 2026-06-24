@@ -1,7 +1,7 @@
 .sensor-focus-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
 }
 
 .sensor-focus-controls {
@@ -49,7 +49,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
   background: var(--card);
 }
@@ -63,11 +63,11 @@
 
 .sensor-focus-row {
   display: grid;
-  grid-template-columns: 150px 74px minmax(0, 1fr);
+  grid-template-columns: 118px 52px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  min-height: 34px;
-  padding: 6px 10px;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 7px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -77,20 +77,28 @@
 
 .sensor-focus-row-label {
   min-width: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
 }
 
 .sensor-focus-row-source {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
+}
+
+.sensor-focus-value-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  min-width: 0;
 }
 
 .sensor-focus-values {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: 2px 8px;
   min-width: 0;
 }
 
@@ -102,12 +110,12 @@
 
 .sensor-focus-key {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
 }
 
 .sensor-focus-reading {
-  font-size: 14px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-weight: 900;
 }

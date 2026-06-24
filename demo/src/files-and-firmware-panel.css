@@ -1,0 +1,17 @@
+.files-and-firmware-panel {
+  min-width: 0;
+}
+
+.compact-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.compact-pre {
+  max-height: 150px;
+}

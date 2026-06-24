@@ -1,3 +1,4 @@
+import { useState } from "react";
 import "./colour-slider.css";
 import { clampInt } from "./utils";
 
@@ -58,10 +59,33 @@ function rgb15ToHue(rgb) {
 
 export default function ColourSlider({ label, rgb, onChange }) {
   const hue = rgb15ToHue(rgb);
+  const [draftHue, setDraftHue] = useState(null);
+  const displayedHue = draftHue ?? hue;
 
   function handleChange(e) {
     const nextHue = clampInt(parseInt(e.target.value, 10), 0, 360);
-    onChange(hueToRgb15(nextHue));
+    setDraftHue(nextHue);
+  }
+
+  function commitHue(value) {
+    const nextHue = clampInt(parseInt(value, 10), 0, 360);
+    const nextRgb = hueToRgb15(nextHue);
+
+    if (
+      nextRgb.r === rgb.r &&
+      nextRgb.g === rgb.g &&
+      nextRgb.b === rgb.b
+    ) {
+      setDraftHue(null);
+      return;
+    }
+
+    setDraftHue(null);
+    onChange(nextRgb);
+  }
+
+  function handleCommit(e) {
+    commitHue(e.currentTarget.value);
   }
 
   return (
@@ -75,8 +99,11 @@ export default function ColourSlider({ label, rgb, onChange }) {
           type="range"
           min="0"
           max="360"
-          value={hue}
+          value={displayedHue}
           onChange={handleChange}
+          onBlur={handleCommit}
+          onKeyUp={handleCommit}
+          onPointerUp={handleCommit}
         />
       </div>
       <div className="colour-values">

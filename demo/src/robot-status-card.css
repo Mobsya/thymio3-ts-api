@@ -1,12 +1,11 @@
 .robot-status-card {
-  margin-top: 10px;
   display: inline-flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: min(100%, 320px);
-  padding: 12px 16px;
+  gap: 5px;
+  min-width: min(100%, 260px);
+  padding: 8px 10px;
   border: 1px solid var(--border);
-  border-left: 6px solid #9ca3af;
+  border-left: 5px solid #9ca3af;
   border-radius: 8px;
   background: var(--card);
 }
@@ -32,10 +31,37 @@
 .robot-status {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
+}
+
+.robot-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.robot-status-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.robot-status-actions button {
+  min-height: 24px;
+  padding: 4px 7px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+
+.robot-status-actions button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .robot-status-card.connected .robot-status {
@@ -51,8 +77,8 @@
 }
 
 .robot-status-dot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: #9ca3af;
 }
@@ -80,7 +106,7 @@
 
 .robot-device-name {
   color: var(--text);
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 900;
   line-height: 1.15;
 }
@@ -91,7 +117,7 @@
   gap: 6px 12px;
   margin-top: 4px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
 }
@@ -101,4 +127,11 @@
   color: #7f1d1d;
   font-size: 13px;
   font-weight: 700;
+}
+
+.robot-reconnect-warning {
+  color: #854d0e;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
 }

@@ -1,0 +1,89 @@
+.sensors-panel {
+  flex: 0 0 var(--sensor-panel-height);
+}
+
+.sensors-panel .panel-header {
+  min-height: 34px;
+  padding: 5px 8px;
+}
+
+.sensors-panel .panel-body {
+  padding: 6px;
+}
+
+.sensor-stream-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.sensor-stream-select select {
+  min-height: 24px;
+  max-width: 88px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sensor-stream-select select:focus {
+  outline: 2px solid rgba(25, 118, 210, 0.35);
+  outline-offset: 1px;
+}
+
+.sensors-panel .sensor-focus-panel {
+  gap: 5px;
+}
+
+.sensors-panel .sensor-focus-controls,
+.sensors-panel .sensor-focus-selector {
+  gap: 4px;
+}
+
+.sensors-panel .sensor-focus-control {
+  min-height: 24px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.sensors-panel .sensor-focus-option {
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.sensors-panel .sensor-focus-row {
+  grid-template-columns: 92px minmax(0, 1fr);
+  min-height: 27px;
+  padding: 3px 5px;
+}
+
+.sensors-panel .sensor-focus-row-source {
+  display: none;
+}
+
+.sensors-panel .sensor-focus-row-label,
+.sensors-panel .sensor-focus-key,
+.sensors-panel .sensor-focus-reading {
+  font-size: 13px;
+}
+
+.sensors-panel .sensor-focus-values {
+  gap: 1px 6px;
+}
+
+@media (max-width: 1120px) {
+  .sensors-panel {
+    flex-basis: var(--sensor-panel-height);
+  }
+}
