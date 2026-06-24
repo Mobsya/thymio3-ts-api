@@ -2,14 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import "./python-editor.css";
 
+let pyodidePromise = null;
+
 // Lazy-load pyodide once
 async function loadPyodideOnce() {
-  const { loadPyodide } = await import(
-    /* @vite-ignore */ new URL("./assets/pyodide.mjs", window.location.href).toString()
-  );
-  return await loadPyodide({
-    indexURL: new URL("./assets/", window.location.href).toString()
-  });
+  if (!pyodidePromise) {
+    pyodidePromise = (async () => {
+      const { loadPyodide } = await import(
+        /* @vite-ignore */ new URL("./assets/pyodide.mjs", window.location.href).toString()
+      );
+      return await loadPyodide({
+        indexURL: new URL("./assets/", window.location.href).toString()
+      });
+    })().catch((error) => {
+      pyodidePromise = null;
+      throw error;
+    });
+  }
+
+  return pyodidePromise;
 }
 
 function debounce(fn, ms) {
