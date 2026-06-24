@@ -157,11 +157,6 @@ h3 {
   flex: 0 0 var(--sensor-panel-height);
 }
 
-.stdout-panel {
-  flex: 1 1 0;
-  min-height: 80px;
-}
-
 .memory-panel {
   grid-column: 1;
   grid-row: 1;
@@ -171,15 +166,6 @@ h3 {
 .workbench-panel {
   grid-column: 1;
   grid-row: 2;
-}
-
-.stdout-panel-scroll .stdout-console {
-  min-height: 100%;
-  max-height: none;
-}
-
-.stdout-panel .panel-body {
-  padding: 6px;
 }
 
 .sensors-panel .panel-header {
@@ -334,6 +320,15 @@ button {
 }
 
 button:hover { filter: brightness(0.96); }
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+button:disabled:hover {
+  filter: none;
+}
 
 button.secondary {
   background: #334155;

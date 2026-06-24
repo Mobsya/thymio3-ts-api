@@ -5,7 +5,7 @@ import PythonEditor from "./python-editor";
 import RobotStatusCard from "./robot-status-card";
 import { SENSOR_FOCUS_SENSOR_IDS } from "./sensor-options";
 import SensorFocusPanel from "./sensor-focus-panel";
-import StdoutConsole from "./stdout-console";
+import StdoutPanel from "./stdout-panel";
 import { clampInt } from "./utils";
 
 /**
@@ -16,12 +16,15 @@ function getThymio() {
   return window.thymio;
 }
 
-const DEFAULT_CODE = `import thymio
+const DEFAULT_CODE = `
+import thymio
 import time
+
 mot = thymio.MOTORS()
 mot.set_speed(200, -200)
 rgb_fl = thymio.LEDS_RGB(0)
-while 1:
+
+while True:
     rgb_fl.set_intensity(1, 0, 0)
     time.sleep(0.2)
     rgb_fl.set_intensity(0, 1, 0)
@@ -485,11 +488,7 @@ export default function App() {
             </div>
           </Panel>
 
-          <Panel title="STD OUT" className="telemetry-panel stdout-panel">
-            <div className="panel-scroll stdout-panel-scroll">
-              <StdoutConsole entries={stdOut} />
-            </div>
-          </Panel>
+          <StdoutPanel entries={stdOut} onClear={() => setStdOut([])} />
         </div>
 
         <Panel title="Device & Memory" className="telemetry-panel memory-panel">
