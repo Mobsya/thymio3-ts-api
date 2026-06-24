@@ -430,16 +430,6 @@ input[type="file"] {
   justify-content: flex-end;
 }
 
-.compact-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel-soft);
-}
-
 .pre {
   margin: 0;
   background: #0b1220;
@@ -450,10 +440,6 @@ input[type="file"] {
   overflow: auto;
   max-height: 260px;
   font-size: 12px;
-}
-
-.compact-pre {
-  max-height: 150px;
 }
 
 .grid-block {
@@ -480,27 +466,6 @@ input[type="file"] {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.progress-container {
-  width: 100%;
-  background-color: #eef2f7;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  height: 24px;
-  overflow: hidden;
-}
-
-.progress-bar {
-  height: 100%;
-  width: 0%;
-  background-color: var(--success);
-  transition: width 0.2s ease;
-  text-align: center;
-  color: white;
-  line-height: 24px;
-  font-size: 12px;
-  font-weight: 900;
 }
 
 .error-box {

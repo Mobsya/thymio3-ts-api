@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import ActuatorPanel from "./actuator-panel";
 import DeviceMemoryStatus from "./device-memory-status";
+import FilesAndFirmwarePanel from "./files-and-firmware-panel";
 import PythonEditor from "./python-editor";
 import RobotStatusCard from "./robot-status-card";
 import { SENSOR_FOCUS_SENSOR_IDS } from "./sensor-options";
@@ -32,17 +33,6 @@ while True:
     rgb_fl.set_intensity(0, 0, 1)
     time.sleep(0.2)
 `;
-
-function ProgressBar({ value }) {
-  const pct = clampInt(value ?? 0, 0, 100);
-  return (
-    <div className="progress-container">
-      <div className="progress-bar" style={{ width: `${pct}%` }}>
-        {pct}%
-      </div>
-    </div>
-  );
-}
 
 function Panel({ title, children, actions, className = "" }) {
   return (
@@ -106,29 +96,12 @@ export default function App() {
   const [receiverLED, setReceiverLED] = useState(0);
   const [microphoneLED, setMicrophoneLED] = useState(false);
 
-  // Audio
-  const audioRef = useRef(null);
-  const [audioProgress, setAudioProgress] = useState(0);
-  const [audioFreq, setAudioFreq] = useState(0);
-  const [audioFreqDuration, setAudioFreqDuration] = useState(0);
   const stdOutEntryId = useRef(0);
-
-  // Files
-  const fileUploadRef = useRef(null);
-  const [fileProgress, setFileProgress] = useState(0);
-  const [fileDownloadName, setFileDownloadName] = useState("");
-  const [filename, setFilename] = useState("");
-  const [fileList, setFileList] = useState("Waiting for file listings...");
 
   // Device info
   const [firmwareInfo, setFirmwareInfo] = useState(null);
   const [firmwareInfoError, setFirmwareInfoError] = useState("");
-  const [newFirmwareInfo, setNewFirmwareInfo] = useState("Waiting for firmware info...");
   const [activeTab, setActiveTab] = useState("actuators");
-
-  // OTA
-  const firmwareRef = useRef(null);
-  const [otaProgress, setOtaProgress] = useState(0);
 
   // --- Event listeners from thymio.global.js ---
   useEffect(() => {
@@ -141,10 +114,6 @@ export default function App() {
     };
     const onSensors = (event) => setMainSensors(event.detail ?? null);
     const onOtherSensors = (event) => setOtherSensors(event.detail ?? null);
-
-    const onAudioProgress = (e) => setAudioProgress(clampInt(e.detail?.percentage ?? 0, 0, 100));
-    const onFileProgress = (e) => setFileProgress(clampInt(e.detail?.percentage ?? 0, 0, 100));
-    const onOtaProgress = (e) => setOtaProgress(clampInt(e.detail?.percentage ?? 0, 0, 100));
 
     const onConnected = (event) => {
       const isConnected = Boolean(event.detail);
@@ -198,11 +167,6 @@ export default function App() {
     document.addEventListener("thymio-sensor-values", onSensors);
     document.addEventListener("thymio-sensor-other-values", onOtherSensors);
 
-    document.addEventListener("thymio-audio-upload-progress", onAudioProgress);
-    document.addEventListener("thymio-file-upload-progress", onFileProgress);
-    document.addEventListener("thymio-file-download-progress", onFileProgress);
-    document.addEventListener("thymio-ota-upload-progress", onOtaProgress);
-
     return () => {
       document.removeEventListener("thymio-connected", onConnected);
       document.removeEventListener("thymio-prompt-manual-reconnection", onManualReconn);
@@ -211,10 +175,6 @@ export default function App() {
       document.removeEventListener("thymio-sensor-values", onSensors);
       document.removeEventListener("thymio-sensor-other-values", onOtherSensors);
 
-      document.removeEventListener("thymio-audio-upload-progress", onAudioProgress);
-      document.removeEventListener("thymio-file-upload-progress", onFileProgress);
-      document.removeEventListener("thymio-file-download-progress", onFileProgress);
-      document.removeEventListener("thymio-ota-upload-progress", onOtaProgress);
     };
   }, []);
 
@@ -336,104 +296,6 @@ export default function App() {
     const t = getThymio();
     if (!t?.stopSensorStreaming) return;
     await t.stopSensorStreaming();
-  }
-
-  async function uploadAudio() {
-    const t = getThymio();
-    const file = audioRef.current?.files?.[0];
-    if (!t?.uploadAudioFile) return;
-    if (!file) return alert("Pick an audio file first");
-    setAudioProgress(0);
-    await t.uploadAudioFile(file);
-  }
-
-  async function playFrequency() {
-    const t = getThymio();
-    if (!t?.playFrequency) return;
-    await t.playFrequency(clampInt(audioFreq, 0, 300), clampInt(audioFreqDuration, 0, 1000));
-  }
-
-  async function uploadFile() {
-    const t = getThymio();
-    const file = fileUploadRef.current?.files?.[0];
-    if (!t?.uploadFile) return;
-    if (!file) return alert("Pick a file first");
-    setFileProgress(0);
-    await t.uploadFile(file);
-  }
-
-  async function downloadFile() {
-    const t = getThymio();
-    if (!t?.downloadFile) return;
-    if (!fileDownloadName.trim()) return alert("Enter a filename to download");
-    setFileProgress(0);
-    const res = await t.downloadFile(fileDownloadName.trim());
-    console.log(res);
-  }
-
-  async function saveFile() {
-    const t = getThymio();
-    if (!t?.saveFile) return;
-    if (!filename.trim()) return alert("Enter a filename");
-    await t.saveFile(filename.trim());
-  }
-
-  async function deleteFile() {
-    const t = getThymio();
-    if (!t?.deleteFile) return;
-    if (!filename.trim()) return alert("Enter a filename");
-    await t.deleteFile(filename.trim());
-  }
-
-  async function eraseAllFiles() {
-    const t = getThymio();
-    if (!t?.eraseAllFiles) return;
-    await t.eraseAllFiles();
-  }
-
-  async function freeMemory() {
-    const t = getThymio();
-    if (!t?.freeMemory) return;
-    await t.freeMemory();
-  }
-
-  async function listFiles() {
-    const t = getThymio();
-    if (!t?.listFiles) return;
-    const list = await t.listFiles();
-    setFileList(JSON.stringify(list, null, 2));
-  }
-
-  async function checkForNewFirmware() {
-    const t = getThymio();
-    if (!t?.isNewerFirmwareAvailable) return;
-    const info = await t.isNewerFirmwareAvailable();
-    setNewFirmwareInfo(JSON.stringify(info, null, 2));
-  }
-
-  async function updateFirmware() {
-    const t = getThymio();
-    if (!t?.updateFirmware) return;
-    setOtaProgress(0);
-    await t.updateFirmware();
-  }
-
-  async function startOtaUpload() {
-    const t = getThymio();
-    if (!t?.uploadFirmware) return;
-    const file = firmwareRef.current?.files?.[0];
-    if (!file) return alert("Pick a firmware file first");
-    setOtaProgress(0);
-
-    const arrayBuffer = await file.arrayBuffer();
-    const firmware = new Uint8Array(arrayBuffer);
-    await t.uploadFirmware(firmware);
-  }
-
-  async function stopOtaUpload() {
-    const t = getThymio();
-    if (!t?.stopFirmwareUpload) return;
-    await t.stopFirmwareUpload();
   }
 
   function applyPreset(preset) {
@@ -606,118 +468,7 @@ export default function App() {
               </div>
             ) : null}
 
-            {activeTab === "files" ? (
-              <div className="tab-stack">
-                <div className="compact-group">
-                  <div className="grid-title">Files</div>
-                  <div className="row wrap">
-                    <input ref={fileUploadRef} type="file" />
-                    <button onClick={uploadFile}>Upload file</button>
-                  </div>
-
-                  <div className="row wrap">
-                    <input
-                      type="text"
-                      value={fileDownloadName}
-                      onChange={(e) => setFileDownloadName(e.target.value)}
-                      placeholder="filename to download"
-                    />
-                    <button onClick={downloadFile}>Download file</button>
-                  </div>
-
-                  <div className="subhead">Upload/Download progress</div>
-                  <ProgressBar value={fileProgress} />
-
-                  <div className="row wrap">
-                    <input
-                      type="text"
-                      value={filename}
-                      onChange={(e) => setFilename(e.target.value)}
-                      placeholder="filename"
-                    />
-                    <button onClick={saveFile}>Save file</button>
-                    <button className="secondary" onClick={deleteFile}>
-                      Delete file
-                    </button>
-                    <button className="secondary" onClick={eraseAllFiles}>
-                      Erase all files
-                    </button>
-                    <button className="secondary" onClick={freeMemory}>
-                      Free memory
-                    </button>
-                    <button className="secondary" onClick={listFiles}>
-                      List files
-                    </button>
-                  </div>
-                  <pre className="pre compact-pre">{fileList}</pre>
-                </div>
-
-                <div className="compact-group">
-                  <div className="grid-title">Automatic Firmware Update</div>
-                  <div className="row wrap">
-                    <button onClick={checkForNewFirmware}>Check for newer firmware</button>
-                    <button className="secondary" onClick={updateFirmware}>
-                      Update Firmware
-                    </button>
-                  </div>
-                  <pre className="pre compact-pre">{newFirmwareInfo}</pre>
-
-                  <div className="subhead">Upload progress</div>
-                  <ProgressBar value={otaProgress} />
-                </div>
-
-                <div className="compact-group">
-                  <div className="grid-title">Manual Firmware Update</div>
-                  <div className="row wrap">
-                    <input ref={firmwareRef} type="file" />
-                    <button onClick={startOtaUpload}>Start OTA</button>
-                    <button className="secondary" onClick={stopOtaUpload}>
-                      Stop OTA Upload
-                    </button>
-                  </div>
-                </div>
-
-                <div className="compact-group">
-                  <div className="grid-title">Audio</div>
-                  <div className="row wrap">
-                    <input ref={audioRef} type="file" />
-                    <button onClick={uploadAudio}>Upload Audio file</button>
-                    <button className="secondary" onClick={() => getThymio()?.playAudioFile?.()}>
-                      Play
-                    </button>
-                    <button className="secondary" onClick={() => getThymio()?.stopAudioFile?.()}>
-                      Stop
-                    </button>
-                    <button className="secondary" onClick={() => getThymio()?.recordAudio?.(3)}>
-                      Record (3s)
-                    </button>
-                  </div>
-
-                  <div className="subhead">Upload progress</div>
-                  <ProgressBar value={audioProgress} />
-
-                  <div className="row wrap">
-                    <input
-                      type="number"
-                      min={0}
-                      max={300}
-                      value={audioFreq}
-                      onChange={(e) => setAudioFreq(parseInt(e.target.value, 10) || 0)}
-                      placeholder="frequency"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      max={1000}
-                      value={audioFreqDuration}
-                      onChange={(e) => setAudioFreqDuration(parseInt(e.target.value, 10) || 0)}
-                      placeholder="duration"
-                    />
-                    <button onClick={playFrequency}>Play Frequency</button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+            {activeTab === "files" ? <FilesAndFirmwarePanel /> : null}
           </div>
         </Panel>
       </main>
