@@ -4,8 +4,7 @@ import DeviceMemoryStatus from "./device-memory-status";
 import FilesAndFirmwarePanel from "./files-and-firmware-panel";
 import PythonEditor from "./python-editor";
 import RobotStatusCard from "./robot-status-card";
-import { SENSOR_FOCUS_SENSOR_IDS } from "./sensor-options";
-import SensorFocusPanel from "./sensor-focus-panel";
+import SensorPanel from "./sensor-panel";
 import StdoutPanel from "./stdout-panel";
 import { clampInt } from "./utils";
 
@@ -76,8 +75,6 @@ export default function App() {
 
   // Streams / output
   const [stdOut, setStdOut] = useState([]);
-  const [mainSensors, setMainSensors] = useState(null);
-  const [otherSensors, setOtherSensors] = useState(null);
 
   // Actuators
   const [circleLEDs, setCircleLEDs] = useState(Array(8).fill(0));
@@ -112,9 +109,6 @@ export default function App() {
         { id: ++stdOutEntryId.current, value },
       ]);
     };
-    const onSensors = (event) => setMainSensors(event.detail ?? null);
-    const onOtherSensors = (event) => setOtherSensors(event.detail ?? null);
-
     const onConnected = (event) => {
       const isConnected = Boolean(event.detail);
 
@@ -124,14 +118,6 @@ export default function App() {
         setPromptManualReconnection(false);
         setFirmwareInfo(null);
         setFirmwareInfoError("");
-
-        void (async () => {
-          try {
-            await getThymio()?.startAllSensorStreaming?.();
-          } catch (err) {
-            console.warn("Failed to start sensor streaming", err);
-          }
-        })();
 
         void (async () => {
           try {
@@ -164,16 +150,12 @@ export default function App() {
     document.addEventListener("thymio-prompt-manual-reconnection", onManualReconn);
     document.addEventListener("thymio-python-execution-status", onPythonExecStatus);
     document.addEventListener("thymio-std-out-values", onStdOut);
-    document.addEventListener("thymio-sensor-values", onSensors);
-    document.addEventListener("thymio-sensor-other-values", onOtherSensors);
 
     return () => {
       document.removeEventListener("thymio-connected", onConnected);
       document.removeEventListener("thymio-prompt-manual-reconnection", onManualReconn);
       document.removeEventListener("thymio-python-execution-status", onPythonExecStatus);
       document.removeEventListener("thymio-std-out-values", onStdOut);
-      document.removeEventListener("thymio-sensor-values", onSensors);
-      document.removeEventListener("thymio-sensor-other-values", onOtherSensors);
 
     };
   }, []);
@@ -274,30 +256,6 @@ export default function App() {
     void sendActuatorData({ sound: nextSound });
   }
 
-  async function startMainSensors() {
-    const t = getThymio();
-    if (!t?.startMainSensorStreaming) return;
-    await t.startMainSensorStreaming();
-  }
-
-  async function startOtherSensors() {
-    const t = getThymio();
-    if (!t?.startSecondarySensorStreaming) return;
-    await t.startSecondarySensorStreaming();
-  }
-
-  async function startAllSensors() {
-    const t = getThymio();
-    if (!t?.startAllSensorStreaming) return;
-    await t.startAllSensorStreaming();
-  }
-
-  async function stopSensors() {
-    const t = getThymio();
-    if (!t?.stopSensorStreaming) return;
-    await t.stopSensorStreaming();
-  }
-
   function applyPreset(preset) {
     // helper to set many fields safely
     if (preset.circleLEDs) setCircleLEDs(preset.circleLEDs);
@@ -325,30 +283,7 @@ export default function App() {
     <div className="page">
       <main className="dashboard-grid">
         <div className="telemetry-stack">
-          <Panel
-            title="Sensors"
-            className="telemetry-panel sensors-panel"
-            actions={
-              <div className="row wrap compact-actions">
-                <button onClick={startMainSensors}>Main</button>
-                <button onClick={startOtherSensors}>Other</button>
-                <button onClick={startAllSensors}>All</button>
-                <button className="secondary" onClick={stopSensors}>
-                  Stop
-                </button>
-              </div>
-            }
-          >
-            <div className="panel-scroll sensor-panel-scroll">
-              <SensorFocusPanel
-                mainSensors={mainSensors}
-                otherSensors={otherSensors}
-                focusedSensors={SENSOR_FOCUS_SENSOR_IDS}
-                onFocusedSensorsChange={() => {}}
-                showSelector={false}
-              />
-            </div>
-          </Panel>
+          <SensorPanel />
 
           <StdoutPanel entries={stdOut} onClear={() => setStdOut([])} />
         </div>

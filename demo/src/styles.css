@@ -153,10 +153,6 @@ h3 {
   gap: var(--dashboard-gap);
 }
 
-.sensors-panel {
-  flex: 0 0 var(--sensor-panel-height);
-}
-
 .memory-panel {
   grid-column: 1;
   grid-row: 1;
@@ -166,35 +162,6 @@ h3 {
 .workbench-panel {
   grid-column: 1;
   grid-row: 2;
-}
-
-.sensors-panel .panel-header {
-  min-height: 34px;
-  padding: 5px 8px;
-}
-
-.sensors-panel .panel-body {
-  padding: 6px;
-}
-
-.sensors-panel .sensor-focus-row {
-  grid-template-columns: 92px minmax(0, 1fr);
-  min-height: 27px;
-  padding: 3px 5px;
-}
-
-.sensors-panel .sensor-focus-row-source {
-  display: none;
-}
-
-.sensors-panel .sensor-focus-row-label,
-.sensors-panel .sensor-focus-key,
-.sensors-panel .sensor-focus-reading {
-  font-size: 13px;
-}
-
-.sensors-panel .sensor-focus-values {
-  gap: 1px 6px;
 }
 
 .memory-panel-scroll {
@@ -508,10 +475,6 @@ input[type="file"] {
   .telemetry-stack {
     grid-column: 2;
     grid-row: 1 / 3;
-  }
-
-  .sensors-panel {
-    flex-basis: var(--sensor-panel-height);
   }
 
   .memory-panel {
