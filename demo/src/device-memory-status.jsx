@@ -158,14 +158,14 @@ export default function DeviceMemoryStatus({ isConnected, pollIntervalMs = 1000,
         <MemorySparkline
           samples={samples}
           keyName="ram"
-          label="RAM free"
+          label="RAM"
           colorClass="ram"
           value={memoryInfo?.ram_bytes_free}
         />
         <MemorySparkline
           samples={samples}
           keyName="flash"
-          label="Flash free"
+          label="Flash"
           colorClass="flash"
           value={memoryInfo?.flash_bytes_free}
         />
