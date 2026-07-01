@@ -131,17 +131,25 @@ async function connect() {
     await otaCommandCharacteristic.startNotifications();
     otaCommandCharacteristic.addEventListener('characteristicvaluechanged', ota.otaCommandNotificationHandler);
 
-    // Get the device firmware version and check the version compatibility
-    const firmwareInfo = await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic);
-    const firmwareVersion = firmwareInfo.esp32_ver;
-    await checkFirmwareCompatibility(firmwareVersion);
-
     dispatchConnectedEvent(true);
 
     console.log("✅ Connected to Thymio 3 !");
+
+    checkFirmwareCompatibilityInBackground(deviceInfoCharacteristic);
   } else {
     throw new Error("Bluetooth GATT is not available.")
   }
+}
+
+function checkFirmwareCompatibilityInBackground(deviceInfoChar: BluetoothRemoteGATTCharacteristic): void {
+  void (async () => {
+    try {
+      const firmwareInfo = await deviceInfo.getFirmwareInfo(deviceInfoChar);
+      await checkFirmwareCompatibility(firmwareInfo.esp32_ver);
+    } catch (error) {
+      console.warn("[Thymio 3 API] Firmware compatibility check failed:", error);
+    }
+  })();
 }
 
 function onDisconnected() {
