@@ -16,9 +16,6 @@ export const OTA_CUSTOMER_CHARACTERISTIC_UUID = 0x8023;
 
 export const MTU = 500;
 
-export const FIRMWARE_PAYLOAD_SIZE = MTU - 4;
-export const FIRMWARE_SECTOR_SIZE = 4096; // 4KB;
-
 export const THYMIO_CONNECTED_EVENT_ID = 'thymio-connected';
 export const THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID = 'thymio-prompt-manual-reconnection';
 export const THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID = 'thymio-python-execution-status';

@@ -41,7 +41,7 @@ export async function isNewerFirmwareAvailable(
 
 export async function getNewFirmware(
 	deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic
-): Promise<ArrayBuffer> {
+): Promise<Uint8Array<ArrayBuffer>> {
 	const localVersion = (await getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
 	const latestRelease = await getLatestRelease();
 
@@ -65,12 +65,13 @@ export async function updateFirmware(
   return await uploadFirmware(otaCommandCharacteristic, otaFirmwareCharacteristic, newFirmware);
 }
 
-async function downloadFirmware(url: string): Promise<ArrayBuffer> {
+async function downloadFirmware(url: string): Promise<Uint8Array<ArrayBuffer>> {
 	const response = await fetch(url);
 
 	if (!response.ok) throw new Error("Firmware download failed");
 
-	return await response.arrayBuffer();
+	const arrayBuf = await response.arrayBuffer();
+	return new Uint8Array(arrayBuf);
 }
 
 async function getLatestRelease() {

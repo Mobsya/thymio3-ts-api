@@ -17,8 +17,10 @@ import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
 import { checkFirmwareCompatibility } from "./firmware-compatibility";
 
-let device: BluetoothDevice | undefined;
 let reconnecting = false;
+
+let device: BluetoothDevice | undefined;
+let server: BluetoothRemoteGATTServer | undefined;
 let commandCharacteristic: BluetoothRemoteGATTCharacteristic;
 let sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic;
 let pythonCharacteristic: BluetoothRemoteGATTCharacteristic;
@@ -94,7 +96,7 @@ export async function disconnect(): Promise<void> {
  */
 async function connect() {
   if (device && device.gatt) {
-    const server = await device.gatt.connect();
+    server = await device.gatt.connect();
     const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
 
     commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
@@ -120,16 +122,6 @@ async function connect() {
 
     deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
     await deviceInfoCharacteristic.startNotifications();
-
-    const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
-
-    otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
-    await otaFirmwareCharacteristic.startNotifications();
-    otaFirmwareCharacteristic.addEventListener('characteristicvaluechanged', ota.otaFirmwareNotificationHandler);
-
-    otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
-    await otaCommandCharacteristic.startNotifications();
-    otaCommandCharacteristic.addEventListener('characteristicvaluechanged', ota.otaCommandNotificationHandler);
 
     dispatchConnectedEvent(true);
 
@@ -266,13 +258,14 @@ export async function isNewerFirmwareAvailable(): Promise<boolean> {
   return await updater.isNewerFirmwareAvailable(deviceInfoCharacteristic);
 }
 
-export async function getNewFirmware(): Promise<ArrayBuffer> {
+export async function getNewFirmware(): Promise<Uint8Array<ArrayBuffer>> {
   return await updater.getNewFirmware(deviceInfoCharacteristic);
 }
 
 export async function updateFirmware(): Promise<void> {
   // Temporary fix for the OTA slowdown
-  unsubscribeFromCharacteristics();
+  await unsubscribeFromMainCharacteristics();
+  await connectToOTAService();
 
   return await updater.updateFirmware(
     deviceInfoCharacteristic,
@@ -283,9 +276,11 @@ export async function updateFirmware(): Promise<void> {
 
 //// OTA CHARACTERISTIC
 
-export async function uploadFirmware(firmware: ArrayBuffer): Promise<void> {
-  // Temporary fix for the OTA slowdown
-  unsubscribeFromCharacteristics();
+export async function uploadFirmware(
+  firmware: Uint8Array<ArrayBuffer>
+): Promise<void> {
+  await unsubscribeFromMainCharacteristics();
+  await connectToOTAService();
 
   return await ota.uploadFirmware(
     otaCommandCharacteristic,
@@ -427,8 +422,21 @@ function dispatchConnectedEvent(connected: boolean) {
   document.dispatchEvent(connectedEvent);
 }
 
-// Temporary fix for the OTA slowdown
-async function unsubscribeFromCharacteristics() {
+async function connectToOTAService() {
+  if(device && device.gatt?.connected && server && server.connected) {
+    const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
+
+    otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
+    await otaFirmwareCharacteristic.startNotifications();
+    otaFirmwareCharacteristic.addEventListener('characteristicvaluechanged', ota.otaFirmwareNotificationHandler);
+
+    otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
+    await otaCommandCharacteristic.startNotifications();
+    otaCommandCharacteristic.addEventListener('characteristicvaluechanged', ota.otaCommandNotificationHandler);
+  }
+}
+
+async function unsubscribeFromMainCharacteristics() {
   await sensorStreamCharacteristic.stopNotifications();
   sensorStreamCharacteristic.removeEventListener('characteristicvaluechanged', sensorStream.handleStreamResponse);
 
