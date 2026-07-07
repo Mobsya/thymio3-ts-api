@@ -76,8 +76,8 @@ export function numberToBytes(value: number, byteLength: number) {
   return bytes;
 }
 
-export function crc16_ccitt(buffer: Uint8Array): number {
-  let crc = 0x0000;
+export function crc16_ccitt(buffer: Uint8Array, init = 0x0000): number {
+  let crc = init;
   for (let b of buffer) {
       crc ^= b << 8;
       for (let i = 0; i < 8; i++) {
