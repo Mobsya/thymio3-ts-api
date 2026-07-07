@@ -12,10 +12,10 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsdown",
+    "build": "tsc --noEmit && tsdown",
     "install-demo": "npm install --prefix demo",
-    "build-demo": "tsdown && npm run build --prefix demo",
-    "run-demo": "tsdown && npm run dev --prefix demo"
+    "build-demo": "tsc --noEmit && tsdown && npm run build --prefix demo",
+    "run-demo": "tsc --noEmit && tsdown && npm run dev --prefix demo"
   },
   "author": "",
   "license": "ISC",
