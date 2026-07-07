@@ -258,7 +258,7 @@ export async function isNewerFirmwareAvailable(): Promise<boolean> {
   return await updater.isNewerFirmwareAvailable(deviceInfoCharacteristic);
 }
 
-export async function getNewFirmware(): Promise<ArrayBuffer> {
+export async function getNewFirmware(): Promise<Uint8Array<ArrayBuffer>> {
   return await updater.getNewFirmware(deviceInfoCharacteristic);
 }
 
@@ -277,8 +277,7 @@ export async function updateFirmware(): Promise<void> {
 //// OTA CHARACTERISTIC
 
 export async function uploadFirmware(
-  firmware: ota.FirmwareSource,
-  options?: ota.OtaUploadOptions
+  firmware: Uint8Array<ArrayBuffer>
 ): Promise<void> {
   await unsubscribeFromMainCharacteristics();
   await connectToOTAService();
@@ -286,8 +285,7 @@ export async function uploadFirmware(
   return await ota.uploadFirmware(
     otaCommandCharacteristic,
     otaFirmwareCharacteristic,
-    firmware,
-    options
+    firmware
   );
 }
 
