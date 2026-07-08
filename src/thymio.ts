@@ -36,38 +36,43 @@ let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic;
  * Request a bluetooth device and connect to it.
  */
 export async function requestAndConnect(): Promise<void> {
-  if (!navigator.bluetooth) {
-    throw new Error("Web Bluetooth not supported");
+  try {
+    if (!navigator.bluetooth) {
+      throw new Error("Web Bluetooth not supported");
+    }
+
+    // For Chromium-based browsers
+    /*
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'THYMIO' }],
+      optionalServices: [
+        MAIN_SERVICE_UUID,
+        OTA_SERVICE_UUID
+      ]
+    });
+    */
+
+    device = await navigator.bluetooth.requestDevice({
+      filters: [
+        { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID]}
+      ]
+    });
+
+    if (!device.name?.startsWith('THYMIO')) {
+      device = undefined;
+      throw new Error('Not a Thymio device');
+    }
+
+    // To handle the reconnects
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+
+    await connect();
+
+    dispatchConnectedEvent(true);
+  } catch (error) {
+    console.error(`Could not connect to the Thymio device`, error);
+    dispatchConnectedEvent(false);
   }
-
-  // For Chromium-based browsers
-  /*
-  device = await navigator.bluetooth.requestDevice({
-    filters: [{ namePrefix: 'THYMIO' }],
-    optionalServices: [
-      MAIN_SERVICE_UUID,
-      OTA_SERVICE_UUID
-    ]
-  });
-  */
-
-  device = await navigator.bluetooth.requestDevice({
-    filters: [
-      { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID]}
-    ]
-  });
-
-  if (!device.name?.startsWith('THYMIO')) {
-    device = undefined;
-    throw new Error('Not a Thymio device');
-  }
-
-  // To handle the reconnects
-  device.addEventListener('gattserverdisconnected', onDisconnected);
-
-  await connect();
-
-  console.log("done")
 }
 
 export function isConnected(): boolean {
@@ -122,8 +127,6 @@ async function connect() {
 
     deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
     await deviceInfoCharacteristic.startNotifications();
-
-    dispatchConnectedEvent(true);
 
     console.log("✅ Connected to Thymio 3 !");
 
