@@ -45,12 +45,6 @@ function SensorValue({ value, colourPreviewMode }) {
   );
 }
 
-function getColourPreviewMode(sensorId) {
-  if (sensorId === "colorSensor") return "hsv";
-  if (sensorId === "colorRaw") return "raw";
-  return null;
-}
-
 export default function SensorFocusPanel({
   mainSensors,
   otherSensors,
@@ -110,7 +104,9 @@ export default function SensorFocusPanel({
             <div className="sensor-focus-row" key={option.id}>
               <span className="sensor-focus-row-label">{option.label}</span>
               <span className="sensor-focus-row-source">{option.source}</span>
-              <SensorValue colourPreviewMode={getColourPreviewMode(option.id)} value={value} />
+              {option.id === "colorSensor" ? (
+                <SensorValue colourPreviewMode="hsv" value={value} />
+              ) : null}
             </div>
           );
         })}
