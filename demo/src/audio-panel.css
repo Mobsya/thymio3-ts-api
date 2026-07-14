@@ -2,14 +2,31 @@
   min-width: 0;
 }
 
+.audio-subpanel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.audio-subpanel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+}
+
+.audio-frequency-panel {
+  grid-column: 1 / -1;
+}
+
 .audio-transport-group {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: white;
 }
 
 .audio-transport-button {
@@ -27,6 +44,11 @@
 
 .audio-transport-icon.record {
   color: var(--danger);
+}
+
+.audio-upload-controls {
+  display: grid;
+  gap: 8px;
 }
 
 .audio-frequency-controls {
@@ -68,6 +90,14 @@
 }
 
 @media (max-width: 760px) {
+  .audio-subpanel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .audio-frequency-panel {
+    grid-column: auto;
+  }
+
   .audio-frequency-controls {
     grid-template-columns: 1fr;
   }
