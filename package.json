@@ -6,7 +6,7 @@
   "thymio": {
     "firmwareCompatibility": {
       "min": "v1.8.0",
-      "max": "v1.8.0"
+      "max": "v1.9.0"
     }
   },
   "main": "dist/index.js",

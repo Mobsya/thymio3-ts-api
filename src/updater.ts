@@ -1,4 +1,3 @@
-import { getFirmwareInfo } from "./device-info";
 import { compareVersions } from "./firmware-compatibility";
 import { uploadFirmware } from "./ota";
 
@@ -29,9 +28,8 @@ export async function fetchFirmwareVersions(): Promise<FirmwareVersion[]> {
 }
 
 export async function isNewerFirmwareAvailable(
-	deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic
+	localVersion: string
 ): Promise<boolean> {
-	const localVersion = (await getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
 	const latestRelease = await getLatestRelease();
 
 	const remoteVersion = latestRelease.version;
@@ -40,9 +38,8 @@ export async function isNewerFirmwareAvailable(
 }
 
 export async function getNewFirmware(
-	deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic
+	localVersion: string
 ): Promise<Uint8Array<ArrayBuffer>> {
-	const localVersion = (await getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
 	const latestRelease = await getLatestRelease();
 
 	if (isNewerVersion(latestRelease.version, localVersion)) {
@@ -57,11 +54,11 @@ export async function getNewFirmware(
 }
 
 export async function updateFirmware(
-  deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic,
+	localVersion: string,
   otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic,
   otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic
 ): Promise<void> {
-  const newFirmware = await getNewFirmware(deviceInfoCharacteristic);
+  const newFirmware = await getNewFirmware(localVersion);
   return await uploadFirmware(otaCommandCharacteristic, otaFirmwareCharacteristic, newFirmware);
 }
 

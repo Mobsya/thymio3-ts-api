@@ -258,20 +258,22 @@ export async function stopSensorStreaming() {
 //// FIRMWARE UPDATE
 
 export async function isNewerFirmwareAvailable(): Promise<boolean> {
-  return await updater.isNewerFirmwareAvailable(deviceInfoCharacteristic);
+  const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
+  return await updater.isNewerFirmwareAvailable(localVersion);
 }
 
 export async function getNewFirmware(): Promise<Uint8Array<ArrayBuffer>> {
-  return await updater.getNewFirmware(deviceInfoCharacteristic);
+  const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
+  return await updater.getNewFirmware(localVersion);
 }
 
 export async function updateFirmware(): Promise<void> {
-  // Temporary fix for the OTA slowdown
+  const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
   await unsubscribeFromMainCharacteristics();
   await connectToOTAService();
 
   return await updater.updateFirmware(
-    deviceInfoCharacteristic,
+    localVersion,
     otaCommandCharacteristic,
     otaFirmwareCharacteristic
   );
