@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build library",
+      "type": "npm",
+      "script": "build",
+      "group": "build",
+      "problemMatcher": "$tsc",
+      "detail": "Runs npm run build: builds the library."
+    },
+    {
+      "label": "Build library and launch demo",
+      "type": "npm",
+      "script": "run-demo",
+      "group": "build",
+      "problemMatcher": "$tsc",
+      "detail": "Runs npm run run-demo: builds the library, then starts the demo dev server."
+    }
+  ]
+}
