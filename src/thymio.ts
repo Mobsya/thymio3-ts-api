@@ -431,61 +431,52 @@ function getConnectedServer(): BluetoothRemoteGATTServer {
 }
 
 async function stopMainBluetoothServices(): Promise<void> {
-  await stopBluetoothService("sensor streaming", async () => {
-    if (sensorStreamCharacteristic) {
-      await sensorStream.stopSensorStreaming(sensorStreamCharacteristic);
-    }
-  });
-
-  await Promise.all([
-    stopCharacteristicNotifications(
-      "sensor stream",
-      sensorStreamCharacteristic,
-      sensorStream.handleStreamResponse
-    ),
-    stopCharacteristicNotifications(
-      "python",
-      pythonCharacteristic,
-      python.handlePythonResponse
-    ),
-    stopCharacteristicNotifications(
-      "stdout",
-      stdOutCharacteristic,
-      handleStdOutResponse
-    ),
-    stopCharacteristicNotifications(
-      "audio",
-      audioCharacteristic,
-      audio.handleAudioResponse
-    ),
-    stopCharacteristicNotifications("file", fileCharacteristic),
-    stopCharacteristicNotifications("device info", deviceInfoCharacteristic)
-  ]);
-}
-
-async function stopCharacteristicNotifications(
-  label: string,
-  characteristic: BluetoothRemoteGATTCharacteristic | undefined,
-  handler?: EventListenerOrEventListenerObject
-): Promise<void> {
-  if (!characteristic) return;
-
-  if (handler) {
-    characteristic.removeEventListener('characteristicvaluechanged', handler);
+  try {
+    await sensorStream.stopSensorStreaming(sensorStreamCharacteristic);
+  } catch (error) {
+    console.warn("[Thymio 3 API] Could not stop sensor streaming before OTA:", error);
   }
 
-  await stopBluetoothService(label, async () => {
-    await characteristic.stopNotifications();
-  });
-}
+  const characteristics: Array<{
+    label: string,
+    characteristic: BluetoothRemoteGATTCharacteristic | undefined,
+    handler?: EventListenerOrEventListenerObject
+  }> = [
+    {
+      label: "sensor stream",
+      characteristic: sensorStreamCharacteristic,
+      handler: sensorStream.handleStreamResponse
+    },
+    {
+      label: "python",
+      characteristic: pythonCharacteristic,
+      handler: python.handlePythonResponse
+    },
+    {
+      label: "stdout",
+      characteristic: stdOutCharacteristic,
+      handler: handleStdOutResponse
+    },
+    {
+      label: "audio",
+      characteristic: audioCharacteristic,
+      handler: audio.handleAudioResponse
+    },
+    { label: "file", characteristic: fileCharacteristic },
+    { label: "device info", characteristic: deviceInfoCharacteristic }
+  ];
 
-async function stopBluetoothService(
-  label: string,
-  stop: () => Promise<void>
-): Promise<void> {
-  try {
-    await stop();
-  } catch (error) {
-    console.warn(`[Thymio 3 API] Could not stop ${label} before OTA:`, error);
+  for (const { label, characteristic, handler } of characteristics) {
+    if (!characteristic) continue;
+
+    if (handler) {
+      characteristic.removeEventListener('characteristicvaluechanged', handler);
+    }
+
+    try {
+      await characteristic.stopNotifications();
+    } catch (error) {
+      console.warn(`[Thymio 3 API] Could not stop ${label} notifications before OTA:`, error);
+    }
   }
 }

@@ -145,6 +145,9 @@ export async function uploadFirmware(
     } catch (error) {
       throw new Error(`OTA stop failed: ${getErrorMessage(error)}`);
     }
+
+    await delay(500);
+    server.disconnect();
   } catch (error) {
     try {
       await sendStopCommand(commandCharacteristic);
