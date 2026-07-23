@@ -11,7 +11,7 @@ import * as files from './files';
 import * as deviceInfo from './device-info';
 import packageJson from '../package.json';
 import { delay } from "./utils";
-import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, OTA_FIRMWARE_CHARACTERISTIC_UUID, OTA_COMMAND_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID, STD_OUT_CHARACTERISTIC_UUID, THYMIO_CONNECTED_EVENT_ID, THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID } from "./constants";
+import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID, STD_OUT_CHARACTERISTIC_UUID, THYMIO_CONNECTED_EVENT_ID, THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID } from "./constants";
 import type { FileListing } from "./files";
 import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
@@ -29,45 +29,47 @@ let audioCharacteristic: BluetoothRemoteGATTCharacteristic;
 let fileCharacteristic: BluetoothRemoteGATTCharacteristic;
 let deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic;
 
-let otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic;
-let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic;
-
 /**
  * Request a bluetooth device and connect to it.
  */
 export async function requestAndConnect(): Promise<void> {
-  if (!navigator.bluetooth) {
-    throw new Error("Web Bluetooth not supported");
+  try {
+    if (!navigator.bluetooth) {
+      throw new Error("Web Bluetooth not supported");
+    }
+
+    // For Chromium-based browsers
+    /*
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'THYMIO' }],
+      optionalServices: [
+        MAIN_SERVICE_UUID,
+        OTA_SERVICE_UUID
+      ]
+    });
+    */
+
+    device = await navigator.bluetooth.requestDevice({
+      filters: [
+        { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID]}
+      ]
+    });
+
+    if (!device.name?.startsWith('THYMIO')) {
+      device = undefined;
+      throw new Error('Not a Thymio device');
+    }
+
+    // To handle the reconnects
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+
+    await connect();
+
+    dispatchConnectedEvent(true);
+  } catch (error) {
+    console.error(`Could not connect to the Thymio device`, error);
+    dispatchConnectedEvent(false);
   }
-
-  // For Chromium-based browsers
-  /*
-  device = await navigator.bluetooth.requestDevice({
-    filters: [{ namePrefix: 'THYMIO' }],
-    optionalServices: [
-      MAIN_SERVICE_UUID,
-      OTA_SERVICE_UUID
-    ]
-  });
-  */
-
-  device = await navigator.bluetooth.requestDevice({
-    filters: [
-      { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID]}
-    ]
-  });
-
-  if (!device.name?.startsWith('THYMIO')) {
-    device = undefined;
-    throw new Error('Not a Thymio device');
-  }
-
-  // To handle the reconnects
-  device.addEventListener('gattserverdisconnected', onDisconnected);
-
-  await connect();
-
-  console.log("done")
 }
 
 export function isConnected(): boolean {
@@ -255,22 +257,22 @@ export async function stopSensorStreaming() {
 //// FIRMWARE UPDATE
 
 export async function isNewerFirmwareAvailable(): Promise<boolean> {
-  return await updater.isNewerFirmwareAvailable(deviceInfoCharacteristic);
+  const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
+  return await updater.isNewerFirmwareAvailable(localVersion);
 }
 
 export async function getNewFirmware(): Promise<Uint8Array<ArrayBuffer>> {
-  return await updater.getNewFirmware(deviceInfoCharacteristic);
+  const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
+  return await updater.getNewFirmware(localVersion);
 }
 
 export async function updateFirmware(): Promise<void> {
-  // Temporary fix for the OTA slowdown
-  await unsubscribeFromMainCharacteristics();
-  await connectToOTAService();
+  const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
+  await stopMainBluetoothServices();
 
   return await updater.updateFirmware(
-    deviceInfoCharacteristic,
-    otaCommandCharacteristic,
-    otaFirmwareCharacteristic
+    localVersion,
+    getConnectedServer()
   );
 }
 
@@ -279,18 +281,16 @@ export async function updateFirmware(): Promise<void> {
 export async function uploadFirmware(
   firmware: Uint8Array<ArrayBuffer>
 ): Promise<void> {
-  await unsubscribeFromMainCharacteristics();
-  await connectToOTAService();
+  await stopMainBluetoothServices();
 
   return await ota.uploadFirmware(
-    otaCommandCharacteristic,
-    otaFirmwareCharacteristic,
+    getConnectedServer(),
     firmware
   );
 }
 
 export async function stopFirmwareUpload(): Promise<void> {
-  return await ota.stopFirmwareUpload(otaCommandCharacteristic);
+  return await ota.stopFirmwareUpload();
 }
 
 //// AUDIO CHARACTERISTIC
@@ -422,34 +422,61 @@ function dispatchConnectedEvent(connected: boolean) {
   document.dispatchEvent(connectedEvent);
 }
 
-async function connectToOTAService() {
-  if(device && device.gatt?.connected && server && server.connected) {
-    const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
-
-    otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
-    await otaFirmwareCharacteristic.startNotifications();
-    otaFirmwareCharacteristic.addEventListener('characteristicvaluechanged', ota.otaFirmwareNotificationHandler);
-
-    otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
-    await otaCommandCharacteristic.startNotifications();
-    otaCommandCharacteristic.addEventListener('characteristicvaluechanged', ota.otaCommandNotificationHandler);
+function getConnectedServer(): BluetoothRemoteGATTServer {
+  if (!device?.gatt?.connected || !server?.connected) {
+    throw new Error("Bluetooth GATT server is not connected");
   }
+
+  return server;
 }
 
-async function unsubscribeFromMainCharacteristics() {
-  await sensorStreamCharacteristic.stopNotifications();
-  sensorStreamCharacteristic.removeEventListener('characteristicvaluechanged', sensorStream.handleStreamResponse);
+async function stopMainBluetoothServices(): Promise<void> {
+  try {
+    await sensorStream.stopSensorStreaming(sensorStreamCharacteristic);
+  } catch (error) {
+    console.warn("[Thymio 3 API] Could not stop sensor streaming before OTA:", error);
+  }
 
-  await pythonCharacteristic.stopNotifications();
-  pythonCharacteristic.removeEventListener('characteristicvaluechanged', python.handlePythonResponse);
+  const characteristics: Array<{
+    label: string,
+    characteristic: BluetoothRemoteGATTCharacteristic | undefined,
+    handler?: EventListenerOrEventListenerObject
+  }> = [
+    {
+      label: "sensor stream",
+      characteristic: sensorStreamCharacteristic,
+      handler: sensorStream.handleStreamResponse
+    },
+    {
+      label: "python",
+      characteristic: pythonCharacteristic,
+      handler: python.handlePythonResponse
+    },
+    {
+      label: "stdout",
+      characteristic: stdOutCharacteristic,
+      handler: handleStdOutResponse
+    },
+    {
+      label: "audio",
+      characteristic: audioCharacteristic,
+      handler: audio.handleAudioResponse
+    },
+    { label: "file", characteristic: fileCharacteristic },
+    { label: "device info", characteristic: deviceInfoCharacteristic }
+  ];
 
-  await stdOutCharacteristic.stopNotifications();
-  stdOutCharacteristic.removeEventListener('characteristicvaluechanged', handleStdOutResponse);
+  for (const { label, characteristic, handler } of characteristics) {
+    if (!characteristic) continue;
 
-  await audioCharacteristic.stopNotifications();
-  audioCharacteristic.removeEventListener('characteristicvaluechanged', audio.handleAudioResponse);
+    if (handler) {
+      characteristic.removeEventListener('characteristicvaluechanged', handler);
+    }
 
-  await fileCharacteristic.stopNotifications();
-
-  await deviceInfoCharacteristic.stopNotifications();
+    try {
+      await characteristic.stopNotifications();
+    } catch (error) {
+      console.warn(`[Thymio 3 API] Could not stop ${label} notifications before OTA:`, error);
+    }
+  }
 }

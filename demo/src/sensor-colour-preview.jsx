@@ -45,14 +45,11 @@ function hsvToRgbCss(colorSensor) {
 function colorRawToRgbCss(colorRaw) {
   if (!colorRaw) return null;
 
-  const red = clamp(Number(colorRaw.red), 0, 65535);
-  const green = clamp(Number(colorRaw.green), 0, 65535);
-  const blue = clamp(Number(colorRaw.blue), 0, 65535);
-  const maxChannel = Math.max(red, green, blue);
+  const red = clamp(Number(colorRaw.red), 0, 255);
+  const green = clamp(Number(colorRaw.green), 0, 255);
+  const blue = clamp(Number(colorRaw.blue), 0, 255);
 
-  if (maxChannel === 0) return null;
-
-  return `rgb(${Math.round((red / maxChannel) * 255)}, ${Math.round((green / maxChannel) * 255)}, ${Math.round((blue / maxChannel) * 255)})`;
+  return `rgb(${red}, ${green}, ${blue})`;
 }
 
 export default function SensorColourPreview({ mode, value }) {

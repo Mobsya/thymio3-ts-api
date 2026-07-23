@@ -1,12 +1,12 @@
 {
   "name": "thymio3-ts-api",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "description": "Thymio 3 API",
   "thymio": {
     "firmwareCompatibility": {
       "min": "v1.8.0",
-      "max": "v1.8.0"
+      "max": "v1.9.0"
     }
   },
   "main": "dist/index.js",
@@ -21,9 +21,7 @@
   "license": "ISC",
   "devDependencies": {
     "@types/web-bluetooth": "^0.0.21",
-    "tsdown": "^0.22.3",
-    "typescript": "^6.0.3"
-  },
-  "dependencies": {
+    "tsdown": "^0.22.13",
+    "typescript": "^7.0.2"
   }
 }

@@ -84,10 +84,10 @@ function createCommandByteArray({
     view.setUint16(offset, packRGB(brRGB),true); offset += 2;
 
     // Motor left (2 bytes - signed 16-bit)
-    view.setInt16(offset, motorLeft); offset += 2;
+    view.setInt16(offset, motorLeft, true); offset += 2;
 
     // Motor right (2 bytes - signed 16-bit)
-    view.setInt16(offset, motorRight); offset += 2;
+    view.setInt16(offset, motorRight, true); offset += 2;
 
     // Sound (1 byte)
     view.setUint8(offset, sound); offset++;

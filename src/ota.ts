@@ -1,4 +1,10 @@
-import { MTU, THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID } from "./constants";
+import {
+  MTU,
+  OTA_COMMAND_CHARACTERISTIC_UUID,
+  OTA_FIRMWARE_CHARACTERISTIC_UUID,
+  OTA_SERVICE_UUID,
+  THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID
+} from "./constants";
 import { crc16_ccitt, delay, type UploadProgress } from "./utils";
 
 const FIRMWARE_SECTOR_SIZE = 4096; // 4KB;
@@ -26,23 +32,26 @@ type FirmwareStatus = -1 | 0 | 1;
 
 let commandStatus: CommandStatus = 0;
 let commandErrorMessage = "";
+let expectedCommand: number | undefined;
 let firmwareStatus: FirmwareStatus = 0;
 let expectedSector = 0;
 let abortRequested = false;
+let otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
+let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
 
 export async function uploadFirmware(
-  otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic,
-  otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic,
+  server: BluetoothRemoteGATTServer,
   firmware: Uint8Array<ArrayBuffer>
 ): Promise<void> {
 
   abortRequested = false;
   const total = firmware.length;
-  const mtuPayloadSize = await probeMTUPayloadSize(otaFirmwareCharacteristic);
+  const { commandCharacteristic, firmwareCharacteristic } = await connectToOTAService(server);
+  const mtuPayloadSize = await probeMTUPayloadSize(firmwareCharacteristic);
 
   try {
-    resetCommandState();
-    await sendStartCommand(otaCommandCharacteristic, total);
+    resetCommandState(CMD_FLASH);
+    await sendStartCommand(commandCharacteristic, total);
 
     try {
       await waitForCommand(COMMAND_TIMEOUT_MS);
@@ -57,7 +66,8 @@ export async function uploadFirmware(
 
     let writtenSize = 0;
     const totalSectors = Math.ceil(total / FIRMWARE_SECTOR_SIZE);
-    const startedAt = Date.now();
+    let lastProgressAt = Date.now();
+    let lastWrittenSize = 0;
 
     while (writtenSize < total && !abortRequested) {
       const sector = firmware.slice(writtenSize, writtenSize + FIRMWARE_SECTOR_SIZE);
@@ -80,7 +90,7 @@ export async function uploadFirmware(
 
         // Send all packets in burst — writeValueWithoutResponse is fire-and-forget
         for (let i = 0; i < packets.length && !abortRequested; i++) {
-          await bleWrite(otaFirmwareCharacteristic, packets[i]!);
+          await bleWrite(firmwareCharacteristic, packets[i]!);
           if (i % 8 === 7) {
             await delay(0);
           }
@@ -103,35 +113,44 @@ export async function uploadFirmware(
       }
 
       writtenSize += sector.length;
+      const now = Date.now();
+      const elapsed = (now - lastProgressAt) / 1000;
+      const bytesSinceLastProgress = writtenSize - lastWrittenSize;
+      const speed = elapsed > 0 ? bytesSinceLastProgress / elapsed : 0;
+      const etaSeconds = speed > 0 ? (total - writtenSize) / speed : undefined;
+
       dispatchProgress({
         uploadedPackets: sectorIndex + 1,
         totalPackets: totalSectors,
         percentage: total === 0 ? 100 : (writtenSize / total) * 100
       });
 
-      const elapsed = (Date.now() - startedAt) / 1000;
-      const speed = elapsed > 0 ? writtenSize / elapsed : 0;
       console.log(
-        `OTA sector ${sectorIndex + 1}/${totalSectors} uploaded (${writtenSize}/${total} bytes, ${Math.round(speed)} B/s)`
+        `OTA sector ${sectorIndex + 1}/${totalSectors} uploaded (${writtenSize}/${total} bytes, ${formatKilobytesPerSecond(speed)}, ETA ${formatDuration(etaSeconds)})`
       );
+      lastProgressAt = now;
+      lastWrittenSize = writtenSize;
     }
 
     if (abortRequested) {
-      await sendStopCommand(otaCommandCharacteristic);
+      await sendStopCommand(commandCharacteristic);
       throw new Error("Firmware upload aborted");
     }
 
-    resetCommandState();
-    await sendStopCommand(otaCommandCharacteristic);
+    resetCommandState(CMD_STOP);
+    await sendStopCommand(commandCharacteristic);
 
     try {
       await waitForCommand(COMMAND_TIMEOUT_MS);
     } catch (error) {
       throw new Error(`OTA stop failed: ${getErrorMessage(error)}`);
     }
+
+    await delay(500);
+    server.disconnect();
   } catch (error) {
     try {
-      await sendStopCommand(otaCommandCharacteristic);
+      await sendStopCommand(commandCharacteristic);
     } catch {
       // The connection may already be closing after an OTA failure.
     }
@@ -141,14 +160,49 @@ export async function uploadFirmware(
   }
 }
 
-export async function stopFirmwareUpload(
-  otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic,
-): Promise<void> {
+export async function stopFirmwareUpload(): Promise<void> {
   abortRequested = true;
+  if (!otaCommandCharacteristic) {
+    throw new Error("OTA command characteristic is not connected");
+  }
+
   return await sendStopCommand(otaCommandCharacteristic);
 }
 
-export function otaCommandNotificationHandler(event: Event): void {
+async function connectToOTAService(
+  server: BluetoothRemoteGATTServer
+): Promise<{
+  commandCharacteristic: BluetoothRemoteGATTCharacteristic,
+  firmwareCharacteristic: BluetoothRemoteGATTCharacteristic
+}> {
+  if (!server.connected) {
+    throw new Error("Bluetooth GATT server is not connected");
+  }
+
+  removeOTAEventListeners();
+
+  const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
+
+  otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
+  await otaFirmwareCharacteristic.startNotifications();
+  otaFirmwareCharacteristic.addEventListener('characteristicvaluechanged', otaFirmwareNotificationHandler);
+
+  otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
+  await otaCommandCharacteristic.startNotifications();
+  otaCommandCharacteristic.addEventListener('characteristicvaluechanged', otaCommandNotificationHandler);
+
+  return {
+    commandCharacteristic: otaCommandCharacteristic,
+    firmwareCharacteristic: otaFirmwareCharacteristic
+  };
+}
+
+function removeOTAEventListeners(): void {
+  otaFirmwareCharacteristic?.removeEventListener('characteristicvaluechanged', otaFirmwareNotificationHandler);
+  otaCommandCharacteristic?.removeEventListener('characteristicvaluechanged', otaCommandNotificationHandler);
+}
+
+function otaCommandNotificationHandler(event: Event): void {
   const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
   if (!value || value.byteLength < 20) return;
 
@@ -158,6 +212,9 @@ export function otaCommandNotificationHandler(event: Event): void {
 
   const command = value.getUint16(0, true);
   if (command !== CMD_ACK) return;
+
+  const acknowledgedCommand = value.getUint16(2, true);
+  if (acknowledgedCommand !== expectedCommand) return;
 
   const response = value.getUint16(4, true);
 
@@ -180,7 +237,7 @@ export function otaCommandNotificationHandler(event: Event): void {
   }
 }
 
-export function otaFirmwareNotificationHandler(event: Event): void {
+function otaFirmwareNotificationHandler(event: Event): void {
   const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
   if (!value || value.byteLength < 4) return;
 
@@ -194,9 +251,17 @@ export function otaFirmwareNotificationHandler(event: Event): void {
     return;
   }
 
+  const desiredSector = value.byteLength >= 6 ? value.getUint16(4, true) : undefined;
+  if (response === FW_RESPONSE_INDEX_ERROR && desiredSector !== undefined && desiredSector > sectorIndex) {
+    console.warn(
+      `OTA firmware sector ${sectorIndex} already accepted; robot expects sector ${desiredSector}`
+    );
+    firmwareStatus = 1;
+    return;
+  }
+
   firmwareStatus = -1;
 
-  const desiredSector = value.byteLength >= 6 ? value.getUint16(4, true) : undefined;
   const errorMessage = getFirmwareResponseError(response, desiredSector);
   console.error(`OTA firmware NACK for sector ${sectorIndex}: ${errorMessage}`);
 }
@@ -205,42 +270,37 @@ async function sendStartCommand(
   otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic,
   firmwareLength: number
 ): Promise<void> {
-  const buffer = new ArrayBuffer(20);
-  const view = new DataView(buffer);
-
-  // Command ID - 2 bytes
-  view.setUint16(0, CMD_FLASH, true);
-
-  // FirmwareLength - 4 bytes
-  view.setUint32(2, firmwareLength, true);
-
-  // CRC16 - 2 bytes
-  const crcInput = new Uint8Array(buffer, 0, 18);
-  const crc = crc16_ccitt(crcInput);
-  view.setUint16(18, crc, true);
-
-  // Send packet
-  const packet = new Uint8Array(buffer);
-  await bleWrite(otaCommandCharacteristic, packet);
+  await bleWrite(otaCommandCharacteristic, buildCommand(CMD_FLASH, [
+    firmwareLength & 0xff,
+    (firmwareLength >> 8) & 0xff,
+    (firmwareLength >> 16) & 0xff,
+    (firmwareLength >> 24) & 0xff
+  ]));
 }
 
 async function sendStopCommand(
   otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic
 ): Promise<void> {
-  const buffer = new ArrayBuffer(20);
-  const view = new DataView(buffer);
+  await bleWrite(otaCommandCharacteristic, buildCommand(CMD_STOP));
+}
 
-  // Command ID - 2 bytes
-  view.setUint16(0, CMD_STOP, true);
+function buildCommand(
+  command: number,
+  payload: number[] = []
+): Uint8Array<ArrayBuffer> {
+  const packet = new Uint8Array(20);
+  packet[0] = command & 0xff;
+  packet[1] = (command >> 8) & 0xff;
 
-  // CRC16 - 2 bytes
-  const crcInput = new Uint8Array(buffer, 0, 18);
-  const crc = crc16_ccitt(crcInput);
-  view.setUint16(18, crc, true);
+  for (let i = 0; i < payload.length && i < 16; i++) {
+    packet[2 + i] = payload[i]!;
+  }
 
-  // Send packet
-  const packet = new Uint8Array(buffer);
-  await bleWrite(otaCommandCharacteristic, packet);
+  const crc = crc16_ccitt(packet.slice(0, 18));
+  packet[18] = crc & 0xff;
+  packet[19] = (crc >> 8) & 0xff;
+
+  return packet;
 }
 
 function buildSectorPackets(
@@ -308,9 +368,10 @@ async function probeMTUPayloadSize(
   return 20; // 23 - 3 header = 20 bytes absolute minimum
 }
 
-function resetCommandState(): void {
+function resetCommandState(command?: number): void {
   commandStatus = 0;
   commandErrorMessage = "";
+  expectedCommand = command;
 }
 
 function waitForCommand(timeoutMs: number): Promise<void> {
@@ -320,6 +381,7 @@ function waitForCommand(timeoutMs: number): Promise<void> {
     const settle = (callback: () => void) => {
       if (settled) return;
       settled = true;
+      expectedCommand = undefined;
       clearInterval(intervalId);
       clearTimeout(timeoutId);
       callback();
@@ -421,4 +483,24 @@ function getFirmwareResponseError(response: number, desiredSector?: number): str
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatKilobytesPerSecond(bytesPerSecond: number): string {
+  return `${(bytesPerSecond / 1024).toFixed(1)} kB/s`;
+}
+
+function formatDuration(seconds: number | undefined): string {
+  if (seconds === undefined || !Number.isFinite(seconds)) {
+    return "unknown";
+  }
+
+  const roundedSeconds = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(roundedSeconds / 60);
+  const remainingSeconds = roundedSeconds % 60;
+
+  if (minutes === 0) {
+    return `${remainingSeconds}s`;
+  }
+
+  return `${minutes}m ${remainingSeconds}s`;
 }

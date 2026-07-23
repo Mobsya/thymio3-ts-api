@@ -47,7 +47,6 @@ function SensorValue({ value, colourPreviewMode }) {
 
 function getColourPreviewMode(sensorId) {
   if (sensorId === "colorSensor") return "hsv";
-  if (sensorId === "colorRaw") return "raw";
   return null;
 }
 

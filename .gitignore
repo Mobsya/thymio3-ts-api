@@ -19,7 +19,8 @@ yarn-error.log*
 .env.*.local
 
 # Editor directories and files
-.vscode/
+.vscode/*
+!.vscode/tasks.json
 .idea/
 *.suo
 *.ntvs*

@@ -28,6 +28,54 @@
   max-height: 150px;
 }
 
+.firmware-drop-area {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 86px;
+  justify-content: center;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text);
+}
+
+.firmware-drop-area.is-drag-active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.firmware-drop-area.has-error {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.firmware-drop-title {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.firmware-drop-meta,
+.firmware-drop-error {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.firmware-drop-meta {
+  color: var(--muted);
+}
+
+.firmware-drop-error {
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.firmware-upload-row {
+  align-items: flex-start;
+}
+
 @media (max-width: 760px) {
   .firmware-command-grid {
     grid-template-columns: 1fr;
