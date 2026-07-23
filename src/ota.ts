@@ -66,7 +66,8 @@ export async function uploadFirmware(
 
     let writtenSize = 0;
     const totalSectors = Math.ceil(total / FIRMWARE_SECTOR_SIZE);
-    const startedAt = Date.now();
+    let lastProgressAt = Date.now();
+    let lastWrittenSize = 0;
 
     while (writtenSize < total && !abortRequested) {
       const sector = firmware.slice(writtenSize, writtenSize + FIRMWARE_SECTOR_SIZE);
@@ -112,17 +113,22 @@ export async function uploadFirmware(
       }
 
       writtenSize += sector.length;
+      const now = Date.now();
+      const elapsed = (now - lastProgressAt) / 1000;
+      const bytesSinceLastProgress = writtenSize - lastWrittenSize;
+      const speed = elapsed > 0 ? bytesSinceLastProgress / elapsed : 0;
+
       dispatchProgress({
         uploadedPackets: sectorIndex + 1,
         totalPackets: totalSectors,
         percentage: total === 0 ? 100 : (writtenSize / total) * 100
       });
 
-      const elapsed = (Date.now() - startedAt) / 1000;
-      const speed = elapsed > 0 ? writtenSize / elapsed : 0;
       console.log(
-        `OTA sector ${sectorIndex + 1}/${totalSectors} uploaded (${writtenSize}/${total} bytes, ${Math.round(speed)} B/s)`
+        `OTA sector ${sectorIndex + 1}/${totalSectors} uploaded (${writtenSize}/${total} bytes, ${formatKilobytesPerSecond(speed)})`
       );
+      lastProgressAt = now;
+      lastWrittenSize = writtenSize;
     }
 
     if (abortRequested) {
@@ -473,4 +479,8 @@ function getFirmwareResponseError(response: number, desiredSector?: number): str
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatKilobytesPerSecond(bytesPerSecond: number): string {
+  return `${(bytesPerSecond / 1024).toFixed(1)} kB/s`;
 }
