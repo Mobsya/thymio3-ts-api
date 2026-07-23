@@ -125,6 +125,8 @@ async function connect() {
     deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
     await deviceInfoCharacteristic.startNotifications();
 
+    dispatchConnectedEvent(true);
+
     console.log("✅ Connected to Thymio 3 !");
 
     checkFirmwareCompatibilityInBackground(deviceInfoCharacteristic);
