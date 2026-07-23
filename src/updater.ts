@@ -55,11 +55,10 @@ export async function getNewFirmware(
 
 export async function updateFirmware(
 	localVersion: string,
-  otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic,
-  otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic
+  server: BluetoothRemoteGATTServer
 ): Promise<void> {
   const newFirmware = await getNewFirmware(localVersion);
-  return await uploadFirmware(otaCommandCharacteristic, otaFirmwareCharacteristic, newFirmware);
+  return await uploadFirmware(server, newFirmware);
 }
 
 async function downloadFirmware(url: string): Promise<Uint8Array<ArrayBuffer>> {
