@@ -117,6 +117,7 @@ export async function uploadFirmware(
       const elapsed = (now - lastProgressAt) / 1000;
       const bytesSinceLastProgress = writtenSize - lastWrittenSize;
       const speed = elapsed > 0 ? bytesSinceLastProgress / elapsed : 0;
+      const etaSeconds = speed > 0 ? (total - writtenSize) / speed : undefined;
 
       dispatchProgress({
         uploadedPackets: sectorIndex + 1,
@@ -125,7 +126,7 @@ export async function uploadFirmware(
       });
 
       console.log(
-        `OTA sector ${sectorIndex + 1}/${totalSectors} uploaded (${writtenSize}/${total} bytes, ${formatKilobytesPerSecond(speed)})`
+        `OTA sector ${sectorIndex + 1}/${totalSectors} uploaded (${writtenSize}/${total} bytes, ${formatKilobytesPerSecond(speed)}, ETA ${formatDuration(etaSeconds)})`
       );
       lastProgressAt = now;
       lastWrittenSize = writtenSize;
@@ -483,4 +484,20 @@ function getErrorMessage(error: unknown): string {
 
 function formatKilobytesPerSecond(bytesPerSecond: number): string {
   return `${(bytesPerSecond / 1024).toFixed(1)} kB/s`;
+}
+
+function formatDuration(seconds: number | undefined): string {
+  if (seconds === undefined || !Number.isFinite(seconds)) {
+    return "unknown";
+  }
+
+  const roundedSeconds = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(roundedSeconds / 60);
+  const remainingSeconds = roundedSeconds % 60;
+
+  if (minutes === 0) {
+    return `${remainingSeconds}s`;
+  }
+
+  return `${minutes}m ${remainingSeconds}s`;
 }
