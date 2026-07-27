@@ -21,7 +21,7 @@
   "license": "ISC",
   "devDependencies": {
     "@types/web-bluetooth": "^0.0.21",
-    "tsdown": "^0.22.13",
+    "tsdown": "^0.22.14",
     "typescript": "^7.0.2"
   }
 }
