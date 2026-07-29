@@ -138,6 +138,10 @@ export default function App() {
 
     const onManualReconn = () => {
       setPromptManualReconnection(true);
+      setConnectionStatus("disconnected");
+      setDeviceName("");
+      setFirmwareInfo(null);
+      setFirmwareInfoError("");
     };
 
     const onPythonExecStatus = (event) => {
