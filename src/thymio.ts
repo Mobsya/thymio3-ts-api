@@ -16,6 +16,7 @@ import type { FileListing } from "./files";
 import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
 import { checkFirmwareCompatibility } from "./firmware-compatibility";
+import { runPriorityBluetoothCall } from "./bluetooth-queue";
 
 let reconnecting = false;
 
@@ -290,7 +291,7 @@ export async function uploadFirmware(
 }
 
 export async function stopFirmwareUpload(): Promise<void> {
-  return await ota.stopFirmwareUpload();
+  return await runPriorityBluetoothCall(() => ota.stopFirmwareUpload());
 }
 
 //// AUDIO CHARACTERISTIC
@@ -474,7 +475,7 @@ async function stopMainBluetoothServices(): Promise<void> {
     }
 
     try {
-      await characteristic.stopNotifications();
+      await runPriorityBluetoothCall(() => characteristic.stopNotifications());
     } catch (error) {
       console.warn(`[Thymio 3 API] Could not stop ${label} notifications before OTA:`, error);
     }

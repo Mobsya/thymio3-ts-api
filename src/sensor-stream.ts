@@ -1,4 +1,5 @@
 import { THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, THYMIO_SENSOR_VALUES_EVENT_ID } from "./constants";
+import { queueBluetoothCall, queuePriorityBluetoothCall } from "./bluetooth-queue";
 
 export type SensorsData = {
   colorSensor: {
@@ -82,7 +83,7 @@ export async function startMainSensorStreaming(
 
   const payload = new Uint8Array([id, body]);
 
-  return await sensorStreamCharacteristic.writeValueWithResponse(payload);
+  return await queueBluetoothCall(() => sensorStreamCharacteristic.writeValueWithResponse(payload));
 }
 
 /**
@@ -96,7 +97,7 @@ export async function startSecondarySensorStreaming(
 
   const payload = new Uint8Array([id, body]);
 
-  return await sensorStreamCharacteristic.writeValueWithResponse(payload);
+  return await queueBluetoothCall(() => sensorStreamCharacteristic.writeValueWithResponse(payload));
 }
 
 /**
@@ -110,7 +111,7 @@ export async function startAllSensorStreaming(
 
   const payload = new Uint8Array([id, body]);
 
-  return await sensorStreamCharacteristic.writeValueWithResponse(payload);
+  return await queueBluetoothCall(() => sensorStreamCharacteristic.writeValueWithResponse(payload));
 }
 
 /**
@@ -124,7 +125,7 @@ export async function stopSensorStreaming(
 
   const payload = new Uint8Array([id, body]);
 
-  return await sensorStreamCharacteristic.writeValueWithResponse(payload);
+  return await queuePriorityBluetoothCall(() => sensorStreamCharacteristic.writeValueWithResponse(payload));
 }
 
 /**

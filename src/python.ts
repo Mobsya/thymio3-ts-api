@@ -1,4 +1,5 @@
 import { THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID } from "./constants";
+import { queueBluetoothCall, runPriorityBluetoothCall } from "./bluetooth-queue";
 import { createPayloadPackets } from "./utils";
 
 export async function sendPythonScript(
@@ -10,7 +11,7 @@ export async function sendPythonScript(
   const packets = createPayloadPackets(scriptDataArray);
 
   for (const packet of packets) {
-    await pythonCharacteristic.writeValueWithResponse(packet);
+    await queueBluetoothCall(() => pythonCharacteristic.writeValueWithResponse(packet));
   }
 }
 
@@ -19,7 +20,7 @@ export async function executeLoadedScript(
 ) {
   const packet = new Uint8Array([0x02]);
 
-  await pythonCharacteristic.writeValueWithResponse(packet);
+  await queueBluetoothCall(() => pythonCharacteristic.writeValueWithResponse(packet));
 }
 
 export async function stopScriptExecution(
@@ -27,7 +28,7 @@ export async function stopScriptExecution(
 ) {
   const packet = new Uint8Array([0x03]);
 
-  await pythonCharacteristic.writeValueWithResponse(packet);
+  await runPriorityBluetoothCall(() => pythonCharacteristic.writeValueWithResponse(packet));
 }
 
 export async function saveScriptToPartition(
@@ -71,7 +72,7 @@ export async function saveScriptToPartition(
 		const id = 0x04;
 		const packet = new Uint8Array([id, scriptId]);
 
-		pythonCharacteristic.writeValueWithResponse(packet).catch(err => {
+		queueBluetoothCall(() => pythonCharacteristic.writeValueWithResponse(packet)).catch(err => {
 			pythonCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
 			reject(err);
 		});
@@ -83,7 +84,7 @@ export async function softResetPythonInterpreter(
 ) {
 	const packet = new Uint8Array([0x05]);
 
-	await pythonCharacteristic.writeValueWithResponse(packet);
+	await queueBluetoothCall(() => pythonCharacteristic.writeValueWithResponse(packet));
 }
 
 export function handlePythonResponse(event: Event) {

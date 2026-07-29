@@ -1,4 +1,5 @@
 import { THYMIO_FILE_DOWNLOAD_PROGRESS_EVENT_ID, THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID } from "./constants";
+import { queueBluetoothCall } from "./bluetooth-queue";
 import { createPayloadPackets, type UploadProgress } from "./utils";
 
 export type FileListing = {
@@ -57,7 +58,7 @@ export async function uploadFile(
       let uploadedPackets = 0;
 
       for(const packet of packets) {
-        await fileCharacteristic.writeValueWithResponse(packet);
+        await queueBluetoothCall(() => fileCharacteristic.writeValueWithResponse(packet));
 
         const uploadProgressData: UploadProgress = {
           uploadedPackets,
@@ -131,7 +132,7 @@ export async function saveFile(
       body.set(array.slice(0, 30));
       const payload = new Uint8Array([id, ...body]);
 
-      await fileCharacteristic.writeValueWithResponse(payload);
+      await queueBluetoothCall(() => fileCharacteristic.writeValueWithResponse(payload));
     } catch (err) {
       console.error(err);
       fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
@@ -190,7 +191,7 @@ export async function deleteFile(
       body.set(array.slice(0, 30));
       const payload = new Uint8Array([id, ...body]);
 
-      await fileCharacteristic.writeValueWithResponse(payload);
+      await queueBluetoothCall(() => fileCharacteristic.writeValueWithResponse(payload));
     } catch (err) {
         console.error(err);
         fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
@@ -266,7 +267,7 @@ export async function listFiles(
     // Send the "list files" request to the device
     const id = 0x04;
     const payload = new Uint8Array([id]);
-    fileCharacteristic.writeValueWithResponse(payload).catch(err => {
+    queueBluetoothCall(() => fileCharacteristic.writeValueWithResponse(payload)).catch(err => {
       fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
       reject(err);
     });
@@ -280,7 +281,7 @@ export async function eraseAllFiles(
 
   const payload = new Uint8Array([id]);
 
-  return await fileCharacteristic.writeValueWithResponse(payload);
+  return await queueBluetoothCall(() => fileCharacteristic.writeValueWithResponse(payload));
 }
 
 export async function downloadFile(
@@ -373,7 +374,7 @@ export async function freeMemory(
 ): Promise<void> {
   const id = 0x08;
   const payload = new Uint8Array([id]);
-  return await fileCharacteristic.writeValueWithResponse(payload);
+  return await queueBluetoothCall(() => fileCharacteristic.writeValueWithResponse(payload));
 }
 
 async function sendFileDownloadRequest(
@@ -425,7 +426,7 @@ async function sendFileDownloadRequest(
       body.set(array.slice(0, 30));
       const payload = new Uint8Array([id, ...body]);
 
-      await fileCharacteristic.writeValueWithResponse(payload);
+      await queueBluetoothCall(() => fileCharacteristic.writeValueWithResponse(payload));
     } catch (err) {
       console.error(err);
       fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
@@ -439,5 +440,5 @@ async function sendFileDownloadAck(
 ): Promise<void> {
   const id = 0x07;
   const payload = new Uint8Array([id]);
-  return await fileCharacteristic.writeValueWithResponse(payload);
+  return await queueBluetoothCall(() => fileCharacteristic.writeValueWithResponse(payload));
 }
