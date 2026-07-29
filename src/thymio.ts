@@ -11,7 +11,7 @@ import * as files from './files';
 import * as deviceInfo from './device-info';
 import packageJson from '../package.json';
 import { delay } from "./utils";
-import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID, STD_OUT_CHARACTERISTIC_UUID, THYMIO_CONNECTED_EVENT_ID, THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID } from "./constants";
+import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID, STD_OUT_CHARACTERISTIC_UUID, THYMIO_CONNECTED_EVENT_ID, THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID, GATT_CONNECT_TIMEOUT_MS } from "./constants";
 import type { FileListing } from "./files";
 import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
@@ -99,7 +99,7 @@ export async function disconnect(): Promise<void> {
  */
 async function connect() {
   if (device && device.gatt) {
-    server = await device.gatt.connect();
+    server = await connectGattWithTimeout(device.gatt);
     const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
 
     commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
@@ -133,6 +133,40 @@ async function connect() {
     checkFirmwareCompatibilityInBackground(deviceInfoCharacteristic);
   } else {
     throw new Error("Bluetooth GATT is not available.")
+  }
+}
+
+/**
+ * Connect to the GATT server, but reject if the browser never resolves the
+ * connection promise so initial connection and reconnect attempts can fail
+ * gracefully instead of blocking forever.
+ */
+async function connectGattWithTimeout(gatt: BluetoothRemoteGATTServer): Promise<BluetoothRemoteGATTServer> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  // If a previous timed-out connect finished in the browser later, reuse that
+  // connected server and let connect() rebuild the service/characteristic state.
+  if (gatt.connected) {
+    return gatt;
+  }
+
+  try {
+    // Race the browser connection attempt against a timeout because Web
+    // Bluetooth does not provide a way to cancel a stuck gatt.connect() call.
+    return await Promise.race([
+      gatt.connect(),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`Bluetooth GATT connection timed out after ${GATT_CONNECT_TIMEOUT_MS}ms`));
+        }, GATT_CONNECT_TIMEOUT_MS);
+      })
+    ]);
+  } finally {
+    // Clear the timer when connect() resolves or rejects first to avoid leaving
+    // stale timers around after successful or normally failed connection calls.
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 
@@ -172,12 +206,16 @@ async function retryConnection() {
 
   while (attempts < maxAttempts) {
     try {
-      await delay(3000);  // Wait 2 seconds before retry
-      if (!device.gatt!.connected) {
-        await connect();
-        reconnecting = false;
-        return;
-      }
+      // Wait three seconds before each retry to give the Bluetooth stack time
+      // to settle after the disconnection event.
+      await delay(3000);
+
+      // Always run the full connection setup. A timed-out gatt.connect() call
+      // can still complete later in the browser, leaving device.gatt.connected
+      // true while services and characteristics still need to be reinitialized.
+      await connect();
+      reconnecting = false;
+      return;
     } catch (e) {
       console.warn(`Retry ${attempts + 1} failed:`, e);
     }
@@ -186,8 +224,12 @@ async function retryConnection() {
 
   console.log(`❌ Failed to reconnect after ${attempts} attempts`);
 
-  // Disconnect and prompt for manual reconnection if automatic reconnection fails
-  disconnect();
+  // Automatic retries are finished, so allow a future disconnect event after
+  // manual reconnection to start a fresh retry cycle.
+  reconnecting = false;
+
+  // Disconnect and prompt for manual reconnection if automatic reconnection fails.
+  await disconnect();
   dispatchManualReconnectionEvent();
 }
 
