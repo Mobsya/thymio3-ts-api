@@ -1,3 +1,21 @@
 .files-panel {
   min-width: 0;
 }
+
+.files-panel > .row {
+  padding: 7px;
+  border: 1px solid rgba(102, 118, 143, 0.24);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.files-panel > .row:nth-of-type(3) {
+  align-items: stretch;
+  background:
+    linear-gradient(90deg, rgba(247, 198, 0, 0.14), transparent 42%),
+    rgba(255, 255, 255, 0.7);
+}
+
+.files-panel .compact-pre {
+  min-height: 108px;
+}

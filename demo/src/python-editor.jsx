@@ -148,6 +148,7 @@ _syntax_check(___code___)
       <Editor
         height={height ?? "100%"}
         defaultLanguage="python"
+        theme="vs-dark"
         value={value}
         onChange={(v) => {
           const next = v ?? "";

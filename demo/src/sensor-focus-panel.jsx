@@ -18,6 +18,10 @@ function formatValue(value) {
   return String(value);
 }
 
+function readingClassName(value) {
+  return `sensor-focus-reading ${value === null || value === undefined ? "waiting" : "live"}`;
+}
+
 function SensorValue({ value, colourPreviewMode }) {
   const colourPreview = colourPreviewMode ? <SensorColourPreview mode={colourPreviewMode} value={value} /> : null;
 
@@ -28,7 +32,9 @@ function SensorValue({ value, colourPreviewMode }) {
           {Object.entries(value).map(([key, entryValue]) => (
             <span className="sensor-focus-value" key={key}>
               <span className="sensor-focus-key">{formatKey(key)}</span>
-              <span className="sensor-focus-reading">{formatValue(entryValue)}</span>
+              <span className={readingClassName(entryValue)} key={`${key}:${formatValue(entryValue)}`}>
+                {formatValue(entryValue)}
+              </span>
             </span>
           ))}
         </div>
@@ -39,7 +45,9 @@ function SensorValue({ value, colourPreviewMode }) {
 
   return (
     <span className="sensor-focus-value-display">
-      <span className="sensor-focus-reading">{formatValue(value)}</span>
+      <span className={readingClassName(value)} key={formatValue(value)}>
+        {formatValue(value)}
+      </span>
       {colourPreview}
     </span>
   );

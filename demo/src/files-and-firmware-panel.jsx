@@ -5,7 +5,7 @@ import "./files-and-firmware-panel.css";
 
 export default function FilesAndFirmwarePanel() {
   return (
-    <div className="tab-stack files-and-firmware-panel">
+    <div className="tab-stack files-and-firmware-panel maintenance-panel-shell">
       <AudioPanel />
       <FilesPanel />
       <FirmwareUpdatePanel />

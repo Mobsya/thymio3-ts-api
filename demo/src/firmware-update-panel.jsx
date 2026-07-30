@@ -103,11 +103,11 @@ export default function FirmwareUpdatePanel() {
   }
 
   return (
-    <div className="compact-group firmware-update-panel">
-      <div className="grid-title">Firmware Update</div>
+    <div className="compact-group firmware-update-panel maintenance-module firmware-module">
+      <div className="grid-title maintenance-title">Firmware Update</div>
 
       <div className="firmware-command-grid">
-        <div className="firmware-command-group">
+        <div className="firmware-command-group maintenance-submodule">
           <div className="subhead">Automatic update</div>
           <div className="row wrap">
             <button onClick={checkForNewFirmware}>Check for newer firmware</button>
@@ -118,7 +118,7 @@ export default function FirmwareUpdatePanel() {
           <pre className="pre compact-pre firmware-check-result">{newFirmwareInfo}</pre>
         </div>
 
-        <div className="firmware-command-group">
+        <div className="firmware-command-group maintenance-submodule">
           <div className="subhead">Manual update</div>
           <div
             className={`firmware-drop-area${isFirmwareDragActive ? " is-drag-active" : ""}${
@@ -147,7 +147,7 @@ export default function FirmwareUpdatePanel() {
         </div>
       </div>
 
-      <div className="firmware-status-group">
+      <div className="firmware-status-group maintenance-submodule">
         <div className="subhead">Upload progress</div>
         <ProgressBar value={otaProgress} />
       </div>

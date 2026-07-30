@@ -13,11 +13,14 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--border);
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid rgba(21, 87, 183, 0.26);
   border-radius: 8px;
-  background: white;
+  background:
+    linear-gradient(135deg, transparent 0 10px, var(--armor-hot) 10px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(232, 237, 245, 0.88)),
+    var(--panel-soft);
 }
 
 .firmware-status-group {
@@ -29,31 +32,53 @@
 }
 
 .firmware-drop-area {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-height: 86px;
   justify-content: center;
-  padding: 12px;
-  border: 1px dashed var(--border-strong);
+  padding: 13px 14px;
+  border: 1px dashed rgba(21, 87, 183, 0.48);
   border-radius: 8px;
-  background: var(--panel-soft);
+  background:
+    linear-gradient(135deg, var(--warning) 0 10px, transparent 10px),
+    linear-gradient(90deg, rgba(21, 87, 183, 0.12) 1px, transparent 1px),
+    linear-gradient(180deg, var(--armor-hot), var(--panel-soft));
+  background-size: auto, 12px 12px, auto;
   color: var(--text);
+  overflow: hidden;
+}
+
+.firmware-drop-area::after {
+  content: "";
+  position: absolute;
+  inset: auto 10px 8px auto;
+  width: 48px;
+  height: 3px;
+  background: var(--danger);
+  opacity: 0.75;
 }
 
 .firmware-drop-area.is-drag-active {
   border-color: var(--primary);
-  background: var(--primary-soft);
+  background:
+    linear-gradient(135deg, var(--warning) 0 10px, transparent 10px),
+    var(--primary-soft);
 }
 
 .firmware-drop-area.has-error {
-  border-color: rgba(239, 68, 68, 0.55);
-  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(215, 25, 32, 0.55);
+  background:
+    linear-gradient(135deg, var(--danger) 0 10px, transparent 10px),
+    var(--danger-soft);
 }
 
 .firmware-drop-title {
+  color: var(--primary-strong);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .firmware-drop-meta,
@@ -64,11 +89,19 @@
 }
 
 .firmware-drop-meta {
-  color: var(--muted);
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 6px;
+  border: 1px solid rgba(220, 232, 255, 0.12);
+  border-radius: 5px;
+  background: var(--cockpit);
+  color: var(--console-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-weight: 800;
 }
 
 .firmware-drop-error {
-  color: #991b1b;
+  color: #8e1015;
   font-weight: 700;
 }
 

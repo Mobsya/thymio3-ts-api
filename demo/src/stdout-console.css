@@ -4,15 +4,18 @@
   max-height: 360px;
   overflow: auto;
   padding: 5px;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(220, 232, 255, 0.12);
   border-radius: 6px;
-  background: #0b1220;
-  color: #e5e7eb;
+  background:
+    linear-gradient(90deg, rgba(21, 87, 183, 0.12) 1px, transparent 1px),
+    linear-gradient(180deg, var(--cockpit-soft), var(--cockpit));
+  background-size: 18px 18px, auto;
+  color: var(--console-text);
   font-size: 11px;
 }
 
 .stdout-console-empty {
-  color: #9ca3af;
+  color: var(--console-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   white-space: pre-wrap;
 }
@@ -28,7 +31,7 @@
 }
 
 .stdout-console-line-number {
-  color: #64748b;
+  color: var(--console-muted);
   font-variant-numeric: tabular-nums;
   text-align: right;
   user-select: none;

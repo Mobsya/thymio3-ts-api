@@ -39,11 +39,11 @@ export default function AudioPanel() {
   }
 
   return (
-    <div className="compact-group audio-panel">
-      <div className="grid-title">Audio</div>
+    <div className="compact-group audio-panel maintenance-module audio-module">
+      <div className="grid-title maintenance-title">Audio</div>
 
       <div className="audio-subpanel-grid">
-        <div className="audio-subpanel">
+        <div className="audio-subpanel maintenance-submodule">
           <div className="subhead">Audio file upload</div>
           <div className="audio-upload-controls">
             <div className="row wrap">
@@ -54,7 +54,7 @@ export default function AudioPanel() {
           </div>
         </div>
 
-        <div className="audio-subpanel">
+        <div className="audio-subpanel maintenance-submodule">
           <div className="subhead">Audio actions</div>
           <div className="audio-transport-group" aria-label="Audio playback controls">
             <button className="secondary audio-transport-button" onClick={() => getThymio()?.playAudioFile?.()}>
@@ -72,7 +72,7 @@ export default function AudioPanel() {
           </div>
         </div>
 
-        <div className="audio-subpanel audio-frequency-panel">
+        <div className="audio-subpanel audio-frequency-panel maintenance-submodule">
           <div className="subhead">Frequency play</div>
           <div className="audio-frequency-controls">
             <label className="audio-slider-field">

@@ -5,31 +5,32 @@
 .sound-grid {
   display: grid;
   grid-template-columns: repeat(10, 32px);
-  gap: 6px;
+  gap: 5px;
 }
 
 .sound-button {
   width: 32px;
   height: 32px;
   padding: 0;
-  background: #f8fafc;
-  border: 1px solid var(--border);
-  color: var(--text);
+  background: var(--armor-hot);
+  border: 1px solid rgba(21, 87, 183, 0.26);
+  color: var(--primary-strong);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
+  font-weight: 900;
   line-height: 1;
 }
 
 .sound-button:hover {
-  filter: brightness(0.98);
-  border-color: rgba(25, 118, 210, 0.35);
+  filter: none;
+  border-color: var(--primary);
+  background: var(--primary-soft);
 }
 
 .sound-button.selected {
-  background: var(--primary);
+  background: var(--cockpit);
   border-color: var(--primary);
-  color: white;
+  color: var(--warning);
 }
 
 @media (max-width: 520px) {

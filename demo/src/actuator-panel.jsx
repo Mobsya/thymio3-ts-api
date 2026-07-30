@@ -193,7 +193,7 @@ function LedMatrixRow({ label, values, onChange }) {
 function LedMatrix({ rows }) {
   return (
     <div className="actuator-block led-matrix">
-      <div className="grid-title">LED intensity</div>
+      <div className="grid-title actuator-section-title">LED intensity</div>
       <div className="led-matrix-header">
         <span />
         <span>All</span>
@@ -239,7 +239,7 @@ function RgbChip({ label, rgb, onChange }) {
     <label className="rgb-chip">
       <span className="rgb-chip-header">
         <span className="rgb-chip-swatch" style={{ backgroundColor: rgbToCss(displayedRgb) }} />
-        <span>{label}</span>
+        <span className="rgb-chip-label">{label}</span>
       </span>
       <input
         aria-label={`${label} colour`}
@@ -286,7 +286,7 @@ function ReceiverLedSlider({ receiverLED, onChange }) {
 function RgbCluster({ items }) {
   return (
     <div className="actuator-block rgb-cluster">
-      <div className="grid-title">RGB LEDs</div>
+      <div className="grid-title actuator-section-title">RGB LEDs</div>
       <div className="rgb-chip-grid">
         {items.map((item) => (
           <RgbChip key={item.label} {...item} />
@@ -368,9 +368,9 @@ export default function ActuatorPanel() {
   }
 
   return (
-    <div className="tab-stack">
+    <div className="tab-stack actuator-panel-shell">
       <div className="preset-bar">
-        <div className="preset-title">Presets</div>
+        <div className="preset-title">Loadout Presets</div>
 
         <div className="preset-buttons">
           {PRESETS.map((p) => (
@@ -393,7 +393,7 @@ export default function ActuatorPanel() {
         </div>
 
         <div className="actuator-block compact-actuator-card">
-          <div className="grid-title">Sound & misc</div>
+          <div className="grid-title actuator-section-title">Sound & misc</div>
           <div className="actuator-field-row">
             <label className="compact-field">
               <span>Sound</span>

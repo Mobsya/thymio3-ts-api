@@ -78,8 +78,8 @@ export default function FilesPanel() {
   }
 
   return (
-    <div className="compact-group files-panel">
-      <div className="grid-title">Files</div>
+    <div className="compact-group files-panel maintenance-module file-module">
+      <div className="grid-title maintenance-title">Files</div>
       <div className="row wrap">
         <input ref={fileUploadRef} type="file" />
         <button onClick={uploadFile}>Upload file</button>
