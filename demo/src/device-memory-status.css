@@ -14,21 +14,26 @@
 
 .device-memory-state {
   padding: 3px 7px;
-  border-radius: 999px;
-  background: rgba(156, 163, 175, 0.12);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: rgba(156, 165, 143, 0.08);
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
+  font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-transform: uppercase;
 }
 
 .device-memory-state.connected {
-  background: rgba(34, 197, 94, 0.12);
-  color: #14532d;
+  border-color: rgba(69, 255, 114, 0.48);
+  background: rgba(69, 255, 114, 0.12);
+  color: var(--success);
 }
 
 .device-memory-state.disconnected {
-  background: rgba(239, 68, 68, 0.10);
-  color: #7f1d1d;
+  border-color: rgba(255, 48, 79, 0.48);
+  background: var(--danger-soft);
+  color: #ff8d9d;
 }
 
 .device-memory-chart-grid {
@@ -42,7 +47,11 @@
   min-height: 96px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 2px;
+  background:
+    linear-gradient(rgba(167, 255, 57, 0.04) 50%, transparent 50%),
+    #020707;
+  background-size: 100% 4px;
   overflow: hidden;
 }
 
@@ -61,10 +70,12 @@
   font-weight: 800;
   line-height: 1;
   pointer-events: none;
+  font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-transform: uppercase;
 }
 
 .device-memory-graph-label strong {
-  color: var(--text);
+  color: var(--primary);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
@@ -78,8 +89,8 @@
 }
 
 .device-memory-grid-line {
-  stroke: var(--border);
-  stroke-dasharray: 3 4;
+  stroke: rgba(167, 255, 57, 0.18);
+  stroke-dasharray: 2 5;
   stroke-width: 1;
 }
 
@@ -93,7 +104,8 @@
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 3;
+  stroke-width: 2.4;
+  filter: drop-shadow(0 0 3px currentColor);
 }
 
 .device-memory-line.ram {
@@ -101,7 +113,7 @@
 }
 
 .device-memory-line.flash {
-  stroke: #22c55e;
+  stroke: var(--secondary);
 }
 
 .device-memory-chart-empty {

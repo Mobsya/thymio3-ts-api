@@ -27,7 +27,7 @@
 .stdout-actions button {
   min-height: 22px;
   padding: 3px 6px;
-  border-radius: 5px;
+  border-radius: 2px;
   font-size: 11px;
   line-height: 1;
   white-space: nowrap;

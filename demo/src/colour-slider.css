@@ -15,8 +15,8 @@
   width: 36px;
   height: 36px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45);
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45), 0 0 12px rgba(167, 255, 57, 0.12);
 }
 
 .colour-range {
@@ -25,12 +25,12 @@
 }
 
 .colour-range::-webkit-slider-runnable-track {
-  border-radius: 999px;
+  border-radius: 2px;
   background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
 }
 
 .colour-range::-moz-range-track {
-  border-radius: 999px;
+  border-radius: 2px;
   background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
 }
 
@@ -40,4 +40,6 @@
   gap: 0.5rem;
   color: var(--muted);
   font-weight: 700;
+  font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-transform: uppercase;
 }

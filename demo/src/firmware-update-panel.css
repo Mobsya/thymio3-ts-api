@@ -10,14 +10,16 @@
 
 .firmware-command-group,
 .firmware-status-group {
+  position: relative;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: white;
+  border-radius: 2px;
+  background: var(--card);
+  box-shadow: inset 0 0 18px rgba(167, 255, 57, 0.04);
 }
 
 .firmware-status-group {
@@ -36,24 +38,28 @@
   justify-content: center;
   padding: 12px;
   border: 1px dashed var(--border-strong);
-  border-radius: 8px;
-  background: var(--panel-soft);
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(-45deg, rgba(255, 178, 39, 0.08) 0 7px, transparent 7px 14px),
+    var(--panel-soft);
   color: var(--text);
 }
 
 .firmware-drop-area.is-drag-active {
   border-color: var(--primary);
   background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .firmware-drop-area.has-error {
-  border-color: rgba(239, 68, 68, 0.55);
-  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(255, 48, 79, 0.72);
+  background: var(--danger-soft);
 }
 
 .firmware-drop-title {
   font-size: 13px;
   font-weight: 800;
+  text-transform: uppercase;
 }
 
 .firmware-drop-meta,
@@ -68,7 +74,7 @@
 }
 
 .firmware-drop-error {
-  color: #991b1b;
+  color: #ff8d9d;
   font-weight: 700;
 }
 

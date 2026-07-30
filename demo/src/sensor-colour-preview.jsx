@@ -60,7 +60,7 @@ export default function SensorColourPreview({ mode, value }) {
     <span
       aria-label={label}
       className="sensor-colour-preview"
-      style={{ backgroundColor: backgroundColor ?? "#f8fafc" }}
+      style={{ backgroundColor: backgroundColor ?? "var(--card)" }}
     />
   );
 }

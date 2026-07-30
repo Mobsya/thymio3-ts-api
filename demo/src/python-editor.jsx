@@ -31,6 +31,35 @@ function debounce(fn, ms) {
   };
 }
 
+function defineNervEditorTheme(monaco) {
+  monaco.editor.defineTheme("nerv-ops", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "", foreground: "f4f1dd", background: "020707" },
+      { token: "comment", foreground: "9ca58f", fontStyle: "italic" },
+      { token: "keyword", foreground: "ffb227", fontStyle: "bold" },
+      { token: "number", foreground: "a7ff39" },
+      { token: "string", foreground: "35e6ff" },
+      { token: "type", foreground: "9a5cff" },
+    ],
+    colors: {
+      "editor.background": "#020707",
+      "editor.foreground": "#f4f1dd",
+      "editorLineNumber.foreground": "#6d765f",
+      "editorLineNumber.activeForeground": "#ffb227",
+      "editorCursor.foreground": "#a7ff39",
+      "editor.selectionBackground": "#a7ff3933",
+      "editor.lineHighlightBackground": "#ffb22712",
+      "editorLineNumber.dimmedForeground": "#3e4738",
+      "editorGutter.background": "#050808",
+      "editorWhitespace.foreground": "#a7ff3926",
+      "editorIndentGuide.background1": "#a7ff3924",
+      "editorIndentGuide.activeBackground1": "#ffb22766",
+    },
+  });
+}
+
 export default function PythonEditor({ value, onChange, height }) {
   const monacoRef = useRef(null);
   const editorRef = useRef(null);
@@ -148,7 +177,9 @@ _syntax_check(___code___)
       <Editor
         height={height ?? "100%"}
         defaultLanguage="python"
+        theme="nerv-ops"
         value={value}
+        beforeMount={defineNervEditorTheme}
         onChange={(v) => {
           const next = v ?? "";
           onChange(next);

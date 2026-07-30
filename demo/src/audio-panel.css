@@ -9,14 +9,16 @@
 }
 
 .audio-subpanel {
+  position: relative;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: white;
+  border-radius: 2px;
+  background: var(--card);
+  box-shadow: inset 0 0 18px rgba(53, 230, 255, 0.04);
 }
 
 .audio-frequency-panel {
@@ -44,6 +46,7 @@
 
 .audio-transport-icon.record {
   color: var(--danger);
+  text-shadow: 0 0 10px rgba(255, 48, 79, 0.65);
 }
 
 .audio-upload-controls {
@@ -66,13 +69,14 @@
   font-size: 12px;
   font-weight: 800;
   color: var(--muted);
+  text-transform: uppercase;
 }
 
 .audio-slider-header {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  color: var(--text);
+  color: var(--secondary);
 }
 
 .audio-slider-header strong {
@@ -83,6 +87,7 @@
   font-size: 11px;
   font-weight: 700;
   color: var(--muted);
+  font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .audio-play-frequency-button {

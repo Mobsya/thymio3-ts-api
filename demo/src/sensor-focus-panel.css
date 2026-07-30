@@ -1,46 +1,50 @@
 .sensor-focus-panel {
-  --sensor-focus-cell-min-width: 126px;
-  --sensor-focus-reading-width: 7ch;
+  --sensor-focus-cell-min-width: 96px;
+  --sensor-focus-reading-width: 6.5ch;
 
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
 }
 
 .sensor-focus-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .sensor-focus-control {
-  padding: 6px 9px;
-  font-size: 12px;
+  min-height: 24px;
+  padding: 3px 6px;
+  font-size: 11px;
 }
 
 .sensor-focus-selector {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .sensor-focus-option {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 8px;
+  gap: 4px;
+  min-height: 24px;
+  padding: 3px 6px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #f8fafc;
+  border-radius: 2px;
+  background: var(--card);
   color: var(--text);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
+  font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-transform: uppercase;
 }
 
 .sensor-focus-option:has(input:checked) {
-  border-color: rgba(25, 118, 210, 0.35);
-  background: rgba(25, 118, 210, 0.08);
+  border-color: rgba(167, 255, 57, 0.58);
+  background: var(--primary-soft);
   color: var(--primary);
 }
 
@@ -52,26 +56,29 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 2px;
   overflow: hidden;
   background: var(--card);
 }
 
 .sensor-focus-empty {
-  padding: 10px;
+  padding: 7px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
 }
 
 .sensor-focus-row {
   display: grid;
-  grid-template-columns: 118px 52px minmax(0, 1fr);
+  grid-template-columns: 96px 42px minmax(0, 1fr);
   align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 4px 7px;
+  gap: 4px;
+  min-height: 23px;
+  padding: 2px 4px;
   border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(90deg, rgba(255, 178, 39, 0.06), transparent 24%),
+    rgba(3, 8, 8, 0.62);
 }
 
 .sensor-focus-row:last-child {
@@ -80,20 +87,26 @@
 
 .sensor-focus-row-label {
   min-width: 0;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 900;
+  color: var(--warning);
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sensor-focus-row-source {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
+  font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .sensor-focus-value-display {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: 2px 5px;
   align-items: center;
   min-width: 0;
 }
@@ -102,29 +115,37 @@
   display: grid;
   flex: 1 1 var(--sensor-focus-cell-min-width);
   grid-template-columns: repeat(auto-fit, minmax(var(--sensor-focus-cell-min-width), 1fr));
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
 .sensor-focus-value {
   display: inline-grid;
   grid-template-columns: minmax(0, 1fr) var(--sensor-focus-reading-width);
-  column-gap: 6px;
+  column-gap: 4px;
   align-items: baseline;
   min-width: 0;
-  padding: 3px 5px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 5px;
-  background: rgba(248, 250, 252, 0.82);
+  min-height: 18px;
+  padding: 1px 4px;
+  border: 1px solid rgba(53, 230, 255, 0.22);
+  border-radius: 2px;
+  background: rgba(0, 14, 16, 0.68);
+}
+
+.sensor-focus-value.is-changing {
+  animation: sensor-value-cell-change 420ms ease-out;
 }
 
 .sensor-focus-key {
   min-width: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   line-height: 1.05;
-  overflow-wrap: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .sensor-focus-reading {
@@ -132,10 +153,43 @@
   justify-content: flex-end;
   width: var(--sensor-focus-reading-width);
   overflow: hidden;
-  font-size: 12px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   font-weight: 900;
   white-space: nowrap;
+  color: var(--primary);
+  font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-shadow: 0 0 6px rgba(167, 255, 57, 0.28);
+}
+
+.sensor-focus-reading.is-changing {
+  animation: sensor-value-readout-change 420ms ease-out;
+}
+
+@keyframes sensor-value-cell-change {
+  0% {
+    border-color: rgba(255, 178, 39, 0.54);
+    background: rgba(167, 255, 57, 0.1);
+    box-shadow: inset 0 0 8px rgba(167, 255, 57, 0.1), 0 0 6px rgba(255, 178, 39, 0.14);
+  }
+
+  100% {
+    border-color: rgba(53, 230, 255, 0.22);
+    background: rgba(0, 14, 16, 0.68);
+    box-shadow: none;
+  }
+}
+
+@keyframes sensor-value-readout-change {
+  0% {
+    color: var(--warning);
+    text-shadow: 0 0 8px rgba(255, 178, 39, 0.36), 0 0 12px rgba(167, 255, 57, 0.18);
+  }
+
+  100% {
+    color: var(--primary);
+    text-shadow: 0 0 6px rgba(167, 255, 57, 0.28);
+  }
 }
 
 @media (max-width: 760px) {
@@ -143,5 +197,12 @@
     grid-template-columns: 1fr;
     gap: 4px;
     align-items: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sensor-focus-value.is-changing,
+  .sensor-focus-reading.is-changing {
+    animation: none;
   }
 }

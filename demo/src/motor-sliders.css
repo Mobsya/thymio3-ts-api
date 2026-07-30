@@ -17,6 +17,8 @@
 
 .motor-slider-label {
   font-weight: 700;
+  color: var(--warning);
+  text-transform: uppercase;
 }
 
 .motor-range {
@@ -25,20 +27,21 @@
 }
 
 .motor-range::-webkit-slider-runnable-track {
-  border-radius: 999px;
-  background: linear-gradient(90deg, #ef4444 0 50%, #22c55e 50% 100%);
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--danger) 0 50%, var(--success) 50% 100%);
 }
 
 .motor-range::-moz-range-track {
-  border-radius: 999px;
-  background: linear-gradient(90deg, #ef4444 0 50%, #22c55e 50% 100%);
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--danger) 0 50%, var(--success) 50% 100%);
 }
 
 .motor-slider-value {
-  color: var(--muted);
+  color: var(--primary);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: right;
+  font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 @media (max-width: 520px) {

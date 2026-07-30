@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import "./sensor-focus-panel.css";
 import SensorColourPreview from "./sensor-colour-preview";
 import { SENSOR_FOCUS_SENSOR_IDS, SENSOR_OPTIONS } from "./sensor-options";
@@ -18,6 +19,79 @@ function formatValue(value) {
   return String(value);
 }
 
+function getComparableValue(value) {
+  if (value === undefined) return "undefined";
+  if (value === null) return "null";
+  if (typeof value !== "object") return `${typeof value}:${value}`;
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function useValueChangePulse(value) {
+  const comparableValue = getComparableValue(value);
+  const previousValue = useRef(comparableValue);
+  const hasMounted = useRef(false);
+  const lastPulseAt = useRef(0);
+  const [isPulsing, setIsPulsing] = useState(false);
+
+  useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      previousValue.current = comparableValue;
+      return undefined;
+    }
+
+    if (previousValue.current === comparableValue) {
+      return undefined;
+    }
+
+    previousValue.current = comparableValue;
+
+    const now = Date.now();
+    if (now - lastPulseAt.current < 1200) {
+      return undefined;
+    }
+
+    lastPulseAt.current = now;
+    setIsPulsing(false);
+
+    const frameId = requestAnimationFrame(() => setIsPulsing(true));
+    const timeoutId = setTimeout(() => setIsPulsing(false), 420);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      clearTimeout(timeoutId);
+    };
+  }, [comparableValue]);
+
+  return isPulsing;
+}
+
+function SensorReading({ value }) {
+  const isPulsing = useValueChangePulse(value);
+
+  return (
+    <span className={`sensor-focus-reading${isPulsing ? " is-changing" : ""}`}>
+      {formatValue(value)}
+    </span>
+  );
+}
+
+function SensorValueChip({ name, value }) {
+  const isPulsing = useValueChangePulse(value);
+
+  return (
+    <span className={`sensor-focus-value${isPulsing ? " is-changing" : ""}`}>
+      <span className="sensor-focus-key">{formatKey(name)}</span>
+      <SensorReading value={value} />
+    </span>
+  );
+}
+
 function SensorValue({ value, colourPreviewMode }) {
   const colourPreview = colourPreviewMode ? <SensorColourPreview mode={colourPreviewMode} value={value} /> : null;
 
@@ -26,10 +100,7 @@ function SensorValue({ value, colourPreviewMode }) {
       <div className="sensor-focus-value-display">
         <div className="sensor-focus-values">
           {Object.entries(value).map(([key, entryValue]) => (
-            <span className="sensor-focus-value" key={key}>
-              <span className="sensor-focus-key">{formatKey(key)}</span>
-              <span className="sensor-focus-reading">{formatValue(entryValue)}</span>
-            </span>
+            <SensorValueChip key={key} name={key} value={entryValue} />
           ))}
         </div>
         {colourPreview}
@@ -39,7 +110,7 @@ function SensorValue({ value, colourPreviewMode }) {
 
   return (
     <span className="sensor-focus-value-display">
-      <span className="sensor-focus-reading">{formatValue(value)}</span>
+      <SensorReading value={value} />
       {colourPreview}
     </span>
   );

@@ -9,7 +9,7 @@
 }
 
 .sensors-panel .panel-body {
-  padding: 6px;
+  padding: 4px;
 }
 
 .sensor-stream-select {
@@ -19,11 +19,13 @@
   min-height: 30px;
   padding: 0 6px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel-soft);
+  border-radius: 2px;
+  background: var(--card);
   color: var(--muted);
   font-size: 12px;
   font-weight: 900;
+  font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-transform: uppercase;
 }
 
 .sensor-stream-select select {
@@ -37,14 +39,15 @@
 }
 
 .sensor-stream-select select:focus {
-  outline: 2px solid rgba(25, 118, 210, 0.35);
+  outline: 2px solid rgba(255, 178, 39, 0.42);
   outline-offset: 1px;
 }
 
 .sensors-panel .sensor-focus-panel {
-  --sensor-focus-cell-min-width: 124px;
+  --sensor-focus-cell-min-width: 88px;
+  --sensor-focus-reading-width: 6ch;
 
-  gap: 5px;
+  gap: 4px;
 }
 
 .sensors-panel .sensor-focus-controls,
@@ -53,22 +56,23 @@
 }
 
 .sensors-panel .sensor-focus-control {
-  min-height: 24px;
-  padding: 3px 6px;
-  font-size: 11px;
+  min-height: 22px;
+  padding: 2px 5px;
+  font-size: 10px;
 }
 
 .sensors-panel .sensor-focus-option {
-  gap: 4px;
-  padding: 3px 6px;
-  border-radius: 6px;
-  font-size: 11px;
+  gap: 3px;
+  min-height: 22px;
+  padding: 2px 5px;
+  border-radius: 2px;
+  font-size: 9px;
 }
 
 .sensors-panel .sensor-focus-row {
-  grid-template-columns: 92px minmax(0, 1fr);
-  min-height: 27px;
-  padding: 3px 5px;
+  grid-template-columns: 76px minmax(0, 1fr);
+  min-height: 21px;
+  padding: 1px 3px;
 }
 
 .sensors-panel .sensor-focus-row-source {
@@ -78,11 +82,16 @@
 .sensors-panel .sensor-focus-row-label,
 .sensors-panel .sensor-focus-key,
 .sensors-panel .sensor-focus-reading {
-  font-size: 13px;
+  font-size: 10px;
 }
 
 .sensors-panel .sensor-focus-values {
-  gap: 1px 6px;
+  gap: 1px 2px;
+}
+
+.sensors-panel .sensor-focus-value {
+  min-height: 17px;
+  padding: 1px 3px;
 }
 
 @media (max-width: 1120px) {
