@@ -1,4 +1,3 @@
-import { useState } from "react";
 import "./led-intensity-sliders.css";
 import { clampInt } from "./utils";
 
@@ -10,23 +9,13 @@ function areIntensitiesEqual(left, right) {
 }
 
 export default function LedIntensitySliders({ label, values, onChange }) {
-  const [draftValues, setDraftValues] = useState(null);
-  const displayedValues = draftValues ?? values;
+  const normalizedValues = values.map((value) => clampInt(value, 0, 15));
 
-  function updateDraftValue(index, value) {
-    setDraftValues((currentValues) => {
-      const next = [...(currentValues ?? values)];
-      next[index] = clampInt(value, 0, 15);
-      return next;
-    });
-  }
-
-  function commitValue(index, value) {
-    const next = [...displayedValues];
+  function updateValue(index, value) {
+    const next = [...normalizedValues];
     next[index] = clampInt(value, 0, 15);
-    setDraftValues(null);
 
-    if (areIntensitiesEqual(next, values)) {
+    if (areIntensitiesEqual(next, normalizedValues)) {
       return;
     }
 
@@ -37,9 +26,7 @@ export default function LedIntensitySliders({ label, values, onChange }) {
     <div className="grid-block led-intensity-sliders">
       <div className="grid-title">{label}</div>
       <div className="led-intensity-list">
-        {displayedValues.map((value, index) => {
-          const intensity = clampInt(value, 0, 15);
-
+        {normalizedValues.map((intensity, index) => {
           return (
             <label className="led-intensity-slider" key={index}>
               <span className="led-intensity-label">LED {index + 1}</span>
@@ -50,10 +37,7 @@ export default function LedIntensitySliders({ label, values, onChange }) {
                 min="0"
                 max="15"
                 value={intensity}
-                onChange={(e) => updateDraftValue(index, parseInt(e.target.value, 10))}
-                onBlur={(e) => commitValue(index, parseInt(e.currentTarget.value, 10))}
-                onKeyUp={(e) => commitValue(index, parseInt(e.currentTarget.value, 10))}
-                onPointerUp={(e) => commitValue(index, parseInt(e.currentTarget.value, 10))}
+                onChange={(e) => updateValue(index, parseInt(e.target.value, 10))}
               />
               <span className="led-intensity-value">{intensity}</span>
             </label>
