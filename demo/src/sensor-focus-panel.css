@@ -120,12 +120,11 @@
 
 .sensor-focus-key {
   min-width: 0;
-  overflow: hidden;
   color: var(--muted);
   font-size: 10px;
   font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.05;
+  overflow-wrap: break-word;
 }
 
 .sensor-focus-reading {

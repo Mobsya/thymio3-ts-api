@@ -42,7 +42,7 @@
 }
 
 .sensors-panel .sensor-focus-panel {
-  --sensor-focus-cell-min-width: 112px;
+  --sensor-focus-cell-min-width: 124px;
 
   gap: 5px;
 }
