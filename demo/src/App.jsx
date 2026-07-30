@@ -62,6 +62,7 @@ function TabButton({ id, activeTab, onSelect, children }) {
 }
 
 export default function App() {
+  const [theme, setTheme] = useState("classic");
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [deviceName, setDeviceName] = useState("");
   // possible values: "disconnected" | "connecting" | "connected"
@@ -81,6 +82,10 @@ export default function App() {
   const [firmwareInfo, setFirmwareInfo] = useState(null);
   const [firmwareInfoError, setFirmwareInfoError] = useState("");
   const [activeTab, setActiveTab] = useState("actuators");
+
+  useEffect(() => {
+    document.documentElement.dataset.demoTheme = theme;
+  }, [theme]);
 
   // --- Event listeners from thymio.global.js ---
   useEffect(() => {
@@ -210,7 +215,19 @@ export default function App() {
           </div>
         </Panel>
 
-        <Panel title="Controls" className="workbench-panel">
+        <Panel
+          title="Controls"
+          className="workbench-panel"
+          actions={
+            <label className="theme-select">
+              <span>Theme</span>
+              <select onChange={(event) => setTheme(event.target.value)} value={theme}>
+                <option value="classic">Default</option>
+                <option value="nerv">NERV Ops</option>
+              </select>
+            </label>
+          }
+        >
           <div className="tab-list" role="tablist" aria-label="Demo controls">
             <TabButton id="actuators" activeTab={activeTab} onSelect={setActiveTab}>
               Actuators
@@ -242,6 +259,7 @@ export default function App() {
 
                 <div className="python-editor-region">
                   <PythonEditor
+                    theme={theme}
                     value={code}
                     onChange={setCode}
                   />

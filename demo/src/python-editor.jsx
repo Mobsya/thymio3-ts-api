@@ -60,7 +60,7 @@ function defineNervEditorTheme(monaco) {
   });
 }
 
-export default function PythonEditor({ value, onChange, height }) {
+export default function PythonEditor({ value, onChange, height, theme = "classic" }) {
   const monacoRef = useRef(null);
   const editorRef = useRef(null);
   const validateRef = useRef(() => {});
@@ -177,7 +177,7 @@ _syntax_check(___code___)
       <Editor
         height={height ?? "100%"}
         defaultLanguage="python"
-        theme="nerv-ops"
+        theme={theme === "nerv" ? "nerv-ops" : "vs"}
         value={value}
         beforeMount={defineNervEditorTheme}
         onChange={(v) => {
