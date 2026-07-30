@@ -1,5 +1,6 @@
 .sensors-panel {
-  flex: 0 0 var(--sensor-panel-height);
+  flex: 1 1 var(--sensor-panel-height);
+  min-height: 0;
 }
 
 .sensors-panel .panel-header {
@@ -41,6 +42,8 @@
 }
 
 .sensors-panel .sensor-focus-panel {
+  --sensor-focus-cell-min-width: 112px;
+
   gap: 5px;
 }
 

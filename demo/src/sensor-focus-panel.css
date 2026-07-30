@@ -1,4 +1,7 @@
 .sensor-focus-panel {
+  --sensor-focus-cell-min-width: 126px;
+  --sensor-focus-reading-width: 7ch;
+
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -96,28 +99,44 @@
 }
 
 .sensor-focus-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 8px;
+  display: grid;
+  flex: 1 1 var(--sensor-focus-cell-min-width);
+  grid-template-columns: repeat(auto-fit, minmax(var(--sensor-focus-cell-min-width), 1fr));
+  gap: 4px;
   min-width: 0;
 }
 
 .sensor-focus-value {
-  display: inline-flex;
-  gap: 4px;
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) var(--sensor-focus-reading-width);
+  column-gap: 6px;
   align-items: baseline;
+  min-width: 0;
+  padding: 3px 5px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 5px;
+  background: rgba(248, 250, 252, 0.82);
 }
 
 .sensor-focus-key {
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
   font-size: 10px;
   font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sensor-focus-reading {
+  display: inline-flex;
+  justify-content: flex-end;
+  width: var(--sensor-focus-reading-width);
+  overflow: hidden;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 @media (max-width: 760px) {

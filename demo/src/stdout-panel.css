@@ -1,6 +1,12 @@
 .stdout-panel {
-  flex: 1 1 0;
-  min-height: 80px;
+  flex: 0 0 var(--stdout-panel-height);
+  min-height: 96px;
+  max-height: var(--stdout-panel-height);
+}
+
+.stdout-panel .panel-header {
+  min-height: 30px;
+  padding: 4px 7px;
 }
 
 .stdout-panel-scroll .stdout-console {
@@ -9,7 +15,7 @@
 }
 
 .stdout-panel .panel-body {
-  padding: 6px;
+  padding: 4px;
 }
 
 .stdout-actions {
@@ -19,8 +25,8 @@
 }
 
 .stdout-actions button {
-  min-height: 24px;
-  padding: 4px 7px;
+  min-height: 22px;
+  padding: 3px 6px;
   border-radius: 5px;
   font-size: 11px;
   line-height: 1;
