@@ -6,7 +6,6 @@ import PythonEditor from "./python-editor";
 import RobotStatusCard from "./robot-status-card";
 import SensorPanel from "./sensor-panel";
 import StdoutPanel from "./stdout-panel";
-import { clampInt } from "./utils";
 
 /**
  * Assumes thymio.iife.js exposes `window.thymio`.
@@ -76,23 +75,6 @@ export default function App() {
   // Streams / output
   const [stdOut, setStdOut] = useState([]);
 
-  // Actuators
-  const [circleLEDs, setCircleLEDs] = useState(Array(8).fill(0));
-  const [frontLegoLEDs, setFrontLegoLEDs] = useState(Array(8).fill(0));
-  const [rearLegoLEDs, setRearLegoLEDs] = useState(Array(8).fill(0));
-  const [flRGB, setFlRGB] = useState({ r: 0, g: 0, b: 0 });
-  const [frRGB, setFrRGB] = useState({ r: 0, g: 0, b: 0 });
-  const [blRGB, setBlRGB] = useState({ r: 0, g: 0, b: 0 });
-  const [brRGB, setBrRGB] = useState({ r: 0, g: 0, b: 0 });
-  const [motorLeft, setMotorLeft] = useState(0);
-  const [motorRight, setMotorRight] = useState(0);
-  const [sound, setSound] = useState(0);
-  const [smallBottomRGB, setSmallBottomRGB] = useState({ r: 0, g: 0, b: 0 });
-  const [smallBackRGB, setSmallBackRGB] = useState({ r: 0, g: 0, b: 0 });
-  const [buttonLEDS, setButtonLEDS] = useState(Array(4).fill(0));
-  const [receiverLED, setReceiverLED] = useState(0);
-  const [microphoneLED, setMicrophoneLED] = useState(false);
-
   const stdOutEntryId = useRef(0);
 
   // Device info
@@ -138,6 +120,10 @@ export default function App() {
 
     const onManualReconn = () => {
       setPromptManualReconnection(true);
+      setConnectionStatus("disconnected");
+      setDeviceName("");
+      setFirmwareInfo(null);
+      setFirmwareInfoError("");
     };
 
     const onPythonExecStatus = (event) => {
@@ -200,85 +186,6 @@ export default function App() {
     await t.softResetPythonInterpreter();
   }
 
-  function buildActuatorData(overrides = {}) {
-    return {
-      circleLEDs: overrides.circleLEDs ?? circleLEDs,
-      frontLegoLEDs: overrides.frontLegoLEDs ?? frontLegoLEDs,
-      rearLegoLEDs: overrides.rearLegoLEDs ?? rearLegoLEDs,
-      flRGB: overrides.flRGB ?? flRGB,
-      frRGB: overrides.frRGB ?? frRGB,
-      blRGB: overrides.blRGB ?? blRGB,
-      brRGB: overrides.brRGB ?? brRGB,
-      motorLeft: clampInt(overrides.motorLeft ?? motorLeft, -1000, 1000),
-      motorRight: clampInt(overrides.motorRight ?? motorRight, -1000, 1000),
-      sound: clampInt(overrides.sound ?? sound, 0, 19),
-      smallBottomRGB: overrides.smallBottomRGB ?? smallBottomRGB,
-      smallBackRGB: overrides.smallBackRGB ?? smallBackRGB,
-      buttonLEDs: overrides.buttonLEDs ?? overrides.buttonLEDS ?? buttonLEDS,
-      receiverLED: clampInt(overrides.receiverLED ?? receiverLED, 0, 15),
-      microphoneLED: overrides.microphoneLED ?? microphoneLED,
-    };
-  }
-
-  async function sendActuatorData(overrides = {}, { alertIfMissing = false } = {}) {
-    const t = getThymio();
-    if (!t?.setActuatorState) {
-      if (alertIfMissing) alert("thymio not loaded");
-      return;
-    }
-
-    await t.setActuatorState(buildActuatorData(overrides));
-  }
-
-  function updateRgbFromSlider(key, setRgb) {
-    return (rgb) => {
-      setRgb(rgb);
-      void sendActuatorData({ [key]: rgb });
-    };
-  }
-
-  function updateLedIntensitiesFromSlider(key, setValues) {
-    return (values) => {
-      setValues(values);
-      void sendActuatorData({ [key]: values });
-    };
-  }
-
-  function updateMotorsFromSlider(values) {
-    if (typeof values.motorLeft === "number") setMotorLeft(values.motorLeft);
-    if (typeof values.motorRight === "number") setMotorRight(values.motorRight);
-    void sendActuatorData(values);
-  }
-
-  function updateSoundFromPicker(value) {
-    const nextSound = clampInt(value, 0, 19);
-    setSound(nextSound);
-    void sendActuatorData({ sound: nextSound });
-  }
-
-  function applyPreset(preset) {
-    // helper to set many fields safely
-    if (preset.circleLEDs) setCircleLEDs(preset.circleLEDs);
-    if (preset.frontLegoLEDs) setFrontLegoLEDs(preset.frontLegoLEDs);
-    if (preset.rearLegoLEDs) setRearLegoLEDs(preset.rearLegoLEDs);
-
-    if (preset.flRGB) setFlRGB(preset.flRGB);
-    if (preset.frRGB) setFrRGB(preset.frRGB);
-    if (preset.blRGB) setBlRGB(preset.blRGB);
-    if (preset.brRGB) setBrRGB(preset.brRGB);
-
-    if (typeof preset.motorLeft === "number") setMotorLeft(preset.motorLeft);
-    if (typeof preset.motorRight === "number") setMotorRight(preset.motorRight);
-    if (typeof preset.sound === "number") setSound(preset.sound);
-    if (preset.smallBottomRGB) setSmallBottomRGB(preset.smallBottomRGB);
-    if (preset.smallBackRGB) setSmallBackRGB(preset.smallBackRGB);
-    if (preset.buttonLEDS) setButtonLEDS(preset.buttonLEDS);
-    if (typeof preset.receiverLED === "number") setReceiverLED(preset.receiverLED);
-    if (typeof preset.microphoneLED === "boolean") setMicrophoneLED(preset.microphoneLED);
-
-    void sendActuatorData(preset);
-  }
-
   return (
     <div className="page">
       <main className="dashboard-grid">
@@ -317,55 +224,7 @@ export default function App() {
           </div>
 
           <div className="tab-panel panel-scroll" id={`dashboard-tab-${activeTab}`} role="tabpanel">
-            {activeTab === "actuators" ? (
-              <ActuatorPanel
-                circleLEDs={circleLEDs}
-                frontLegoLEDs={frontLegoLEDs}
-                rearLegoLEDs={rearLegoLEDs}
-                buttonLEDS={buttonLEDS}
-                flRGB={flRGB}
-                frRGB={frRGB}
-                blRGB={blRGB}
-                brRGB={brRGB}
-                smallBottomRGB={smallBottomRGB}
-                smallBackRGB={smallBackRGB}
-                motorLeft={motorLeft}
-                motorRight={motorRight}
-                sound={sound}
-                receiverLED={receiverLED}
-                microphoneLED={microphoneLED}
-                onApplyPreset={applyPreset}
-                onCircleLEDsChange={updateLedIntensitiesFromSlider("circleLEDs", setCircleLEDs)}
-                onFrontLegoLEDsChange={updateLedIntensitiesFromSlider("frontLegoLEDs", setFrontLegoLEDs)}
-                onRearLegoLEDsChange={updateLedIntensitiesFromSlider("rearLegoLEDs", setRearLegoLEDs)}
-                onButtonLEDsChange={(values) => {
-                  setButtonLEDS(values);
-                  void sendActuatorData({ buttonLEDs: values });
-                }}
-                onFlRGBChange={updateRgbFromSlider("flRGB", setFlRGB)}
-                onFrRGBChange={updateRgbFromSlider("frRGB", setFrRGB)}
-                onBlRGBChange={updateRgbFromSlider("blRGB", setBlRGB)}
-                onBrRGBChange={updateRgbFromSlider("brRGB", setBrRGB)}
-                onSmallBottomRGBChange={(rgb) => {
-                  setSmallBottomRGB(rgb);
-                  void sendActuatorData({ smallBottomRGB: rgb });
-                }}
-                onSmallBackRGBChange={(rgb) => {
-                  setSmallBackRGB(rgb);
-                  void sendActuatorData({ smallBackRGB: rgb });
-                }}
-                onMotorsChange={updateMotorsFromSlider}
-                onSoundChange={updateSoundFromPicker}
-                onReceiverLEDChange={(nextReceiverLED) => {
-                  setReceiverLED(nextReceiverLED);
-                  void sendActuatorData({ receiverLED: nextReceiverLED });
-                }}
-                onMicrophoneLEDChange={(nextMicrophoneLED) => {
-                  setMicrophoneLED(nextMicrophoneLED);
-                  void sendActuatorData({ microphoneLED: nextMicrophoneLED });
-                }}
-              />
-            ) : null}
+            {activeTab === "actuators" ? <ActuatorPanel /> : null}
 
             {activeTab === "python" ? (
               <div className="tab-stack python-tab-stack">

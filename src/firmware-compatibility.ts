@@ -51,7 +51,6 @@ function warnIfFirmwareIsIncompatible(firmwareVersion: string): void {
       `[Thymio 3 API] Firmware compatibility warning: ESP32 firmware ${firmwareVersion} is outside the compatible range ${formatCompatibilityRange(firmwareCompatibility)} for API version ${getAPIVersion()}. Some API features may not work as expected.`
     );
   }
-  console.log('incompatible')
 }
 
 function isCompatibleFirmwareVersion(

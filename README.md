@@ -16,8 +16,8 @@ npm run build
 
 This generates the `dist` folder in which you can find the following files:
 
-1. `dist/thymio.global.js` - for use directly in the browser
-2. `dist/thymio.js` - for use as a CJS module
+1. `dist/thymio.iife.js` - for use directly in the browser
+2. `dist/thymio.cjs` - for use as a CJS module
 3. `dist/thymio.mjs` - for use as an ESM module
 
 ## Demo
@@ -26,8 +26,8 @@ A live demo of this project can be found [here](https://mobsya.github.io/thymio3
 
 If you want to run the demo locally you can run the following commands from the root directory :
 ```
-npm run install-demo
-npm run run-demo
+npm run demo:install
+npm run demo:run
 ```
 
 And open the `localhost:5173` in your browser.

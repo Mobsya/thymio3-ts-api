@@ -14,6 +14,10 @@ export const OTA_PROGRESS_BAR_CHARACTERISTIC_UUID = 0x8021;
 export const OTA_COMMAND_CHARACTERISTIC_UUID = 0x8022;
 export const OTA_CUSTOMER_CHARACTERISTIC_UUID = 0x8023;
 
+// Web Bluetooth can leave gatt.connect() pending indefinitely, so each
+// connection attempt must fail on its own to keep reconnect retries moving.
+export const GATT_CONNECT_TIMEOUT_MS = 10_000;
+
 export const MTU = 500;
 
 export const THYMIO_CONNECTED_EVENT_ID = 'thymio-connected';

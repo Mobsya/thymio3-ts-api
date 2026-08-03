@@ -1,4 +1,5 @@
 import { THYMIO_AUDIO_UPLOAD_PROGRESS_EVENT_ID } from "./constants";
+import { queueBluetoothCall, queuePriorityBluetoothCall } from "./bluetooth-queue";
 import { createPayloadPackets, type UploadProgress } from "./utils";
 
 /**
@@ -22,7 +23,7 @@ export async function uploadAudioFile(
   let uploadedPackets = 0;
 
   for(const packet of packets) {
-    await audioCharacteristic.writeValueWithResponse(packet);
+    await queueBluetoothCall(() => audioCharacteristic.writeValueWithResponse(packet));
 
     const uploadProgressData: UploadProgress = {
       uploadedPackets,
@@ -48,7 +49,7 @@ export async function playAudioFile(
   const body = new Array(20).fill(0x00);
   const payload = new Uint8Array([id, ...body]);
 
-  return await audioCharacteristic.writeValueWithResponse(payload);
+  return await queueBluetoothCall(() => audioCharacteristic.writeValueWithResponse(payload));
 }
 
 /**
@@ -61,7 +62,7 @@ export async function stopAudioFile(
 
   const payload = new Uint8Array([id]);
 
-  return await audioCharacteristic.writeValueWithResponse(payload);
+  return await queuePriorityBluetoothCall(() => audioCharacteristic.writeValueWithResponse(payload));
 }
 
 /**
@@ -84,7 +85,7 @@ export async function recordAudio(
   view.setUint8(1, duration);
   const payload = new Uint8Array(buffer);
 
-  return await audioCharacteristic.writeValueWithResponse(payload);
+  return await queueBluetoothCall(() => audioCharacteristic.writeValueWithResponse(payload));
 }
 
 /**
@@ -106,7 +107,7 @@ export async function playFrequency(
   view.setUint16(3, duration);
   const payload = new Uint8Array(buffer);
 
-  return await audioCharacteristic.writeValueWithResponse(payload);
+  return await queueBluetoothCall(() => audioCharacteristic.writeValueWithResponse(payload));
 }
 
 export function handleAudioResponse(event: Event) {

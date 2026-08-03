@@ -1,3 +1,5 @@
+import { queueBluetoothCall } from "./bluetooth-queue";
+
 export type FirmwareInfo = {
   esp32_ver: string,
   stm32_ver: string
@@ -38,7 +40,7 @@ export async function getFirmwareInfo(
     try {
       const id = 0x01;
       const payload = new Uint8Array([id]);
-      await deviceInfoCharacteristic.writeValueWithResponse(payload);
+      await queueBluetoothCall(() => deviceInfoCharacteristic.writeValueWithResponse(payload));
     } catch(err) {
       deviceInfoCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
       reject(err);
@@ -76,7 +78,7 @@ export async function getMemoryInfo(
     try {
       const id = 0x02;
       const payload = new Uint8Array([id]);
-      await deviceInfoCharacteristic.writeValueWithResponse(payload);
+      await queueBluetoothCall(() => deviceInfoCharacteristic.writeValueWithResponse(payload));
     } catch(err) {
       deviceInfoCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
       reject(err);

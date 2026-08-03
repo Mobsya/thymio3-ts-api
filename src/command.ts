@@ -1,3 +1,5 @@
+import { queueBluetoothCall } from "./bluetooth-queue";
+
 export type RGB = {
   r: number, // number 0-15
   g: number, // number 0-15
@@ -33,8 +35,8 @@ export async function setActuatorState(
   const commandArray = createCommandByteArray(actuatorData);
   const secondaryCommandArray = createSecondaryCommandByteArray(actuatorData);
 
-  await commandCharacteristic.writeValueWithResponse(commandArray);
-  await commandCharacteristic.writeValueWithResponse(secondaryCommandArray);
+  await queueBluetoothCall(() => commandCharacteristic.writeValueWithResponse(commandArray));
+  await queueBluetoothCall(() => commandCharacteristic.writeValueWithResponse(secondaryCommandArray));
 }
 
 /**

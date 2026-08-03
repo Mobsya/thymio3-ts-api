@@ -15,7 +15,12 @@
   --dashboard-padding: clamp(8px, 1vw, 14px);
   --telemetry-width: clamp(360px, 28vw, 480px);
   --memory-strip-height: clamp(88px, 9vh, 108px);
-  --sensor-panel-height: clamp(500px, calc(100dvh - 260px), 640px);
+  --stdout-panel-height: clamp(112px, 16dvh, 148px);
+  --sensor-panel-height: clamp(
+    480px,
+    calc(100dvh - var(--stdout-panel-height) - var(--dashboard-gap) - var(--dashboard-padding) - var(--dashboard-padding)),
+    760px
+  );
 }
 
 * { box-sizing: border-box; }
@@ -453,7 +458,12 @@ input[type="file"] {
 @media (max-width: 1120px) {
   :root {
     --telemetry-width: minmax(0, 1fr);
-    --sensor-panel-height: clamp(480px, 58vh, 600px);
+    --stdout-panel-height: clamp(104px, 14dvh, 132px);
+    --sensor-panel-height: clamp(
+      480px,
+      calc(100dvh - var(--stdout-panel-height) - var(--dashboard-gap) - var(--dashboard-padding) - var(--dashboard-padding)),
+      700px
+    );
   }
 
   .dashboard-header {

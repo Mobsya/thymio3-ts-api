@@ -57,42 +57,39 @@ function rgb15ToHue(rgb) {
   return Math.round(60 * ((r - g) / delta + 4));
 }
 
+function areRgbEqual(left, right) {
+  return (
+    clampInt(left.r, 0, 15) === clampInt(right.r, 0, 15) &&
+    clampInt(left.g, 0, 15) === clampInt(right.g, 0, 15) &&
+    clampInt(left.b, 0, 15) === clampInt(right.b, 0, 15)
+  );
+}
+
 export default function ColourSlider({ label, rgb, onChange }) {
   const hue = rgb15ToHue(rgb);
   const [draftHue, setDraftHue] = useState(null);
-  const displayedHue = draftHue ?? hue;
+  const draftRgb = draftHue === null ? null : hueToRgb15(draftHue);
+  const hasValidDraft = draftRgb !== null && areRgbEqual(draftRgb, rgb);
+  const displayedHue = hasValidDraft ? draftHue : hue;
+  const displayedRgb = hasValidDraft ? draftRgb : rgb;
 
   function handleChange(e) {
     const nextHue = clampInt(parseInt(e.target.value, 10), 0, 360);
-    setDraftHue(nextHue);
-  }
-
-  function commitHue(value) {
-    const nextHue = clampInt(parseInt(value, 10), 0, 360);
     const nextRgb = hueToRgb15(nextHue);
+    setDraftHue(nextHue);
 
-    if (
-      nextRgb.r === rgb.r &&
-      nextRgb.g === rgb.g &&
-      nextRgb.b === rgb.b
-    ) {
-      setDraftHue(null);
+    if (areRgbEqual(nextRgb, rgb)) {
       return;
     }
 
-    setDraftHue(null);
     onChange(nextRgb);
-  }
-
-  function handleCommit(e) {
-    commitHue(e.currentTarget.value);
   }
 
   return (
     <fieldset className="fieldset colour-slider">
       <legend>{label}</legend>
       <div className="colour-slider-row">
-        <span className="colour-swatch" style={{ backgroundColor: rgbToCss(rgb) }} />
+        <span className="colour-swatch" style={{ backgroundColor: rgbToCss(displayedRgb) }} />
         <input
           aria-label={`${label} colour`}
           className="colour-range"
@@ -101,15 +98,12 @@ export default function ColourSlider({ label, rgb, onChange }) {
           max="360"
           value={displayedHue}
           onChange={handleChange}
-          onBlur={handleCommit}
-          onKeyUp={handleCommit}
-          onPointerUp={handleCommit}
         />
       </div>
       <div className="colour-values">
-        <span>R {rgb.r}</span>
-        <span>G {rgb.g}</span>
-        <span>B {rgb.b}</span>
+        <span>R {displayedRgb.r}</span>
+        <span>G {displayedRgb.g}</span>
+        <span>B {displayedRgb.b}</span>
       </div>
     </fieldset>
   );
