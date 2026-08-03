@@ -56,7 +56,8 @@ export async function requestAndConnect(): Promise<void> {
       ]
     });
 
-    if (!device.name?.startsWith('THYMIO')) {
+    // Remove the T3 prefix upon 1.0 release
+    if (!device.name?.startsWith('THYMIO') && !device.name?.startsWith('T3')) {
       device = undefined;
       throw new Error('Not a Thymio device');
     }
