@@ -12,7 +12,7 @@
     {
       "label": "Build library and launch demo",
       "type": "npm",
-      "script": "run-demo",
+      "script": "demo:run",
       "group": "build",
       "problemMatcher": "$tsc",
       "detail": "Runs npm run run-demo: builds the library, then starts the demo dev server."

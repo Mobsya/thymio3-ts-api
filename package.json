@@ -13,9 +13,9 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc --noEmit && tsdown",
-    "install-demo": "npm install --prefix demo",
-    "build-demo": "tsc --noEmit && tsdown && npm run build --prefix demo",
-    "run-demo": "tsc --noEmit && tsdown && npm run dev --prefix demo"
+    "demo:install": "npm install --prefix demo",
+    "demo:build": "tsc --noEmit && tsdown && npm run build --prefix demo",
+    "demo:run": "tsc --noEmit && tsdown && npm run dev --prefix demo"
   },
   "author": "",
   "license": "ISC",
