@@ -228,8 +228,13 @@
 
 .rgb-chip-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
+}
+
+.rgb-chip:nth-child(5),
+.rgb-chip:nth-child(6) {
+  grid-column: span 2;
 }
 
 .rgb-chip {
@@ -310,6 +315,11 @@
 @media (max-width: 900px) {
   .rgb-chip-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rgb-chip:nth-child(5),
+  .rgb-chip:nth-child(6) {
+    grid-column: span 1;
   }
 }
 
