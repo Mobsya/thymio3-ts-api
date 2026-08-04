@@ -10,6 +10,28 @@ function getThymio() {
 }
 
 const ACTUATOR_SEND_INTERVAL_MS = 100;
+const SOUND_OPTIONS = [
+  { value: 0, label: "no sound" },
+  { value: 1, label: "a3" },
+  { value: 2, label: "alarm" },
+  { value: 3, label: "b3" },
+  { value: 4, label: "bad" },
+  { value: 5, label: "beep" },
+  { value: 6, label: "blop" },
+  { value: 7, label: "bye" },
+  { value: 8, label: "c3" },
+  { value: 9, label: "d3" },
+  { value: 10, label: "detect" },
+  { value: 11, label: "e3" },
+  { value: 12, label: "f3" },
+  { value: 13, label: "fall" },
+  { value: 14, label: "g3" },
+  { value: 15, label: "good" },
+  { value: 16, label: "magic" },
+  { value: 17, label: "notify" },
+  { value: 18, label: "ping" },
+  { value: 19, label: "tick" },
+];
 const DEFAULT_ACTUATOR_DATA = {
   circleLEDs: Array(8).fill(0),
   frontLegoLEDs: Array(8).fill(0),
@@ -195,18 +217,6 @@ function LedMatrix({ rows }) {
   return (
     <div className="actuator-block led-matrix">
       <div className="grid-title">LED intensity</div>
-      <div className="led-matrix-header">
-        <span />
-        <span>All</span>
-        <span>1</span>
-        <span>2</span>
-        <span>3</span>
-        <span>4</span>
-        <span>5</span>
-        <span>6</span>
-        <span>7</span>
-        <span>8</span>
-      </div>
       <div className="led-matrix-body">
         {rows.map((row) => (
           <LedMatrixRow key={row.label} {...row} />
@@ -423,9 +433,9 @@ export default function ActuatorPanel() {
                 onChange={(e) => updateSoundFromPicker(parseInt(e.target.value, 10))}
                 value={sound}
               >
-                {Array.from({ length: 20 }, (_, value) => (
+                {SOUND_OPTIONS.map(({ value, label }) => (
                   <option key={value} value={value}>
-                    {value}
+                    {label}
                   </option>
                 ))}
               </select>
