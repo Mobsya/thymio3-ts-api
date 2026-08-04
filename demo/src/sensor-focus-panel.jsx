@@ -1,4 +1,5 @@
 import "./sensor-focus-panel.css";
+import { hsvToRgb } from "./color-utils";
 import SensorColourPreview from "./sensor-colour-preview";
 import { SENSOR_FOCUS_SENSOR_IDS, SENSOR_OPTIONS } from "./sensor-options";
 
@@ -18,19 +19,45 @@ function formatValue(value) {
   return String(value);
 }
 
+function SensorValueEntries({ entries }) {
+  return entries.map(([key, entryValue]) => (
+    <span className="sensor-focus-value" key={key}>
+      <span className="sensor-focus-key">{formatKey(key)}</span>
+      <span className="sensor-focus-reading">{formatValue(entryValue)}</span>
+    </span>
+  ));
+}
+
 function SensorValue({ value, colourPreviewMode }) {
   const colourPreview = colourPreviewMode ? <SensorColourPreview mode={colourPreviewMode} value={value} /> : null;
 
   if (value && typeof value === "object" && !Array.isArray(value)) {
+    if (colourPreviewMode === "hsv") {
+      const rgb = hsvToRgb(value);
+      const hsvEntries = Object.entries(value);
+      const rgbEntries = rgb ? Object.entries(rgb) : [];
+
+      return (
+        <div className="sensor-focus-value-display">
+          <div className="sensor-focus-color-values">
+            <div className="sensor-focus-color-group">
+              <SensorValueEntries entries={hsvEntries} />
+            </div>
+            {rgbEntries.length > 0 ? (
+              <div className="sensor-focus-color-group">
+                <SensorValueEntries entries={rgbEntries} />
+              </div>
+            ) : null}
+          </div>
+          {colourPreview}
+        </div>
+      );
+    }
+
     return (
       <div className="sensor-focus-value-display">
         <div className="sensor-focus-values">
-          {Object.entries(value).map(([key, entryValue]) => (
-            <span className="sensor-focus-value" key={key}>
-              <span className="sensor-focus-key">{formatKey(key)}</span>
-              <span className="sensor-focus-reading">{formatValue(entryValue)}</span>
-            </span>
-          ))}
+          <SensorValueEntries entries={Object.entries(value)} />
         </div>
         {colourPreview}
       </div>

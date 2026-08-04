@@ -223,24 +223,29 @@
 .rgb-cluster {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .rgb-chip-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(150px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.rgb-chip:nth-child(5),
+.rgb-chip:nth-child(6) {
+  grid-column: span 2;
 }
 
 .rgb-chip {
   display: grid;
-  grid-template-columns: 80px minmax(0, 1fr) 74px;
-  align-items: center;
-  gap: 8px;
+  grid-template-rows: auto auto;
+  justify-items: center;
+  gap: 5px;
   min-width: 0;
-  padding: 7px;
+  padding: 5px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: white;
 }
 
@@ -248,6 +253,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  justify-self: stretch;
   min-width: 0;
   font-size: 12px;
   font-weight: 900;
@@ -255,37 +261,69 @@
 
 .rgb-chip-swatch {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 5px;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45);
 }
 
-.rgb-chip-range {
-  width: 100%;
-  accent-color: var(--primary);
-}
-
-.rgb-chip-range::-webkit-slider-runnable-track {
-  border-radius: 999px;
-  background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
-}
-
-.rgb-chip-range::-moz-range-track {
-  border-radius: 999px;
-  background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
-}
-
 .rgb-chip-values {
+  margin-left: auto;
   color: var(--muted);
   font-size: 10px;
   font-weight: 900;
   white-space: nowrap;
 }
 
+.rgb-chip .react-colorful {
+  width: 100%;
+  height: 114px;
+}
+
+.rgb-chip .react-colorful__saturation {
+  border-bottom-width: 8px;
+  border-radius: 6px 6px 0 0;
+}
+
+.rgb-chip .react-colorful__hue {
+  height: 18px;
+}
+
+.rgb-chip .react-colorful__last-control {
+  border-radius: 0 0 6px 6px;
+}
+
+.rgb-chip .react-colorful__pointer {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
+.rgb-chip .react-colorful__hue-pointer {
+  width: 12px;
+  height: 20px;
+  border-radius: 6px;
+}
+
 @media (max-width: 1120px) {
-  .actuator-top-grid,
+  .actuator-top-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .rgb-chip-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rgb-chip:nth-child(5),
+  .rgb-chip:nth-child(6) {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 560px) {
   .rgb-chip-grid {
     grid-template-columns: 1fr;
   }
@@ -299,8 +337,7 @@
 
   .actuator-field-row,
   .led-matrix-header,
-  .led-matrix-row,
-  .rgb-chip {
+  .led-matrix-row {
     grid-template-columns: 1fr;
   }
 

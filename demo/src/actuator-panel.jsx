@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { RgbColorPicker } from "react-colorful";
 import { PRESETS } from "./presets";
 import MotorSliders from "./motor-sliders";
-import { clampInt, rgbToCss, rgb15ToHue, hueToRgb15, areIntensitiesEqual, areRgbEqual } from "./utils";
+import { clampInt, rgbToCss, areIntensitiesEqual, areRgbEqual } from "./utils";
 import "./actuator-panel.css";
 
 function getThymio() {
@@ -9,6 +10,28 @@ function getThymio() {
 }
 
 const ACTUATOR_SEND_INTERVAL_MS = 100;
+const SOUND_OPTIONS = [
+  { value: 0, label: "no sound" },
+  { value: 1, label: "a3" },
+  { value: 2, label: "alarm" },
+  { value: 3, label: "b3" },
+  { value: 4, label: "bad" },
+  { value: 5, label: "beep" },
+  { value: 6, label: "blop" },
+  { value: 7, label: "bye" },
+  { value: 8, label: "c3" },
+  { value: 9, label: "d3" },
+  { value: 10, label: "detect" },
+  { value: 11, label: "e3" },
+  { value: 12, label: "f3" },
+  { value: 13, label: "fall" },
+  { value: 14, label: "g3" },
+  { value: 15, label: "good" },
+  { value: 16, label: "magic" },
+  { value: 17, label: "notify" },
+  { value: 18, label: "ping" },
+  { value: 19, label: "tick" },
+];
 const DEFAULT_ACTUATOR_DATA = {
   circleLEDs: Array(8).fill(0),
   frontLegoLEDs: Array(8).fill(0),
@@ -194,18 +217,6 @@ function LedMatrix({ rows }) {
   return (
     <div className="actuator-block led-matrix">
       <div className="grid-title">LED intensity</div>
-      <div className="led-matrix-header">
-        <span />
-        <span>All</span>
-        <span>1</span>
-        <span>2</span>
-        <span>3</span>
-        <span>4</span>
-        <span>5</span>
-        <span>6</span>
-        <span>7</span>
-        <span>8</span>
-      </div>
       <div className="led-matrix-body">
         {rows.map((row) => (
           <LedMatrixRow key={row.label} {...row} />
@@ -215,18 +226,42 @@ function LedMatrix({ rows }) {
   );
 }
 
+function rgb15ToRgb255(rgb) {
+  return {
+    r: clampInt(rgb.r, 0, 15) * 17,
+    g: clampInt(rgb.g, 0, 15) * 17,
+    b: clampInt(rgb.b, 0, 15) * 17,
+  };
+}
+
+function rgb255ToRgb15(rgb) {
+  return {
+    r: clampInt(Math.round(rgb.r / 17), 0, 15),
+    g: clampInt(Math.round(rgb.g / 17), 0, 15),
+    b: clampInt(Math.round(rgb.b / 17), 0, 15),
+  };
+}
+
+function normalizeRgb255(rgb) {
+  return {
+    r: clampInt(Math.round(rgb.r), 0, 255),
+    g: clampInt(Math.round(rgb.g), 0, 255),
+    b: clampInt(Math.round(rgb.b), 0, 255),
+  };
+}
+
 function RgbChip({ label, rgb, onChange }) {
-  const hue = rgb15ToHue(rgb);
-  const [draftHue, setDraftHue] = useState(null);
-  const draftRgb = draftHue === null ? null : hueToRgb15(draftHue);
+  const [draftPickerRgb, setDraftPickerRgb] = useState(null);
+  const draftRgb = draftPickerRgb === null ? null : rgb255ToRgb15(draftPickerRgb);
   const hasValidDraft = draftRgb !== null && areRgbEqual(draftRgb, rgb);
-  const displayedHue = hasValidDraft ? draftHue : hue;
+  const pickerRgb = hasValidDraft ? draftPickerRgb : rgb15ToRgb255(rgb);
   const displayedRgb = hasValidDraft ? draftRgb : rgb;
 
-  function updateHue(value) {
-    const nextHue = clampInt(parseInt(value, 10), 0, 360);
-    const nextRgb = hueToRgb15(nextHue);
-    setDraftHue(nextHue);
+  function updateRgb(value) {
+    const nextPickerRgb = normalizeRgb255(value);
+    const nextRgb = rgb255ToRgb15(nextPickerRgb);
+
+    setDraftPickerRgb(nextPickerRgb);
 
     if (areRgbEqual(nextRgb, rgb)) {
       return;
@@ -236,22 +271,18 @@ function RgbChip({ label, rgb, onChange }) {
   }
 
   return (
-    <label className="rgb-chip">
+    <div className="rgb-chip">
       <span className="rgb-chip-header">
         <span className="rgb-chip-swatch" style={{ backgroundColor: rgbToCss(displayedRgb) }} />
         <span>{label}</span>
+        <span className="rgb-chip-values">R {displayedRgb.r} G {displayedRgb.g} B {displayedRgb.b}</span>
       </span>
-      <input
+      <RgbColorPicker
         aria-label={`${label} colour`}
-        className="rgb-chip-range"
-        max="360"
-        min="0"
-        onChange={(e) => updateHue(e.target.value)}
-        type="range"
-        value={displayedHue}
+        color={pickerRgb}
+        onChange={updateRgb}
       />
-      <span className="rgb-chip-values">R {displayedRgb.r} G {displayedRgb.g} B {displayedRgb.b}</span>
-    </label>
+    </div>
   );
 }
 
@@ -402,9 +433,9 @@ export default function ActuatorPanel() {
                 onChange={(e) => updateSoundFromPicker(parseInt(e.target.value, 10))}
                 value={sound}
               >
-                {Array.from({ length: 20 }, (_, value) => (
+                {SOUND_OPTIONS.map(({ value, label }) => (
                   <option key={value} value={value}>
-                    {value}
+                    {label}
                   </option>
                 ))}
               </select>
