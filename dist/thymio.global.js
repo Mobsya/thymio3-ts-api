@@ -9428,6 +9428,11 @@ var thymio = (() => {
     }
   });
 
+  function dispatchThymioEvent(name, detail = {}) {
+    const event = new CustomEvent(name, { detail });
+    document.dispatchEvent(event);
+  }
+
   // src/thymio.ts
   var thymio_exports = {};
   __export(thymio_exports, {
@@ -9702,42 +9707,29 @@ var thymio = (() => {
       const id = value.getUint8(0);
       if (id === 1) {
         const loadResult = value.getUint8(1);
-        switch (loadResult) {
-          case 0:
-            dispatchExecutionStatusEvent(true);
-            console.log("[Python execution]: \u2705 Script loaded successfully.");
-            break;
-          case 1:
-            console.log("[Python execution]: \u274C CRC mismatch.");
-            break;
-          case 2:
-            console.log("[Python execution]: \u26A0\uFE0F Partial upload.");
-            break;
-          case 3:
-            console.log("[Python execution]: \u274C Wrong sequence.");
-            break;
-          case 4:
-            console.log("[Python execution]: \u274C Script too big (2 KB limit).");
-            break;
-          default:
-            throw new Error("[Python execution]: Unknown return code.");
-        }
+        const resultMessages = {
+          0: "\u2705 Script loaded successfully.",
+          1: "\u274C CRC mismatch.",
+          2: "\u26A0\uFE0F Partial upload.",
+          3: "\u274C Wrong sequence.",
+          4: "\u274C Script too big (2 KB limit)."
+          // Add more error codes if needed
+        };
+        console.log(
+          `[Notification] Script Loaded: ${resultMessages[loadResult] || "Unknown error code: " + loadResult}`
+        );
       } else if (id === 2) {
         const result = value.getUint8(1);
         const exception = (result & 1) !== 0;
         const scriptRunning = (result & 2) !== 0;
-        let terminationReason;
+        console.log("[Notification] Script Terminated:");
         if (!exception && !scriptRunning) {
-          terminationReason = "\u2705 Script terminated normally.";
+          console.log("\u2705 Script terminated normally.");
         } else {
-          if (exception) {
-            terminationReason = "\u274C Script terminated with exception.";
-          } else if (scriptRunning) {
-            terminationReason = "\u26A0\uFE0F Another script was already running.";
-          }
+          if (exception) console.log("\u274C Script terminated with exception.");
+          if (scriptRunning)
+            console.log("\u26A0\uFE0F Another script was already running.");
         }
-        console.log(`[Python execution]: Script Terminated: ${terminationReason}`);
-        dispatchExecutionStatusEvent(false);
       } else {
         console.warn(
           `[Notification] Unknown ID: 0x${id.toString(16).padStart(2, "0")}`
@@ -10691,7 +10683,7 @@ var thymio = (() => {
         { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID] }
       ]
     });
-    if (!device.name?.startsWith("THYMIO")) {
+    if (!device.name?.startsWith("T3") && !device.name?.startsWith("THYMIO")) {
       device = void 0;
       throw new Error("Not a Thymio device");
     }
@@ -10710,48 +10702,52 @@ var thymio = (() => {
     if (device) {
       device.removeEventListener("gattserverdisconnected", onDisconnected);
       await device.gatt?.disconnect();
-      dispatchConnectedEvent(false);
       console.log("\u2705 Disconnected from Thymio 3.");
+      dispatchThymioEvent('thymio-disconnected');
     } else {
       throw new Error("Bluetooth device is undefined");
     }
   }
   async function connect() {
     if (device && device.gatt) {
-      const server = await device.gatt.connect();
-      const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
-      commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
-      sensorStreamCharacteristic = await mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
-      await sensorStreamCharacteristic.startNotifications();
-      sensorStreamCharacteristic.addEventListener("characteristicvaluechanged", handleStreamResponse);
-      pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
-      await pythonCharacteristic.startNotifications();
-      pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
-      stdOutCharacteristic = await mainService.getCharacteristic(STD_OUT_CHARACTERISTIC_UUID);
-      await stdOutCharacteristic.startNotifications();
-      stdOutCharacteristic.addEventListener("characteristicvaluechanged", handleStdOutResponse);
-      audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
-      await audioCharacteristic.startNotifications();
-      audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);
-      fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
-      await fileCharacteristic.startNotifications();
-      deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
-      await deviceInfoCharacteristic.startNotifications();
-      const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
-      otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
-      await otaFirmwareCharacteristic.startNotifications();
-      otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
-      otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
-      await otaCommandCharacteristic.startNotifications();
-      otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
-      dispatchConnectedEvent(true);
+      try {
+        const server = await device.gatt.connect();
+        const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
+        commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
+        sensorStreamCharacteristic = await mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
+        await sensorStreamCharacteristic.startNotifications();
+        sensorStreamCharacteristic.addEventListener("characteristicvaluechanged", handleStreamResponse);
+        pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
+        await pythonCharacteristic.startNotifications();
+        pythonCharacteristic.addEventListener("characteristicvaluechanged", handlePythonResponse);
+        stdOutCharacteristic = await mainService.getCharacteristic(STD_OUT_CHARACTERISTIC_UUID);
+        await stdOutCharacteristic.startNotifications();
+        stdOutCharacteristic.addEventListener("characteristicvaluechanged", handleStdOutResponse);
+        audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
+        await audioCharacteristic.startNotifications();
+        audioCharacteristic.addEventListener("characteristicvaluechanged", handleAudioResponse);
+        fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
+        await fileCharacteristic.startNotifications();
+        deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
+        await deviceInfoCharacteristic.startNotifications();
+        const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
+        otaFirmwareCharacteristic = await otaService.getCharacteristic(OTA_FIRMWARE_CHARACTERISTIC_UUID);
+        otaFirmwareCharacteristic.startNotifications();
+        otaFirmwareCharacteristic.addEventListener("characteristicvaluechanged", otaFirmwareNotificationHandler);
+        otaCommandCharacteristic = await otaService.getCharacteristic(OTA_COMMAND_CHARACTERISTIC_UUID);
+        otaCommandCharacteristic.startNotifications();
+        otaCommandCharacteristic.addEventListener("characteristicvaluechanged", otaCommandNotificationHandler);
+      } catch (e) {
+        console.error(`Could not connect to Thymio 3.`, e);
+      }
       console.log("\u2705 Connected to Thymio 3 !");
+      dispatchThymioEvent('thymio-connected');
     } else {
       throw new Error("Bluetooth GATT is not available.");
     }
   }
   function onDisconnected() {
-    dispatchConnectedEvent(false);
+    dispatchThymioEvent('thymio-disconnected');
     console.log("\u26A0\uFE0F Disconnected. Attempting to reconnect...");
     if (!reconnecting) {
       reconnecting = true;
@@ -10763,10 +10759,10 @@ var thymio = (() => {
       throw new Error("Bluetooth device is undefined");
     }
     let attempts = 0;
-    const maxAttempts = 5;
+    const maxAttempts = 10;
     while (attempts < maxAttempts) {
       try {
-        await delay(3e3);
+        await delay(2e3);
         if (!device.gatt.connected) {
           await connect();
           reconnecting = false;
@@ -10778,8 +10774,6 @@ var thymio = (() => {
       attempts++;
     }
     console.log(`\u274C Failed to reconnect after ${attempts} attempts`);
-    disconnect();
-    dispatchManualReconnectionEvent();
   }
   async function setActuatorState2(actuatorData) {
     await setActuatorState(commandCharacteristic, actuatorData);
@@ -10820,12 +10814,7 @@ var thymio = (() => {
     );
   }
   async function uploadFirmware2(firmware) {
-    unsubscribeFromCharacteristics();
-    return await uploadFirmware(
-      otaCommandCharacteristic,
-      otaFirmwareCharacteristic,
-      firmware
-    );
+    return await uploadFirmware(otaCommandCharacteristic, otaFirmwareCharacteristic, firmware);
   }
   async function stopFirmwareUpload2() {
     return await stopFirmwareUpload(otaCommandCharacteristic);
@@ -10905,7 +10894,7 @@ var thymio = (() => {
   }  
   async function startBothSensorStreaming2() {
     return await startBothSensorStreaming(sensorStreamCharacteristic);
-  }
+  }    
   return __toCommonJS(thymio_exports);
 })();
 //# sourceMappingURL=thymio.global.js.map

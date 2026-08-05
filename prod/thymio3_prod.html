@@ -93,6 +93,7 @@
   <div id="upload-status-text">Uploading Python Script...</div>
 </div>
 <div class="container">
+  <div style="color: #666; font-style: italic; font-size: 9px;">v.2026-07-29</div>
   <div class="header">
     <h2>Thymio 3 Test and Calibration</h2>
     <div id="connection-status" style="color: #d32f2f; font-weight: bold;">Disconnected</div>
@@ -171,26 +172,26 @@
     //statusLbl.style.color = "#d32f2f";
   }
 
-// Listener for connection state changes
-// thymio-connected now dispatches the connection state in event.detail
-document.addEventListener("thymio-connected", (event) => {
+// Listener for unexpected disconnection
+// Handles both manual and automatic reconnections
+document.addEventListener("thymio-connected", () => {
+    const deviceName = thymio.getDeviceName();
     const statusLbl = document.getElementById('connection-status');
-
-    if (event.detail) {
-        const deviceName = thymio.getDeviceName();
-        statusLbl.innerText = `Connected to ${deviceName}`;
-        statusLbl.className = "status-connected";
-        console.log("Thymio Link Active.");
-    } else {
-        statusLbl.innerText = "Disconnected";
-        statusLbl.className = "status-disconnected";
-
-        // Safety: Hide loading overlay if it was visible during a crash
-        document.getElementById('upload-overlay').style.display = 'none';
-        console.warn("Thymio Link Lost.");
-    }
+    statusLbl.innerText = `Connected to ${deviceName}`;
+    statusLbl.className = "status-connected";
+    console.log("Thymio Link Active.");
 });
 
+// Handles unexpected drops (battery, range) or manual disconnects
+document.addEventListener("thymio-disconnected", () => {
+    const statusLbl = document.getElementById('connection-status');
+    statusLbl.innerText = "Disconnected";
+    statusLbl.className = "status-disconnected";
+    
+    // Safety: Hide loading overlay if it was visible during a crash
+    document.getElementById('loading-overlay').style.display = 'none';
+    console.warn("Thymio Link Lost.");
+});
 
   // ==========================================
   // SENSOR VISUALIZATION
@@ -1173,6 +1174,10 @@ calib_mot_bw_first_row = 1
 calib_mot_bw_sum = 0
 calib_mot_bw_time = 0
 calib_mot_bw = [0, 0, 0]
+diff_prox = 0
+diff_prox_prev = 0
+delta_count = 0
+delta = 0
 
 calib_state = 0
 state_counter = 0
@@ -1275,7 +1280,7 @@ while 1:
         ground_black[1] = g1.reflected() - g1.ambient()
         if(ground_black[1] < 0):
             ground_black[1] = 0
-        g0.set_calibration_all([ground_black[0], ground_black[1], ground_white[0], ground_white[1]])
+        g0.set_calibration_from_values([ground_black[0], ground_black[1], ground_white[0], ground_white[1]])
         # color
         color.calibrate_and_save_black()
 
@@ -1515,11 +1520,17 @@ while 1:
             #print("go to state 1 from 0")
 
         elif calib_mot_bw_state == 1: # Go backward until the start of the first black line is detected, then reset the timer
-            temp_rot = imu.get_angle_deg()*4
+            temp_rot = 0 #imu.get_angle_deg()*4            
             #mot.set_speed(-CALIB_FWBW_MOT_SPEED+temp_rot, -CALIB_FWBW_MOT_SPEED-temp_rot) # try to keep the robot straight during the forward movement using the gyro feedback
-            proxSum =  int((p5.value() - p6.value())/10);
-            #mot.set_speed(-CALIB_FWBW_MOT_SPEED-proxSum, -CALIB_FWBW_MOT_SPEED+proxSum)  
-            mot.set_speed(-CALIB_FWBW_MOT_SPEED+temp_rot-proxSum, -CALIB_FWBW_MOT_SPEED-temp_rot+proxSum)
+            proxSum =  0 #int((p5.value() - p6.value())/10);
+            diff_prox = p0.value() - p4.value()
+            delta_count = delta_count + 1
+            if delta_count > 10:
+                delta_count = 0
+                delta = int((diff_prox - diff_prox_prev)/6)
+                #print("delta = " + str(delta))
+                diff_prox_prev = diff_prox
+            mot.set_speed(-CALIB_FWBW_MOT_SPEED+temp_rot-proxSum-delta, -CALIB_FWBW_MOT_SPEED-temp_rot+proxSum+delta)
 
             if ((g0.value() < GROUND_BLACK_THR) and (g1.value() < GROUND_BLACK_THR)):
                 if calib_mot_bw_first_row == 1:
@@ -1544,11 +1555,17 @@ while 1:
                 #print("go to state 2 from 1 (row " + str(calib_mot_bw_num_rows) + ")")
 
         elif calib_mot_bw_state == 2: # During the travel the robot should be able to detect the end of the black line
-            temp_rot = imu.get_angle_deg()*4
+            temp_rot = 0 #imu.get_angle_deg()*4            
             #mot.set_speed(-CALIB_FWBW_MOT_SPEED+temp_rot, -CALIB_FWBW_MOT_SPEED-temp_rot) # try to keep the robot straight during the forward movement using the gyro feedback
-            proxSum =  int((p5.value() - p6.value())/10);
-            #mot.set_speed(-CALIB_FWBW_MOT_SPEED-proxSum, -CALIB_FWBW_MOT_SPEED+proxSum)  
-            mot.set_speed(-CALIB_FWBW_MOT_SPEED+temp_rot-proxSum, -CALIB_FWBW_MOT_SPEED-temp_rot+proxSum)
+            proxSum =  0 #int((p5.value() - p6.value())/10);
+            diff_prox = p0.value() - p4.value()
+            delta_count = delta_count + 1
+            if delta_count > 10:
+                delta_count = 0
+                delta = int((diff_prox - diff_prox_prev)/6)
+                #print("delta = " + str(delta))
+                diff_prox_prev = diff_prox
+            mot.set_speed(-CALIB_FWBW_MOT_SPEED+temp_rot-proxSum-delta, -CALIB_FWBW_MOT_SPEED-temp_rot+proxSum+delta)
             if ((g0.value() > GROUND_WHITE_THR) and (g1.value() > GROUND_WHITE_THR)):
                 calib_mot_bw_state = 1
                 #print("go to state 1 from 2")
@@ -1586,9 +1603,9 @@ while 1:
         print("color calib = " + str(color.get_calibration())) # already saved at step 0 and 4
         print("ground black = " + str(ground_black))
         print("ground white = " + str(ground_white))
-        #g0.set_calibration_all([ground_black[0], ground_black[1], ground_white[0], ground_white[1]]) # already done at step 4
+        #g0.set_calibration_from_values([ground_black[0], ground_black[1], ground_white[0], ground_white[1]]) # already done at step 4
         if ground_black[0] != 1023 and ground_black[1] != 1023 and ground_white[0] != 0 and ground_white[1] != 0:
-            g0.save_calibration()
+            g0.save_calibration_from_values()
             #pass
         break
 
