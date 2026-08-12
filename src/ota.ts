@@ -1,5 +1,5 @@
 import {
-  MTU,
+  DEFAULT_MTU,
   OTA_COMMAND_CHARACTERISTIC_UUID,
   OTA_FIRMWARE_CHARACTERISTIC_UUID,
   OTA_SERVICE_UUID,
@@ -352,7 +352,7 @@ async function probeMTUPayloadSize(
     // Compat mode: write-with-response payloads are fragmented/reassembled by
     // the ATT layer (prepared writes), so the full packet size always fits.
     console.warn("OTA compat mode: using write-with-response because write-without-response is not exposed");
-    return MTU - 3;
+    return DEFAULT_MTU - 3;
   }
 
   const candidates = [510, 247, 185, 122, 23];

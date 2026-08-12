@@ -1,4 +1,4 @@
-import { MTU } from "./constants";
+import { getMTU } from "./mtu";
 
 export type UploadProgress = {
   uploadedPackets: number,
@@ -37,7 +37,7 @@ export function createPayloadPackets(payload: Uint8Array, isAudio = false) {
     header.set(numberToBytes(seqId, 2), 7);
   }
 
-  const firstChunkSize = MTU - FIRST_PACKET_HEADER_SIZE;
+  const firstChunkSize = getMTU() - FIRST_PACKET_HEADER_SIZE;
   const firstChunk = payload.slice(0, firstChunkSize);
 
   const firstPacket = new Uint8Array(header.length + firstChunk.length);
@@ -50,7 +50,7 @@ export function createPayloadPackets(payload: Uint8Array, isAudio = false) {
   // --- Subsequent Packets ---
   let offset = firstChunkSize;
   while (offset < payload.length) {
-    const chunkSize = Math.min(MTU - SUBSEQUENT_PACKET_HEADER_SIZE, payloadLength - offset);
+    const chunkSize = Math.min(getMTU() - SUBSEQUENT_PACKET_HEADER_SIZE, payloadLength - offset);
     const packet = new Uint8Array(SUBSEQUENT_PACKET_HEADER_SIZE + chunkSize);
 
     packet.set(numberToBytes(seqId, 2), 0);
