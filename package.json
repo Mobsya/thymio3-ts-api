@@ -13,6 +13,11 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc --noEmit && tsdown",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:hardware": "THYMIO_HARDWARE=1 vitest run --config vitest.hardware.config.ts",
+    "test:hardware:headless": "THYMIO_HARDWARE=1 THYMIO_HARDWARE_HEADLESS=1 vitest run --config vitest.hardware.config.ts",
     "demo:install": "npm install --prefix demo",
     "demo:build": "tsc --noEmit && tsdown && npm run build --prefix demo",
     "demo:run": "tsc --noEmit && tsdown && npm run dev --prefix demo"
@@ -21,7 +26,12 @@
   "license": "ISC",
   "devDependencies": {
     "@types/web-bluetooth": "^0.0.21",
+    "@vitest/browser-playwright": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.11",
+    "jsdom": "^30.0.1",
+    "playwright": "^1.62.1",
     "tsdown": "^0.22.14",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   }
 }

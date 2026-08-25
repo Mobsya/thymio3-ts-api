@@ -32,6 +32,43 @@ npm run demo:run
 
 And open the `localhost:5173` in your browser.
 
+## Testing
+
+Run the deterministic API and protocol-characterization tests with:
+
+```
+npm test
+```
+
+To generate a coverage report:
+
+```
+npm run test:coverage
+```
+
+Hardware smoke tests are opt-in and run in Vitest Browser Mode using Chromium:
+
+```
+npm run test:hardware
+```
+
+The browser opens headed by default so you can approve the Web Bluetooth device
+chooser. For a runtime check without the chooser UI, you can also run:
+
+```
+npm run test:hardware:headless
+```
+
+By default this uses Playwright's bundled Chromium. If Playwright reports that
+Chromium is missing, install it with:
+
+```
+npx playwright install chromium
+```
+
+To force a system browser channel instead, set `PLAYWRIGHT_CHROME_CHANNEL`, for
+example `PLAYWRIGHT_CHROME_CHANNEL=chrome`.
+
 
 ## Documentation
 
