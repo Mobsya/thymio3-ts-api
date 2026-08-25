@@ -65,6 +65,7 @@ The API checks the connected ESP32 firmware version against the compatibility ra
 
 #### Events
 
+`thymio-python-load-result` - notifies when a Python script upload completes with `{ success, code, message }`\
 `thymio-python-execution-status` - exposes the Python execution status\
 `thymio-std-out-values` - event that exposes the Thymio's std out values
 

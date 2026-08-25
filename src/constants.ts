@@ -23,6 +23,7 @@ export const DEFAULT_MTU = 500;
 export const THYMIO_CONNECTED_EVENT_ID = 'thymio-connected';
 export const THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID = 'thymio-prompt-manual-reconnection';
 export const THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID = 'thymio-python-execution-status';
+export const THYMIO_PYTHON_LOAD_RESULT_EVENT_ID = 'thymio-python-load-result';
 export const THYMIO_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-values';
 export const THYMIO_OTHER_SENSOR_VALUES_EVENT_ID = 'thymio-sensor-other-values';
 export const THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID = 'thymio-ota-upload-progress';
