@@ -1,18 +1,76 @@
-import { THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID } from "./constants";
+import { THYMIO_PYTHON_EXECUTION_STATUS_EVENT_ID, THYMIO_PYTHON_LOAD_RESULT_EVENT_ID } from "./constants";
 import { queueBluetoothCall, runPriorityBluetoothCall } from "./bluetooth-queue";
 import { createPayloadPackets } from "./utils";
+
+const PYTHON_LOAD_SUCCESS_RESPONSE_ID = 0x01;
+const PYTHON_LOAD_ACK_TIMEOUT_MS = 10_000;
+
+type PythonLoadResult = {
+  success: boolean,
+  code: number,
+  message: string
+};
 
 export async function sendPythonScript(
   pythonCharacteristic: BluetoothRemoteGATTCharacteristic,
   script: string
-) {
+): Promise<void> {
   const encoder = new TextEncoder();
   const scriptDataArray = encoder.encode(script);
   const packets = createPayloadPackets(scriptDataArray);
 
-  for (const packet of packets) {
-    await queueBluetoothCall(() => pythonCharacteristic.writeValueWithResponse(packet));
-  }
+  return new Promise<void>(async (resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+
+    const cleanup = () => {
+      pythonCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    const settle = (callback: () => void) => {
+      if (settled) return;
+
+      settled = true;
+      cleanup();
+      callback();
+    };
+
+    const onResponse = (event: Event) => {
+      const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
+      if (!value) return;
+
+      const id = value.getUint8(0);
+      if (id !== PYTHON_LOAD_SUCCESS_RESPONSE_ID) return;
+
+      const loadResult = getPythonLoadResult(value.getUint8(1));
+      dispatchPythonLoadResultEvent(loadResult);
+
+      if (loadResult.success) {
+        dispatchExecutionStatusEvent(true);
+        settle(resolve);
+      } else {
+        settle(() => reject(new Error(`[Python upload]: ${loadResult.message}`)));
+      }
+    };
+
+    pythonCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
+
+    try {
+      for (const packet of packets) {
+        await queueBluetoothCall(() => pythonCharacteristic.writeValueWithResponse(packet));
+        if (settled) return;
+      }
+
+      timeoutId = setTimeout(() => {
+        settle(() => reject(new Error("[Python upload]: Timed out waiting for load ACK")));
+      }, PYTHON_LOAD_ACK_TIMEOUT_MS);
+    } catch (err) {
+      settle(() => reject(err));
+    }
+  });
 }
 
 export async function executeLoadedScript(
@@ -92,30 +150,7 @@ export function handlePythonResponse(event: Event) {
 	if (value) {
 		const id = value.getUint8(0);
 
-		if (id === 0x01) {
-			const loadResult = value.getUint8(1);
-
-			switch(loadResult) {
-				case 0:
-					dispatchExecutionStatusEvent(true);
-					console.log("[Python execution]: ✅ Script loaded successfully.");
-					break;
-				case 1:
-					console.log("[Python execution]: ❌ CRC mismatch.");
-					break;
-				case 2:
-					console.log("[Python execution]: ⚠️ Partial upload.");
-					break;
-				case 3:
-					console.log("[Python execution]: ❌ Wrong sequence.");
-					break;
-				case 4:
-					console.log("[Python execution]: ❌ Script too big (2 KB limit).");
-					break;
-				default:
-					throw new Error("[Python execution]: Unknown return code.")
-			}
-		} else if (id === 0x02) {
+		if (id === 0x02) {
 			const result = value.getUint8(1);
 
 			const exception = (result & 0b00000001) !== 0;
@@ -135,12 +170,40 @@ export function handlePythonResponse(event: Event) {
 			console.log(`[Python execution]: Script Terminated: ${terminationReason}`);
 
 			dispatchExecutionStatusEvent(false);
-		} else {
+		} else if (id !== PYTHON_LOAD_SUCCESS_RESPONSE_ID) {
 			console.warn(
 				`[Notification] Unknown ID: 0x${id.toString(16).padStart(2, "0")}`
 			);
 		}
 	}
+}
+
+function getPythonLoadResult(code: number): PythonLoadResult {
+  switch(code) {
+    case 0:
+      return { success: true, code, message: "Script loaded successfully" };
+    case 1:
+      return { success: false, code, message: "CRC mismatch" };
+    case 2:
+      return { success: false, code, message: "Partial upload" };
+    case 3:
+      return { success: false, code, message: "Wrong sequence" };
+    case 4:
+      return { success: false, code, message: "Script too big" };
+    default:
+      return { success: false, code, message: `Unknown response code ${code}` };
+  }
+}
+
+function dispatchPythonLoadResultEvent(result: PythonLoadResult) {
+  const pythonLoadResultEvent = new CustomEvent(THYMIO_PYTHON_LOAD_RESULT_EVENT_ID, {
+    detail: {
+      success: result.success,
+      code: result.code,
+      message: result.message
+    }
+  });
+  document.dispatchEvent(pythonLoadResultEvent);
 }
 
 function dispatchExecutionStatusEvent(executing: boolean) {

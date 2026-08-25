@@ -127,7 +127,7 @@ export default function App() {
     };
 
     const onPythonExecStatus = (event) => {
-      console.log(event);
+      //console.log(event);
       const isExecuting = Boolean(event.detail);
       setIsExecuting(isExecuting);
     };

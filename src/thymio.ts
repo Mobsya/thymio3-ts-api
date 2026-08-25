@@ -17,6 +17,7 @@ import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
 import { checkFirmwareCompatibility } from "./firmware-compatibility";
 import { runPriorityBluetoothCall } from "./bluetooth-queue";
+import { negotiateMTU } from "./mtu";
 
 let reconnecting = false;
 
@@ -126,6 +127,8 @@ async function connect() {
 
     deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
     await deviceInfoCharacteristic.startNotifications();
+
+    await negotiateMTU(deviceInfoCharacteristic);
 
     dispatchConnectedEvent(true);
 
