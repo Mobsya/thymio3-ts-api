@@ -15,11 +15,12 @@
   --dashboard-padding: clamp(8px, 1vw, 14px);
   --telemetry-width: clamp(360px, 28vw, 480px);
   --memory-strip-height: clamp(88px, 9vh, 108px);
+  --robot-diagram-panel-height: clamp(306px, 38dvh, 382px);
   --stdout-panel-height: clamp(112px, 16dvh, 148px);
   --sensor-panel-height: clamp(
-    480px,
-    calc(100dvh - var(--stdout-panel-height) - var(--dashboard-gap) - var(--dashboard-padding) - var(--dashboard-padding)),
-    760px
+    220px,
+    calc(100dvh - var(--robot-diagram-panel-height) - var(--stdout-panel-height) - var(--dashboard-gap) - var(--dashboard-gap) - var(--dashboard-padding) - var(--dashboard-padding)),
+    440px
   );
 }
 
@@ -458,11 +459,12 @@ input[type="file"] {
 @media (max-width: 1120px) {
   :root {
     --telemetry-width: minmax(0, 1fr);
+    --robot-diagram-panel-height: clamp(294px, 36dvh, 360px);
     --stdout-panel-height: clamp(104px, 14dvh, 132px);
     --sensor-panel-height: clamp(
-      480px,
-      calc(100dvh - var(--stdout-panel-height) - var(--dashboard-gap) - var(--dashboard-padding) - var(--dashboard-padding)),
-      700px
+      220px,
+      calc(100dvh - var(--robot-diagram-panel-height) - var(--stdout-panel-height) - var(--dashboard-gap) - var(--dashboard-gap) - var(--dashboard-padding) - var(--dashboard-padding)),
+      410px
     );
   }
 
@@ -524,6 +526,18 @@ input[type="file"] {
 
   .dashboard-panel {
     min-height: 280px;
+  }
+
+  .telemetry-stack {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .robot-diagram-panel,
+  .sensors-panel,
+  .stdout-panel {
+    flex: 0 0 auto;
+    max-height: none;
   }
 
   .memory-panel {

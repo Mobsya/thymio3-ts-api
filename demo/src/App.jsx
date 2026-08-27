@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import ActuatorPanel from "./actuator-panel";
+import { DEFAULT_ACTUATOR_DATA, buildActuatorData, scheduleActuatorData } from "./actuator-state";
 import DeviceMemoryStatus from "./device-memory-status";
 import FilesAndFirmwarePanel from "./files-and-firmware-panel";
 import PythonEditor from "./python-editor";
+import RobotDiagramPanel from "./robot-diagram-panel";
 import RobotStatusCard from "./robot-status-card";
 import SensorPanel from "./sensor-panel";
 import StdoutPanel from "./stdout-panel";
@@ -74,6 +76,9 @@ export default function App() {
 
   // Streams / output
   const [stdOut, setStdOut] = useState([]);
+  const [mainSensors, setMainSensors] = useState(null);
+  const [otherSensors, setOtherSensors] = useState(null);
+  const [sensorStreamMode, setSensorStreamMode] = useState("idle");
 
   const stdOutEntryId = useRef(0);
 
@@ -81,6 +86,9 @@ export default function App() {
   const [firmwareInfo, setFirmwareInfo] = useState(null);
   const [firmwareInfoError, setFirmwareInfoError] = useState("");
   const [activeTab, setActiveTab] = useState("actuators");
+  const [actuatorData, setActuatorData] = useState(() => buildActuatorData(DEFAULT_ACTUATOR_DATA));
+
+  const actuatorDataRef = useRef(DEFAULT_ACTUATOR_DATA);
 
   // --- Event listeners from thymio.global.js ---
   useEffect(() => {
@@ -91,6 +99,8 @@ export default function App() {
         { id: ++stdOutEntryId.current, value },
       ]);
     };
+    const onSensors = (event) => setMainSensors(event.detail ?? null);
+    const onOtherSensors = (event) => setOtherSensors(event.detail ?? null);
     const onConnected = (event) => {
       const isConnected = Boolean(event.detail);
 
@@ -109,12 +119,24 @@ export default function App() {
             setFirmwareInfoError(err?.message ?? "Failed to read firmware info");
           }
         })();
+
+        void (async () => {
+          try {
+            await getThymio()?.startAllSensorStreaming?.();
+            setSensorStreamMode("all");
+          } catch (err) {
+            console.warn("Failed to start sensor streaming", err);
+          }
+        })();
       } else {
         // If connection drops and library tries to auto-reconnect
         setConnectionStatus("connecting");
         setDeviceName("");
         setFirmwareInfo(null);
         setFirmwareInfoError("");
+        setMainSensors(null);
+        setOtherSensors(null);
+        setSensorStreamMode("idle");
       }
     };
 
@@ -124,6 +146,9 @@ export default function App() {
       setDeviceName("");
       setFirmwareInfo(null);
       setFirmwareInfoError("");
+      setMainSensors(null);
+      setOtherSensors(null);
+      setSensorStreamMode("idle");
     };
 
     const onPythonExecStatus = (event) => {
@@ -136,12 +161,16 @@ export default function App() {
     document.addEventListener("thymio-prompt-manual-reconnection", onManualReconn);
     document.addEventListener("thymio-python-execution-status", onPythonExecStatus);
     document.addEventListener("thymio-std-out-values", onStdOut);
+    document.addEventListener("thymio-sensor-values", onSensors);
+    document.addEventListener("thymio-sensor-other-values", onOtherSensors);
 
     return () => {
       document.removeEventListener("thymio-connected", onConnected);
       document.removeEventListener("thymio-prompt-manual-reconnection", onManualReconn);
       document.removeEventListener("thymio-python-execution-status", onPythonExecStatus);
       document.removeEventListener("thymio-std-out-values", onStdOut);
+      document.removeEventListener("thymio-sensor-values", onSensors);
+      document.removeEventListener("thymio-sensor-other-values", onOtherSensors);
 
     };
   }, []);
@@ -158,6 +187,9 @@ export default function App() {
     await getThymio().disconnect();
     setConnectionStatus("disconnected");
     setDeviceName("");
+    setMainSensors(null);
+    setOtherSensors(null);
+    setSensorStreamMode("idle");
   }
 
   async function executeCode() {
@@ -186,11 +218,62 @@ export default function App() {
     await t.softResetPythonInterpreter();
   }
 
+  function handleActuatorDataChange(nextActuatorData) {
+    const normalizedActuatorData = buildActuatorData(nextActuatorData, actuatorDataRef.current);
+
+    actuatorDataRef.current = normalizedActuatorData;
+    setActuatorData(normalizedActuatorData);
+    scheduleActuatorData(normalizedActuatorData);
+  }
+
+  async function selectSensorStream(stream) {
+    const t = getThymio();
+
+    if (stream === "main") {
+      if (!t?.startMainSensorStreaming) return;
+      await t.startMainSensorStreaming();
+      setSensorStreamMode("main");
+      return;
+    }
+
+    if (stream === "other") {
+      if (!t?.startSecondarySensorStreaming) return;
+      await t.startSecondarySensorStreaming();
+      setSensorStreamMode("other");
+      return;
+    }
+
+    if (stream === "all") {
+      if (!t?.startAllSensorStreaming) return;
+      await t.startAllSensorStreaming();
+      setSensorStreamMode("all");
+    }
+  }
+
+  async function stopSensors() {
+    const t = getThymio();
+    if (!t?.stopSensorStreaming) return;
+    await t.stopSensorStreaming();
+    setSensorStreamMode("stopped");
+  }
+
   return (
     <div className="page">
       <main className="dashboard-grid">
         <div className="telemetry-stack">
-          <SensorPanel />
+          <RobotDiagramPanel
+            actuatorData={actuatorData}
+            mainSensors={mainSensors}
+            otherSensors={otherSensors}
+          />
+
+          <SensorPanel
+            mainSensors={mainSensors}
+            otherSensors={otherSensors}
+            onSelectSensorStream={selectSensorStream}
+            onStopSensors={stopSensors}
+            sensorStreamMode={sensorStreamMode}
+          />
 
           <StdoutPanel entries={stdOut} onClear={() => setStdOut([])} />
         </div>
@@ -224,7 +307,12 @@ export default function App() {
           </div>
 
           <div className="tab-panel panel-scroll" id={`dashboard-tab-${activeTab}`} role="tabpanel">
-            {activeTab === "actuators" ? <ActuatorPanel /> : null}
+            {activeTab === "actuators" ? (
+              <ActuatorPanel
+                actuatorData={actuatorData}
+                onActuatorDataChange={handleActuatorDataChange}
+              />
+            ) : null}
 
             {activeTab === "python" ? (
               <div className="tab-stack python-tab-stack">

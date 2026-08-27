@@ -2,14 +2,10 @@ import { useEffect, useState } from "react";
 import { RgbColorPicker } from "react-colorful";
 import { PRESETS } from "./presets";
 import MotorSliders from "./motor-sliders";
+import { buildActuatorData, clearScheduledActuatorData } from "./actuator-state";
 import { clampInt, rgbToCss, areIntensitiesEqual, areRgbEqual } from "./utils";
 import "./actuator-panel.css";
 
-function getThymio() {
-  return window.thymio;
-}
-
-const ACTUATOR_SEND_INTERVAL_MS = 100;
 const SOUND_OPTIONS = [
   { value: 0, label: "no sound" },
   { value: 1, label: "a3" },
@@ -32,118 +28,6 @@ const SOUND_OPTIONS = [
   { value: 18, label: "ping" },
   { value: 19, label: "tick" },
 ];
-const DEFAULT_ACTUATOR_DATA = {
-  circleLEDs: Array(8).fill(0),
-  frontLegoLEDs: Array(8).fill(0),
-  rearLegoLEDs: Array(8).fill(0),
-  flRGB: { r: 0, g: 0, b: 0 },
-  frRGB: { r: 0, g: 0, b: 0 },
-  blRGB: { r: 0, g: 0, b: 0 },
-  brRGB: { r: 0, g: 0, b: 0 },
-  motorLeft: 0,
-  motorRight: 0,
-  sound: 0,
-  smallBottomRGB: { r: 0, g: 0, b: 0 },
-  smallBackRGB: { r: 0, g: 0, b: 0 },
-  buttonLEDs: Array(4).fill(0),
-  receiverLED: 0,
-  microphoneLED: false,
-};
-
-let latestActuatorData = DEFAULT_ACTUATOR_DATA;
-let pendingActuatorData = null;
-let actuatorSendTimer = null;
-let actuatorSendInFlight = false;
-let lastActuatorSendAt = 0;
-
-function buildActuatorData(overrides = {}, base = latestActuatorData) {
-  return {
-    circleLEDs: overrides.circleLEDs ?? base.circleLEDs,
-    frontLegoLEDs: overrides.frontLegoLEDs ?? base.frontLegoLEDs,
-    rearLegoLEDs: overrides.rearLegoLEDs ?? base.rearLegoLEDs,
-    flRGB: overrides.flRGB ?? base.flRGB,
-    frRGB: overrides.frRGB ?? base.frRGB,
-    blRGB: overrides.blRGB ?? base.blRGB,
-    brRGB: overrides.brRGB ?? base.brRGB,
-    motorLeft: clampInt(overrides.motorLeft ?? base.motorLeft, -1000, 1000),
-    motorRight: clampInt(overrides.motorRight ?? base.motorRight, -1000, 1000),
-    sound: clampInt(overrides.sound ?? base.sound, 0, 19),
-    smallBottomRGB: overrides.smallBottomRGB ?? base.smallBottomRGB,
-    smallBackRGB: overrides.smallBackRGB ?? base.smallBackRGB,
-    buttonLEDs: overrides.buttonLEDs ?? overrides.buttonLEDS ?? base.buttonLEDs,
-    receiverLED: clampInt(overrides.receiverLED ?? base.receiverLED, 0, 15),
-    microphoneLED: overrides.microphoneLED ?? base.microphoneLED,
-  };
-}
-
-function scheduleActuatorFlush() {
-  if (actuatorSendTimer !== null) {
-    return;
-  }
-
-  const elapsed = Date.now() - lastActuatorSendAt;
-  const delay = Math.max(0, ACTUATOR_SEND_INTERVAL_MS - elapsed);
-
-  actuatorSendTimer = setTimeout(() => {
-    actuatorSendTimer = null;
-    void flushActuatorData();
-  }, delay);
-}
-
-async function flushActuatorData() {
-  if (actuatorSendInFlight) {
-    return;
-  }
-
-  const actuatorData = pendingActuatorData;
-  if (!actuatorData) {
-    return;
-  }
-
-  const t = getThymio();
-  if (!t?.setActuatorState) {
-    pendingActuatorData = null;
-    return;
-  }
-
-  pendingActuatorData = null;
-  actuatorSendInFlight = true;
-  lastActuatorSendAt = Date.now();
-
-  try {
-    await t.setActuatorState(actuatorData);
-  } catch (err) {
-    console.error("Failed to send actuator data", err);
-  } finally {
-    actuatorSendInFlight = false;
-
-    if (pendingActuatorData) {
-      scheduleActuatorFlush();
-    }
-  }
-}
-
-function scheduleActuatorData(overrides = {}, { alertIfMissing = false } = {}) {
-  latestActuatorData = buildActuatorData(overrides);
-
-  const t = getThymio();
-  if (!t?.setActuatorState) {
-    if (alertIfMissing) alert("thymio not loaded");
-    return;
-  }
-
-  pendingActuatorData = latestActuatorData;
-  scheduleActuatorFlush();
-}
-
-function clearScheduledActuatorData() {
-  if (actuatorSendTimer !== null) {
-    clearTimeout(actuatorSendTimer);
-    actuatorSendTimer = null;
-  }
-
-  pendingActuatorData = null;
-}
 
 function LedMatrixRow({ label, values, onChange }) {
   const normalizedValues = values.map((value) => clampInt(value, 0, 15));
@@ -327,22 +211,25 @@ function RgbCluster({ items }) {
   );
 }
 
-export default function ActuatorPanel() {
-  const [circleLEDs, setCircleLEDs] = useState(latestActuatorData.circleLEDs);
-  const [frontLegoLEDs, setFrontLegoLEDs] = useState(latestActuatorData.frontLegoLEDs);
-  const [rearLegoLEDs, setRearLegoLEDs] = useState(latestActuatorData.rearLegoLEDs);
-  const [flRGB, setFlRGB] = useState(latestActuatorData.flRGB);
-  const [frRGB, setFrRGB] = useState(latestActuatorData.frRGB);
-  const [blRGB, setBlRGB] = useState(latestActuatorData.blRGB);
-  const [brRGB, setBrRGB] = useState(latestActuatorData.brRGB);
-  const [motorLeft, setMotorLeft] = useState(latestActuatorData.motorLeft);
-  const [motorRight, setMotorRight] = useState(latestActuatorData.motorRight);
-  const [sound, setSound] = useState(latestActuatorData.sound);
-  const [smallBottomRGB, setSmallBottomRGB] = useState(latestActuatorData.smallBottomRGB);
-  const [smallBackRGB, setSmallBackRGB] = useState(latestActuatorData.smallBackRGB);
-  const [buttonLEDS, setButtonLEDS] = useState(latestActuatorData.buttonLEDs);
-  const [receiverLED, setReceiverLED] = useState(latestActuatorData.receiverLED);
-  const [microphoneLED, setMicrophoneLED] = useState(latestActuatorData.microphoneLED);
+export default function ActuatorPanel({ actuatorData, onActuatorDataChange }) {
+  const normalizedActuatorData = buildActuatorData(actuatorData);
+  const {
+    circleLEDs,
+    frontLegoLEDs,
+    rearLegoLEDs,
+    flRGB,
+    frRGB,
+    blRGB,
+    brRGB,
+    motorLeft,
+    motorRight,
+    sound,
+    smallBottomRGB,
+    smallBackRGB,
+    buttonLEDs,
+    receiverLED,
+    microphoneLED,
+  } = normalizedActuatorData;
 
   useEffect(() => {
     return () => {
@@ -350,52 +237,29 @@ export default function ActuatorPanel() {
     };
   }, []);
 
-  function updateRgbFromSlider(key, setRgb) {
-    return (rgb) => {
-      setRgb(rgb);
-      scheduleActuatorData({ [key]: rgb });
-    };
+  function updateActuatorData(overrides) {
+    onActuatorDataChange(buildActuatorData(overrides, normalizedActuatorData));
   }
 
-  function updateLedIntensitiesFromSlider(key, setValues) {
-    return (values) => {
-      setValues(values);
-      scheduleActuatorData({ [key]: values });
-    };
+  function updateRgbFromSlider(key) {
+    return (rgb) => updateActuatorData({ [key]: rgb });
+  }
+
+  function updateLedIntensitiesFromSlider(key) {
+    return (values) => updateActuatorData({ [key]: values });
   }
 
   function updateMotorsFromSlider(values) {
-    if (typeof values.motorLeft === "number") setMotorLeft(values.motorLeft);
-    if (typeof values.motorRight === "number") setMotorRight(values.motorRight);
-    scheduleActuatorData(values);
+    updateActuatorData(values);
   }
 
   function updateSoundFromPicker(value) {
     const nextSound = clampInt(value, 0, 19);
-    setSound(nextSound);
-    scheduleActuatorData({ sound: nextSound });
+    updateActuatorData({ sound: nextSound });
   }
 
   function applyPreset(preset) {
-    if (preset.circleLEDs) setCircleLEDs(preset.circleLEDs);
-    if (preset.frontLegoLEDs) setFrontLegoLEDs(preset.frontLegoLEDs);
-    if (preset.rearLegoLEDs) setRearLegoLEDs(preset.rearLegoLEDs);
-
-    if (preset.flRGB) setFlRGB(preset.flRGB);
-    if (preset.frRGB) setFrRGB(preset.frRGB);
-    if (preset.blRGB) setBlRGB(preset.blRGB);
-    if (preset.brRGB) setBrRGB(preset.brRGB);
-
-    if (typeof preset.motorLeft === "number") setMotorLeft(preset.motorLeft);
-    if (typeof preset.motorRight === "number") setMotorRight(preset.motorRight);
-    if (typeof preset.sound === "number") setSound(preset.sound);
-    if (preset.smallBottomRGB) setSmallBottomRGB(preset.smallBottomRGB);
-    if (preset.smallBackRGB) setSmallBackRGB(preset.smallBackRGB);
-    if (preset.buttonLEDS) setButtonLEDS(preset.buttonLEDS);
-    if (typeof preset.receiverLED === "number") setReceiverLED(preset.receiverLED);
-    if (typeof preset.microphoneLED === "boolean") setMicrophoneLED(preset.microphoneLED);
-
-    scheduleActuatorData(preset);
+    updateActuatorData(preset);
   }
 
   return (
@@ -445,10 +309,7 @@ export default function ActuatorPanel() {
               <span>Receiver</span>
               <ReceiverLedSlider
                 receiverLED={receiverLED}
-                onChange={(nextReceiverLED) => {
-                  setReceiverLED(nextReceiverLED);
-                  scheduleActuatorData({ receiverLED: nextReceiverLED });
-                }}
+                onChange={(nextReceiverLED) => updateActuatorData({ receiverLED: nextReceiverLED })}
               />
             </label>
 
@@ -456,10 +317,7 @@ export default function ActuatorPanel() {
               <input
                 checked={microphoneLED}
                 type="checkbox"
-                onChange={(e) => {
-                  setMicrophoneLED(e.target.checked);
-                  scheduleActuatorData({ microphoneLED: e.target.checked });
-                }}
+                onChange={(e) => updateActuatorData({ microphoneLED: e.target.checked })}
               />
               <span>Mic {microphoneLED ? "On" : "Off"}</span>
             </label>
@@ -472,50 +330,41 @@ export default function ActuatorPanel() {
           {
             label: "Circle",
             values: circleLEDs,
-            onChange: updateLedIntensitiesFromSlider("circleLEDs", setCircleLEDs),
+            onChange: updateLedIntensitiesFromSlider("circleLEDs"),
           },
           {
             label: "Front",
             values: frontLegoLEDs,
-            onChange: updateLedIntensitiesFromSlider("frontLegoLEDs", setFrontLegoLEDs),
+            onChange: updateLedIntensitiesFromSlider("frontLegoLEDs"),
           },
           {
             label: "Rear",
             values: rearLegoLEDs,
-            onChange: updateLedIntensitiesFromSlider("rearLegoLEDs", setRearLegoLEDs),
+            onChange: updateLedIntensitiesFromSlider("rearLegoLEDs"),
           },
           {
             label: "Button",
-            values: buttonLEDS,
-            onChange: (values) => {
-              setButtonLEDS(values);
-              scheduleActuatorData({ buttonLEDs: values });
-            },
+            values: buttonLEDs,
+            onChange: updateLedIntensitiesFromSlider("buttonLEDs"),
           },
         ]}
       />
 
       <RgbCluster
         items={[
-          { label: "FL", rgb: flRGB, onChange: updateRgbFromSlider("flRGB", setFlRGB) },
-          { label: "FR", rgb: frRGB, onChange: updateRgbFromSlider("frRGB", setFrRGB) },
-          { label: "BL", rgb: blRGB, onChange: updateRgbFromSlider("blRGB", setBlRGB) },
-          { label: "BR", rgb: brRGB, onChange: updateRgbFromSlider("brRGB", setBrRGB) },
+          { label: "FL", rgb: flRGB, onChange: updateRgbFromSlider("flRGB") },
+          { label: "FR", rgb: frRGB, onChange: updateRgbFromSlider("frRGB") },
+          { label: "BL", rgb: blRGB, onChange: updateRgbFromSlider("blRGB") },
+          { label: "BR", rgb: brRGB, onChange: updateRgbFromSlider("brRGB") },
           {
             label: "Bottom",
             rgb: smallBottomRGB,
-            onChange: (rgb) => {
-              setSmallBottomRGB(rgb);
-              scheduleActuatorData({ smallBottomRGB: rgb });
-            },
+            onChange: updateRgbFromSlider("smallBottomRGB"),
           },
           {
             label: "Back",
             rgb: smallBackRGB,
-            onChange: (rgb) => {
-              setSmallBackRGB(rgb);
-              scheduleActuatorData({ smallBackRGB: rgb });
-            },
+            onChange: updateRgbFromSlider("smallBackRGB"),
           },
         ]}
       />
