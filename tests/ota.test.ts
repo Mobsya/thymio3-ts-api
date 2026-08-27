@@ -125,7 +125,102 @@ describe('OTA firmware upload', () => {
 
     await expect(stopFirmwareUpload()).rejects.toThrow('OTA command characteristic is not connected');
   });
+
+  it('cleans OTA state and sends one stop command when upload is cancelled', async () => {
+    const { uploadFirmware, stopFirmwareUpload } = await import('../src/ota');
+    const commandCharacteristic = new FakeBluetoothCharacteristic({
+      onWriteWithResponse: (data, characteristic) => {
+        if (commandOf(data) === CMD_FLASH) {
+          characteristic.emitValue(commandAckPacket(CMD_FLASH));
+        }
+      },
+    });
+    const firmwareCharacteristic = new FakeBluetoothCharacteristic({
+      writeWithoutResponse: true,
+    });
+    const server = new FakeBluetoothServer(new Map([
+      [
+        OTA_SERVICE_UUID,
+        new FakeBluetoothService(new Map([
+          [OTA_COMMAND_CHARACTERISTIC_UUID, commandCharacteristic],
+          [OTA_FIRMWARE_CHARACTERISTIC_UUID, firmwareCharacteristic],
+        ])),
+      ],
+    ]));
+
+    const upload = uploadFirmware(server.asBluetoothServer(), new Uint8Array([1, 2, 3]));
+    await waitForCondition(() => {
+      expect(firmwareCharacteristic.writesWithoutResponse.length).toBeGreaterThan(1);
+    });
+
+    await stopFirmwareUpload();
+
+    await expect(upload).rejects.toThrow('Firmware upload aborted');
+    expect(commandCharacteristic.writesWithResponse.filter((data) => commandOf(data) === CMD_STOP)).toHaveLength(1);
+    expect(commandCharacteristic.stopNotificationsCount).toBe(1);
+    expect(firmwareCharacteristic.stopNotificationsCount).toBe(1);
+    await expect(stopFirmwareUpload()).rejects.toThrow('OTA command characteristic is not connected');
+  });
+
+  it('cleans OTA state without sending stop when the robot disconnects mid-upload', async () => {
+    const { uploadFirmware, stopFirmwareUpload } = await import('../src/ota');
+    let server!: FakeBluetoothServer;
+    const commandCharacteristic = new FakeBluetoothCharacteristic({
+      onWriteWithResponse: (data, characteristic) => {
+        if (commandOf(data) === CMD_FLASH) {
+          characteristic.emitValue(commandAckPacket(CMD_FLASH));
+        }
+      },
+    });
+    const firmwareCharacteristic = new FakeBluetoothCharacteristic({
+      writeWithoutResponse: true,
+      onWriteWithoutResponse: (data) => {
+        if (data.byteLength !== 510) {
+          server.disconnect();
+        }
+      },
+    });
+    server = new FakeBluetoothServer(new Map([
+      [
+        OTA_SERVICE_UUID,
+        new FakeBluetoothService(new Map([
+          [OTA_COMMAND_CHARACTERISTIC_UUID, commandCharacteristic],
+          [OTA_FIRMWARE_CHARACTERISTIC_UUID, firmwareCharacteristic],
+        ])),
+      ],
+    ]));
+
+    await expect(uploadFirmware(server.asBluetoothServer(), new Uint8Array([1, 2, 3]))).rejects.toThrow(
+      'Bluetooth GATT server disconnected during OTA upload'
+    );
+    expect(commandCharacteristic.writesWithResponse.filter((data) => commandOf(data) === CMD_STOP)).toHaveLength(0);
+    expect(commandCharacteristic.stopNotificationsCount).toBe(0);
+    expect(firmwareCharacteristic.stopNotificationsCount).toBe(0);
+    await expect(stopFirmwareUpload()).rejects.toThrow('OTA command characteristic is not connected');
+  });
 });
+
+function commandOf(data: Uint8Array<ArrayBuffer>): number {
+  return data[0]! | (data[1]! << 8);
+}
+
+async function waitForCondition(assertion: () => void): Promise<void> {
+  const deadline = Date.now() + 1000;
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
+
+  assertion();
+  throw lastError;
+}
 
 function commandAckPacket(acknowledgedCommand: number, response = 0): Uint8Array {
   const packet = new Uint8Array(20);

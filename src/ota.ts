@@ -36,6 +36,9 @@ let expectedCommand: number | undefined;
 let firmwareStatus: FirmwareStatus = 0;
 let expectedSector = 0;
 let abortRequested = false;
+let abortStopCommandSent = false;
+let uploadInProgress = false;
+let otaServer: BluetoothRemoteGATTServer | undefined;
 let otaFirmwareCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
 let otaCommandCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
 
@@ -44,18 +47,31 @@ export async function uploadFirmware(
   firmware: Uint8Array<ArrayBuffer>
 ): Promise<void> {
 
-  abortRequested = false;
   const total = firmware.length;
-  const { commandCharacteristic, firmwareCharacteristic } = await connectToOTAService(server);
-  const mtuPayloadSize = await probeMTUPayloadSize(firmwareCharacteristic);
+  let commandCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
+  let firmwareCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
+  let stopCommandSent = false;
 
+  prepareOTAState();
   try {
+    const otaCharacteristics = await connectToOTAService(server);
+    commandCharacteristic = otaCharacteristics.commandCharacteristic;
+    firmwareCharacteristic = otaCharacteristics.firmwareCharacteristic;
+
+    throwIfDisconnected();
+    if (abortRequested) throw new Error("Firmware upload aborted");
+
+    const mtuPayloadSize = await probeMTUPayloadSize(firmwareCharacteristic);
+
     resetCommandState(CMD_FLASH);
     await sendStartCommand(commandCharacteristic, total);
 
     try {
       await waitForCommand(COMMAND_TIMEOUT_MS);
     } catch (error) {
+      if (abortRequested) {
+        throw new Error("Firmware upload aborted");
+      }
       throw new Error(`OTA start failed: ${getErrorMessage(error)}`);
     }
 
@@ -90,6 +106,7 @@ export async function uploadFirmware(
 
         // Send all packets in burst — writeValueWithoutResponse is fire-and-forget
         for (let i = 0; i < packets.length && !abortRequested; i++) {
+          throwIfDisconnected();
           await bleWrite(firmwareCharacteristic, packets[i]!);
           if (i % 8 === 7) {
             await delay(0);
@@ -133,40 +150,55 @@ export async function uploadFirmware(
     }
 
     if (abortRequested) {
-      await sendStopCommand(commandCharacteristic);
+      if (!abortStopCommandSent) {
+        await sendStopCommand(commandCharacteristic);
+      }
+      stopCommandSent = true;
       throw new Error("Firmware upload aborted");
     }
 
     resetCommandState(CMD_STOP);
     await sendStopCommand(commandCharacteristic);
+    stopCommandSent = true;
 
     try {
       await waitForCommand(COMMAND_TIMEOUT_MS);
     } catch (error) {
+      if (abortRequested) {
+        throw new Error("Firmware upload aborted");
+      }
       throw new Error(`OTA stop failed: ${getErrorMessage(error)}`);
     }
 
     await delay(500);
     server.disconnect();
   } catch (error) {
-    try {
-      await sendStopCommand(commandCharacteristic);
-    } catch {
-      // The connection may already be closing after an OTA failure.
+    if (commandCharacteristic && !stopCommandSent && !abortStopCommandSent && isOTAServerConnected()) {
+      try {
+        await sendStopCommand(commandCharacteristic);
+      } catch {
+        // The connection may already be closing after an OTA failure.
+      }
     }
     throw error;
   } finally {
-    abortRequested = false;
+    await cleanupOTAService();
   }
 }
 
 export async function stopFirmwareUpload(): Promise<void> {
+  if (!uploadInProgress) {
+    abortRequested = false;
+    throw new Error("OTA command characteristic is not connected");
+  }
+
   abortRequested = true;
   if (!otaCommandCharacteristic) {
     throw new Error("OTA command characteristic is not connected");
   }
 
-  return await sendStopCommand(otaCommandCharacteristic);
+  await sendStopCommand(otaCommandCharacteristic);
+  abortStopCommandSent = true;
 }
 
 async function connectToOTAService(
@@ -179,6 +211,7 @@ async function connectToOTAService(
     throw new Error("Bluetooth GATT server is not connected");
   }
 
+  otaServer = server;
   removeOTAEventListeners();
 
   const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
@@ -200,6 +233,50 @@ async function connectToOTAService(
 function removeOTAEventListeners(): void {
   otaFirmwareCharacteristic?.removeEventListener('characteristicvaluechanged', otaFirmwareNotificationHandler);
   otaCommandCharacteristic?.removeEventListener('characteristicvaluechanged', otaCommandNotificationHandler);
+}
+
+function prepareOTAState(): void {
+  resetCommandState();
+  firmwareStatus = 0;
+  expectedSector = 0;
+  abortRequested = false;
+  abortStopCommandSent = false;
+  uploadInProgress = true;
+}
+
+async function cleanupOTAService(): Promise<void> {
+  const server = otaServer;
+  const firmwareCharacteristic = otaFirmwareCharacteristic;
+  const commandCharacteristic = otaCommandCharacteristic;
+
+  removeOTAEventListeners();
+
+  if (server?.connected) {
+    await Promise.all([
+      stopNotifications(firmwareCharacteristic),
+      stopNotifications(commandCharacteristic),
+    ]);
+  }
+
+  resetCommandState();
+  firmwareStatus = 0;
+  expectedSector = 0;
+  abortRequested = false;
+  abortStopCommandSent = false;
+  uploadInProgress = false;
+  otaServer = undefined;
+  otaFirmwareCharacteristic = undefined;
+  otaCommandCharacteristic = undefined;
+}
+
+async function stopNotifications(
+  characteristic: BluetoothRemoteGATTCharacteristic | undefined
+): Promise<void> {
+  try {
+    await characteristic?.stopNotifications();
+  } catch {
+    // Best-effort cleanup: the robot may already have disconnected or rebooted.
+  }
 }
 
 function otaCommandNotificationHandler(event: Event): void {
@@ -358,9 +435,11 @@ async function probeMTUPayloadSize(
   const candidates = [510, 247, 185, 122, 23];
   for (const size of candidates) {
     try {
+      throwIfDisconnected();
       await otaFirmwareCharacteristic.writeValueWithoutResponse(new Uint8Array(size));
       return size - 3; // subtract 3-byte OTA header → usable payload
     } catch {
+      throwIfDisconnected();
       // BLE stack rejected this size — try smaller
     }
   }
@@ -388,7 +467,11 @@ function waitForCommand(timeoutMs: number): Promise<void> {
     };
 
     const checkStatus = () => {
-      if (commandStatus === 1) {
+      if (!isOTAServerConnected()) {
+        settle(() => reject(new Error("Bluetooth GATT server disconnected during OTA upload")));
+      } else if (abortRequested) {
+        settle(() => reject(new Error("Firmware upload aborted")));
+      } else if (commandStatus === 1) {
         settle(resolve);
       } else if (commandStatus < 0) {
         settle(() => reject(new Error(commandErrorMessage)));
@@ -407,28 +490,30 @@ function waitForCommand(timeoutMs: number): Promise<void> {
 }
 
 function waitForFirmware(timeoutMs: number): Promise<boolean> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let settled = false;
 
-    const settle = (value: boolean) => {
+    const settle = (callback: () => void) => {
       if (settled) return;
       settled = true;
       clearInterval(intervalId);
       clearTimeout(timeoutId);
-      resolve(value);
+      callback();
     };
 
     const checkStatus = () => {
-      if (abortRequested) {
-        settle(false);
+      if (!isOTAServerConnected()) {
+        settle(() => reject(new Error("Bluetooth GATT server disconnected during OTA upload")));
+      } else if (abortRequested) {
+        settle(() => resolve(false));
       } else if (firmwareStatus !== 0) {
-        settle(firmwareStatus === 1);
+        settle(() => resolve(firmwareStatus === 1));
       }
     };
 
     const intervalId = setInterval(checkStatus, 20);
     const timeoutId = setTimeout(() => {
-      settle(false);
+      settle(() => resolve(false));
     }, timeoutMs);
 
     checkStatus();
@@ -439,6 +524,8 @@ async function bleWrite(
   characteristic: BluetoothRemoteGATTCharacteristic,
   data: Uint8Array<ArrayBuffer>
 ): Promise<void> {
+  throwIfDisconnected();
+
   if (supportsWriteWithoutResponse(characteristic)) {
     await characteristic.writeValueWithoutResponse(data);
   } else {
@@ -483,6 +570,16 @@ function getFirmwareResponseError(response: number, desiredSector?: number): str
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isOTAServerConnected(): boolean {
+  return otaServer?.connected ?? false;
+}
+
+function throwIfDisconnected(): void {
+  if (!isOTAServerConnected()) {
+    throw new Error("Bluetooth GATT server disconnected during OTA upload");
+  }
 }
 
 function formatKilobytesPerSecond(bytesPerSecond: number): string {
