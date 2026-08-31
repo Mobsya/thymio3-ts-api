@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
+import { registerThymioPythonLanguage } from "./thymio-python-intellisense";
 import "./python-editor.css";
 
 let pyodidePromise = null;
@@ -158,6 +159,8 @@ _syntax_check(___code___)
           editorRef.current = editor;
           monacoRef.current = monaco;
 
+          registerThymioPythonLanguage(monaco);
+
           // editor polish
           editor.updateOptions({
             minimap: { enabled: false },
@@ -166,6 +169,11 @@ _syntax_check(___code___)
             insertSpaces: true,
             wordWrap: "on",
             automaticLayout: true,
+            hover: { enabled: true },
+            parameterHints: { enabled: true },
+            quickSuggestions: { other: true, comments: false, strings: false },
+            suggestOnTriggerCharacters: true,
+            snippetSuggestions: "top",
           });
 
           // run initial validation
