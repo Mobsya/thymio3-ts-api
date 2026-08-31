@@ -147,7 +147,8 @@ The API checks the connected ESP32 firmware version against the compatibility ra
 ### Firmware updates
 
 `thymio.isNewerFirmwareAvailable()` - check if a newer Thymio 3 version is available\
-`thymio.updateFirmware()` - update the firmware to the latest version
+`thymio.updateFirmware()` - update the firmware to the latest version\
+Pass `{ includePrereleases: true }` to either function to consider GitHub prereleases.
 
 ### Manual OTA updates
 

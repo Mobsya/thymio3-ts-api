@@ -1,85 +1,163 @@
 import { compareVersions } from "./firmware-compatibility";
 import { uploadFirmware } from "./ota";
 
-const FIRMWARE_VERSIONS_URL = "https://mobsya.github.io/thymio-3-firmware/versions.json";
-const FIRMWARE_BASE_URL = 'https://mobsya.github.io/thymio-3-firmware/firmware/';
+const FIRMWARE_RELEASES_URL = "https://api.github.com/repos/Mobsya/thymio3-firmware-esp32/releases?per_page=100";
+const GITHUB_API_HEADERS = {
+  Accept: "application/vnd.github+json",
+  "X-GitHub-Api-Version": "2022-11-28",
+};
 
-interface FirmwareVersion {
-	version: string;
-	file: string;
-	releaseDate: string;
-	description: string;
+export interface FirmwareUpdateOptions {
+  includePrereleases?: boolean;
 }
 
-export async function fetchFirmwareVersions(): Promise<FirmwareVersion[]> {
-	try {
-		const response = await fetch(FIRMWARE_VERSIONS_URL);
+interface FirmwareVersion {
+  version: string;
+  releaseDate: string;
+  description: string;
+  downloadUrl: string;
+}
 
-		if (!response.ok) {
-				throw new Error('Failed to fetch firmware versions');
-		}
+interface GitHubReleaseAsset {
+  name: string;
+  browser_download_url: string;
+}
 
-		const data = await response.json();
-		return data.firmware_versions;
-	} catch (error) {
-		console.error('Error fetching firmware versions:', error);
-		throw error;
-	}
+interface GitHubRelease {
+  tag_name: string;
+  name: string | null;
+  body: string | null;
+  draft: boolean;
+  prerelease: boolean;
+  created_at: string;
+  published_at: string | null;
+  assets: GitHubReleaseAsset[];
+}
+
+export async function fetchFirmwareVersions(
+  options: FirmwareUpdateOptions = {}
+): Promise<FirmwareVersion[]> {
+  try {
+    const response = await fetch(FIRMWARE_RELEASES_URL, {
+      headers: GITHUB_API_HEADERS,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch firmware releases');
+    }
+
+    const releases = await response.json();
+
+    if (!Array.isArray(releases)) {
+      throw new Error('Invalid firmware releases response');
+    }
+
+    return (releases as GitHubRelease[])
+      .filter((release) => !release.draft)
+      .filter((release) => options.includePrereleases || !release.prerelease)
+      .map(toFirmwareVersion);
+  } catch (error) {
+    console.error('Error fetching firmware releases:', error);
+    throw error;
+  }
 }
 
 export async function isNewerFirmwareAvailable(
-	localVersion: string
+  localVersion: string,
+  options: FirmwareUpdateOptions = {}
 ): Promise<boolean> {
-	const latestRelease = await getLatestRelease();
+  const latestRelease = await getLatestRelease(options);
 
-	const remoteVersion = latestRelease.version;
+  const remoteVersion = latestRelease.version;
 
-	return isNewerVersion(remoteVersion, localVersion);
+  return isNewerVersion(remoteVersion, localVersion);
 }
 
 export async function getNewFirmware(
-	localVersion: string
+  localVersion: string,
+  options: FirmwareUpdateOptions = {}
 ): Promise<Uint8Array<ArrayBuffer>> {
-	const latestRelease = await getLatestRelease();
+  const latestRelease = await getLatestRelease(options);
 
-	if (isNewerVersion(latestRelease.version, localVersion)) {
-		const firmwareURL = `${FIRMWARE_BASE_URL}${latestRelease.file}`
-
-		return downloadFirmware(firmwareURL);
-	} else {
-		throw new Error(
-			`The local version ${localVersion} is the same or newer than the latest firmware version ${latestRelease.version}`
-		);
-	}
+  if (isNewerVersion(latestRelease.version, localVersion)) {
+    return downloadFirmware(latestRelease.downloadUrl);
+  } else {
+    throw new Error(
+      `The local version ${localVersion} is the same or newer than the latest firmware version ${latestRelease.version}`
+    );
+  }
 }
 
 export async function updateFirmware(
-	localVersion: string,
-  server: BluetoothRemoteGATTServer
+  localVersion: string,
+  server: BluetoothRemoteGATTServer,
+  options: FirmwareUpdateOptions = {}
 ): Promise<void> {
-  const newFirmware = await getNewFirmware(localVersion);
+  const newFirmware = await getNewFirmware(localVersion, options);
   return await uploadFirmware(server, newFirmware);
 }
 
 async function downloadFirmware(url: string): Promise<Uint8Array<ArrayBuffer>> {
-	const response = await fetch(url);
+  const response = await fetch(url);
 
-	if (!response.ok) throw new Error("Firmware download failed");
+  if (!response.ok) throw new Error("Firmware download failed");
 
-	const arrayBuf = await response.arrayBuffer();
-	return new Uint8Array(arrayBuf);
+  const arrayBuf = await response.arrayBuffer();
+  return new Uint8Array(arrayBuf);
 }
 
-async function getLatestRelease() {
-	const firmwareVersions = await fetchFirmwareVersions();
+async function getLatestRelease(options: FirmwareUpdateOptions) {
+  const firmwareVersions = await fetchFirmwareVersions(options);
 
-	const latestVersion = firmwareVersions.reduce((prev, current) => {
-		return compareVersions(prev.version, current.version) > 0 ? prev : current;
-	});
+  if (firmwareVersions.length === 0) {
+    throw new Error('No firmware releases found');
+  }
 
-	return latestVersion;
+  const latestVersion = firmwareVersions.reduce((prev, current) => {
+    return compareVersions(prev.version, current.version) > 0 ? prev : current;
+  });
+
+  return latestVersion;
 }
 
 function isNewerVersion(remoteVersion: string, localVersion: string): boolean {
-	return compareVersions(remoteVersion, localVersion) > 0;
+  return compareVersions(remoteVersion, localVersion) > 0;
+}
+
+function toFirmwareVersion(release: GitHubRelease): FirmwareVersion {
+  const firmwareAsset = selectFirmwareAsset(release);
+
+  return {
+    version: release.tag_name,
+    releaseDate: release.published_at ?? release.created_at,
+    description: release.body ?? release.name ?? '',
+    downloadUrl: firmwareAsset.browser_download_url,
+  };
+}
+
+function selectFirmwareAsset(release: GitHubRelease): GitHubReleaseAsset {
+  const bonAssets = release.assets.filter((asset) =>
+    asset.name.toLowerCase().endsWith('.bin')
+  );
+
+  if (bonAssets.length === 0) {
+    throw new Error(`No .bin firmware asset found for release ${release.tag_name}`);
+  }
+
+  if (bonAssets.length === 1) {
+    return bonAssets[0];
+  }
+
+  const releaseTag = release.tag_name.toLowerCase();
+  const releaseVersion = releaseTag.replace(/^v/, '');
+  const matchingAssets = bonAssets.filter((asset) => {
+    const assetName = asset.name.toLowerCase();
+    return assetName.includes(releaseTag) || assetName.includes(releaseVersion);
+  });
+
+  if (matchingAssets.length === 1) {
+    return matchingAssets[0];
+  }
+
+  throw new Error(`Multiple .bin firmware assets found for release ${release.tag_name}`);
 }
