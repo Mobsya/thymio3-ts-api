@@ -10,26 +10,6 @@ export type MemoryInfo = {
   ram_bytes_free: number
 }
 
-function parseJsonPayload<T>(value: DataView): T {
-  const payloadOffset = 3;
-
-  if (value.byteLength < payloadOffset) {
-    throw new Error("Device info response is missing payload length");
-  }
-
-  const messageLength = value.getUint16(1, true);
-
-  if (messageLength > value.byteLength - payloadOffset) {
-    throw new Error("Device info response payload is shorter than declared length");
-  }
-
-  const data = new Uint8Array(value.buffer, value.byteOffset + payloadOffset, messageLength);
-
-  const decoder = new TextDecoder();
-  const jsonString = decoder.decode(data);
-  return JSON.parse(jsonString) as T;
-}
-
 export async function getFirmwareInfo(
   deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic
 ): Promise<FirmwareInfo> {
@@ -39,19 +19,20 @@ export async function getFirmwareInfo(
 
       if (!value) return;
 
-      const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
+      const view = new DataView(value.buffer);
       const id = view.getUint8(0);
 
       if (id !== 0x01) return;
 
       deviceInfoCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
 
-      try {
-        const firmwareInfo = parseJsonPayload<FirmwareInfo>(value);
-        resolve(firmwareInfo);
-      } catch (err) {
-        reject(err);
-      }
+      const messageLength = view.getUint16(1, true);
+      const data = new Uint8Array(value.buffer, 3);
+
+      const decoder = new TextDecoder();
+      const firmwareInfoString = decoder.decode(data);
+      const firmwareInfo = JSON.parse(firmwareInfoString) as FirmwareInfo;
+      resolve(firmwareInfo);
     };
 
     deviceInfoCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
@@ -76,19 +57,20 @@ export async function getMemoryInfo(
 
       if (!value) return;
 
-      const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
+      const view = new DataView(value.buffer);
       const id = view.getUint8(0);
 
       if (id !== 0x02) return;
 
       deviceInfoCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
 
-      try {
-        const memoryInfo = parseJsonPayload<MemoryInfo>(value);
-        resolve(memoryInfo);
-      } catch (err) {
-        reject(err);
-      }
+      const messageLength = view.getUint16(1, true);
+      const data = new Uint8Array(value.buffer, 3);
+
+      const decoder = new TextDecoder();
+      const memoryInfoString = decoder.decode(data);
+      const memoryInfo = JSON.parse(memoryInfoString) as MemoryInfo;
+      resolve(memoryInfo);
     };
 
     deviceInfoCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
