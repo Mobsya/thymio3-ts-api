@@ -32,6 +32,7 @@ yarn-error.log*
 
 # Coverage reports
 coverage/
+.vitest/
 
 # Misc
 *.log
