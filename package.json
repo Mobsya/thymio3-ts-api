@@ -6,7 +6,7 @@
   "thymio": {
     "firmwareCompatibility": {
       "min": "v1.8.0",
-      "max": "v1.9.0"
+      "max": "v1.10.0"
     }
   },
   "main": "dist/index.js",
@@ -29,8 +29,8 @@
     "@vitest/browser-playwright": "^5.0.0",
     "@vitest/coverage-v8": "^5.0.0",
     "jsdom": "^30.0.1",
-    "playwright": "^1.62.1",
-    "tsdown": "^0.22.14",
+    "playwright": "^1.63.0",
+    "tsdown": "^0.23.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   }
