@@ -53,3 +53,31 @@ export function colorRawToRgb(colorRaw) {
     b: clamp(Number(colorRaw.blue), 0, 255),
   };
 }
+
+// Firmware T_Color byte order. Its Yellow and Cyan ranges correspond to the
+// supplied Orange and Dark green samples. CMYK percentages describe those samples.
+const DETECTED_COLOURS = [
+  { name: "Red", cmyk: [3.7, 100, 100, 0.37] },
+  { name: "Orange", cmyk: [11, 38, 100, 0] },
+  { name: "Light green", cmyk: [30, 0, 100, 0] },
+  { name: "Dark green", cmyk: [67, 0, 100, 0] },
+  { name: "Blue", cmyk: [87, 76, 0, 0] },
+  { name: "Violet", cmyk: [44, 84, 0, 0] },
+  { name: "White", cmyk: [0, 0, 0, 0] },
+  { name: "Black", cmyk: [0, 0, 0, 100] },
+];
+
+export function getDetectedColour(value) {
+  if (!Number.isInteger(value)) return null;
+  const colour = DETECTED_COLOURS[value];
+  // Firmware value 8 means unknown; other unrecognised bytes stay neutral too.
+  if (!colour) return null;
+
+  const [cyan, magenta, yellow, black] = colour.cmyk;
+  const channel = (ink) => Math.round(255 * (1 - ink / 100) * (1 - black / 100));
+
+  return {
+    name: colour.name,
+    rgb: { r: channel(cyan), g: channel(magenta), b: channel(yellow) },
+  };
+}

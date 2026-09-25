@@ -67,22 +67,27 @@
 
 .sensors-panel .sensor-focus-row {
   grid-template-columns: 92px minmax(0, 1fr);
-  min-height: 27px;
-  padding: 3px 5px;
+  min-height: 32px;
+  padding: 6px;
 }
 
 .sensors-panel .sensor-focus-row-source {
   display: none;
 }
 
-.sensors-panel .sensor-focus-row-label,
-.sensors-panel .sensor-focus-key,
-.sensors-panel .sensor-focus-reading {
+.sensors-panel .sensor-focus-row-label {
   font-size: 13px;
 }
 
 .sensors-panel .sensor-focus-values {
-  gap: 1px 6px;
+  gap: 4px 6px;
+}
+
+@media (max-width: 760px) {
+  .sensors-panel .sensor-focus-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
 }
 
 @media (max-width: 1120px) {
