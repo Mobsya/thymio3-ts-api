@@ -1,7 +1,5 @@
 .sensor-focus-panel {
   --sensor-focus-cell-min-width: 126px;
-  --sensor-focus-reading-width: 7ch;
-
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -54,7 +52,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
-  background: var(--card);
+  background: var(--panel);
 }
 
 .sensor-focus-empty {
@@ -74,7 +72,8 @@
   border-bottom: 1px solid var(--border);
 }
 
-.sensor-focus-row:last-child {
+.sensor-focus-row:last-child,
+.sensor-focus-section:last-child {
   border-bottom: none;
 }
 
@@ -96,69 +95,148 @@
   gap: 4px 8px;
   align-items: center;
   min-width: 0;
+  justify-content: flex-end;
 }
 
 .sensor-focus-values {
   display: grid;
-  flex: 1 1 var(--sensor-focus-cell-min-width);
-  grid-template-columns: repeat(auto-fit, minmax(var(--sensor-focus-cell-min-width), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--sensor-focus-cell-min-width)), 1fr));
   gap: 4px;
   min-width: 0;
 }
 
-.sensor-focus-color-values {
+.sensor-focus-section {
   display: grid;
-  grid-template-columns: repeat(2, minmax(48px, max-content));
-  gap: 4px 6px;
+  gap: 8px;
   min-width: 0;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
 }
 
-.sensor-focus-color-group {
+.sensor-focus-section-heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.sensor-focus-colour-columns {
   display: grid;
-  grid-template-rows: repeat(3, auto);
-  gap: 3px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+
+.sensor-focus-colour-column {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.sensor-focus-colour-column + .sensor-focus-colour-column {
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+}
+
+.sensor-focus-column-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  column-gap: 3px;
+  min-height: 32px;
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 16px;
+}
+
+.sensor-focus-column-note {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .sensor-focus-value {
   display: inline-grid;
-  grid-template-columns: minmax(0, 1fr) var(--sensor-focus-reading-width);
+  grid-template-columns: minmax(0, 1fr) max-content;
   column-gap: 6px;
   align-items: baseline;
   min-width: 0;
-  padding: 3px 5px;
+  padding: 4px 5px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 5px;
   background: rgba(248, 250, 252, 0.82);
 }
 
-.sensor-focus-color-group .sensor-focus-value {
-  grid-template-columns: auto auto;
+.sensor-focus-colour-column .sensor-focus-value {
   column-gap: 3px;
-  padding: 2px 4px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
-.sensor-focus-color-group .sensor-focus-reading {
-  width: 3ch;
+.sensor-focus-detected {
+  min-width: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.sensor-focus-ground-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: right;
+}
+
+.sensor-focus-ground-table th,
+.sensor-focus-ground-table td {
+  padding: 4px 3px;
+}
+
+.sensor-focus-ground-table th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.sensor-focus-ground-table thead th {
+  border-bottom: 1px solid var(--border);
+}
+
+.sensor-focus-ground-table th:first-child {
+  padding-left: 0;
+  text-align: left;
+}
+
+.sensor-focus-ground-table th:last-child,
+.sensor-focus-ground-table td:last-child {
+  padding-right: 0;
 }
 
 .sensor-focus-key {
   min-width: 0;
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.05;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
   overflow-wrap: break-word;
 }
 
 .sensor-focus-reading {
   display: inline-flex;
   justify-content: flex-end;
-  width: var(--sensor-focus-reading-width);
-  overflow: hidden;
-  font-size: 12px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
-  font-weight: 900;
+  font-weight: 700;
+  line-height: 1.4;
   white-space: nowrap;
+}
+
+.sensor-focus-reading[aria-label="Waiting"] {
+  color: var(--muted);
 }
 
 @media (max-width: 760px) {
