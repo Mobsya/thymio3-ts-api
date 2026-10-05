@@ -1,12 +1,12 @@
 {
   "name": "thymio3-ts-api",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "type": "module",
   "description": "Thymio 3 API",
   "thymio": {
     "firmwareCompatibility": {
       "min": "v1.8.0",
-      "max": "v1.11.0"
+      "max": "v1.12.0"
     }
   },
   "main": "dist/index.js",
