@@ -147,7 +147,13 @@ The API checks the connected ESP32 firmware version against the compatibility ra
 ### Firmware updates
 
 `thymio.isNewerFirmwareAvailable()` - check if a newer Thymio 3 version is available\
-`thymio.updateFirmware()` - update the firmware to the latest version
+`thymio.getNewFirmware()` - download the latest application image as a `Uint8Array`\
+`thymio.updateFirmware()` - update the firmware to the latest version\
+Pass `{ includePrereleases: true }` to these functions to consider GitHub prereleases.
+
+Releases are discovered through the public [GitHub Releases API](https://github.com/Mobsya/thymio3-firmware-esp32/releases).
+Bluetooth OTA uses the application `.bin` file, for example `ESP32-2026-10-05-872e8c2-1.10.2.bin`.
+The `FULL-` image, bootloader, partition table, OTA data, and audio-tone files are not OTA application images.
 
 ### Manual OTA updates
 
