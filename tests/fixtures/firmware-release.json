@@ -1,0 +1,53 @@
+{
+  "tag_name": "v1.10.2",
+  "name": "v1.10.2",
+  "body": "Automated firmware build for 872e8c2830da6e47a93de3e5b91507c7e2d3e4dd",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-10-05T11:56:38Z",
+  "published_at": "2026-10-05T11:59:42Z",
+  "assets": [
+    {
+      "name": "ESP32-2026-10-05-872e8c2-1.10.2-audio-tone.bin",
+      "browser_download_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/ESP32-2026-10-05-872e8c2-1.10.2-audio-tone.bin"
+    },
+    {
+      "name": "ESP32-2026-10-05-872e8c2-1.10.2-bootloader.bin",
+      "browser_download_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/ESP32-2026-10-05-872e8c2-1.10.2-bootloader.bin"
+    },
+    {
+      "name": "ESP32-2026-10-05-872e8c2-1.10.2-ota-data.bin",
+      "browser_download_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/ESP32-2026-10-05-872e8c2-1.10.2-ota-data.bin"
+    },
+    {
+      "name": "ESP32-2026-10-05-872e8c2-1.10.2-partition-table.bin",
+      "browser_download_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/ESP32-2026-10-05-872e8c2-1.10.2-partition-table.bin"
+    },
+    {
+      "name": "ESP32-2026-10-05-872e8c2-1.10.2.bin",
+      "browser_download_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/ESP32-2026-10-05-872e8c2-1.10.2.bin",
+      "size": 1212112,
+      "digest": "sha256:1a250c68a18c86bf456f7224241e2359eda5031b14d92c4c177b527da95e50ca"
+    },
+    {
+      "name": "flasher_args.json",
+      "browser_download_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/flasher_args.json"
+    },
+    {
+      "name": "flash_args",
+      "browser_download_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/flash_args"
+    },
+    {
+      "name": "FULL-ESP32-2026-10-05-872e8c2-1.10.2.bin",
+      "browser_download_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/FULL-ESP32-2026-10-05-872e8c2-1.10.2.bin"
+    },
+    {
+      "name": "manifest.json",
+      "browser_download_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/manifest.json"
+    },
+    {
+      "name": "SHA256SUMS",
+      "browser_download_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/SHA256SUMS"
+    }
+  ]
+}

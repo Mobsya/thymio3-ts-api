@@ -303,24 +303,25 @@ export async function stopSensorStreaming() {
 
 //// FIRMWARE UPDATE
 
-export async function isNewerFirmwareAvailable(): Promise<boolean> {
+export async function isNewerFirmwareAvailable(
+  options?: updater.FirmwareUpdateOptions
+): Promise<boolean> {
   const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
-  return await updater.isNewerFirmwareAvailable(localVersion);
+  return await updater.isNewerFirmwareAvailable(localVersion, options);
 }
 
-export async function getNewFirmware(): Promise<Uint8Array<ArrayBuffer>> {
+export async function getNewFirmware(
+  options?: updater.FirmwareUpdateOptions
+): Promise<Uint8Array<ArrayBuffer>> {
   const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
-  return await updater.getNewFirmware(localVersion);
+  return await updater.getNewFirmware(localVersion, options);
 }
 
-export async function updateFirmware(): Promise<void> {
-  const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
-  await stopMainBluetoothServices();
-
-  return await updater.updateFirmware(
-    localVersion,
-    getConnectedServer()
-  );
+export async function updateFirmware(
+  options?: updater.FirmwareUpdateOptions
+): Promise<void> {
+  const firmware = await getNewFirmware(options);
+  return await uploadFirmware(firmware);
 }
 
 //// OTA CHARACTERISTIC
