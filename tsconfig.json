@@ -12,6 +12,8 @@
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
+    // Use Oxc for tsdown declarations; TypeScript 7 has no classic compiler API.
+    "isolatedDeclarations": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,

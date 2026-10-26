@@ -9,7 +9,7 @@ import { createPayloadPackets, type UploadProgress } from "./utils";
 export async function uploadAudioFile(
   audioCharacteristic: BluetoothRemoteGATTCharacteristic,
   file: File
-) {
+): Promise<void> {
   // Perform the audio file checks
   await isFileWavOrMp3(file);
   await isMonoAndCorrectSampleRate(file);
@@ -43,7 +43,7 @@ export async function uploadAudioFile(
  */
 export async function playAudioFile(
   audioCharacteristic: BluetoothRemoteGATTCharacteristic,
-) {
+): Promise<void> {
   const id = 0x02;
 
   const body = new Array(20).fill(0x00);
@@ -57,7 +57,7 @@ export async function playAudioFile(
  */
 export async function stopAudioFile(
   audioCharacteristic: BluetoothRemoteGATTCharacteristic,
-) {
+): Promise<void> {
   const id = 0x03;
 
   const payload = new Uint8Array([id]);
@@ -72,7 +72,7 @@ export async function stopAudioFile(
 export async function recordAudio(
   audioCharacteristic: BluetoothRemoteGATTCharacteristic,
   duration: number
-) {
+): Promise<void> {
   if (duration > 10) {
     throw new Error(`Can not record more than 10 seconds.`);
   }
@@ -97,7 +97,7 @@ export async function playFrequency(
   audioCharacteristic: BluetoothRemoteGATTCharacteristic,
   frequency: number,
   duration: number
-) {
+): Promise<void> {
   const id = 0x06;
 
   const buffer = new ArrayBuffer(5);
@@ -110,7 +110,7 @@ export async function playFrequency(
   return await queueBluetoothCall(() => audioCharacteristic.writeValueWithResponse(payload));
 }
 
-export function handleAudioResponse(event: Event) {
+export function handleAudioResponse(event: Event): void {
 	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
 
   if (value) {

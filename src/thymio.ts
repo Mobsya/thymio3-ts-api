@@ -239,7 +239,7 @@ async function retryConnection() {
 
 // GET DEVICE NAME
 
-export function getDeviceName() {
+export function getDeviceName(): string {
   return device?.name || "Unknown device";
 }
 
@@ -253,43 +253,43 @@ export function getAPIVersion(): string {
  * Set the state of the Thymio 3 actuators.
  * @param {*} actuatorData
  */
-export async function setActuatorState(actuatorData: ActuatorData) {
+export async function setActuatorState(actuatorData: ActuatorData): Promise<void> {
   await command.setActuatorState(commandCharacteristic, actuatorData)
 }
 
 // PYTHON CHARACTERISTIC
 
-export async function sendPythonScript(script: string) {
+export async function sendPythonScript(script: string): Promise<void> {
   await python.sendPythonScript(pythonCharacteristic, script);
 }
 
-export async function executeLoadedScript() {
+export async function executeLoadedScript(): Promise<void> {
   await python.executeLoadedScript(pythonCharacteristic);
 }
 
-export async function stopScriptExecution() {
+export async function stopScriptExecution(): Promise<void> {
   await python.stopScriptExecution(pythonCharacteristic);
 }
 
-export async function saveScriptToPartition(scriptId: number) {
+export async function saveScriptToPartition(scriptId: number): Promise<void> {
 	await python.saveScriptToPartition(pythonCharacteristic, scriptId);
 }
 
-export async function softResetPythonInterpreter() {
+export async function softResetPythonInterpreter(): Promise<void> {
 	await python.softResetPythonInterpreter(pythonCharacteristic);
 }
 
 //// SENSOR STREAM CHARACTERISTIC
 
-export async function startMainSensorStreaming() {
+export async function startMainSensorStreaming(): Promise<void> {
   return await sensorStream.startMainSensorStreaming(sensorStreamCharacteristic);
 }
 
-export async function startSecondarySensorStreaming() {
+export async function startSecondarySensorStreaming(): Promise<void> {
   return await sensorStream.startSecondarySensorStreaming(sensorStreamCharacteristic);
 }
 
-export async function startAllSensorStreaming() {
+export async function startAllSensorStreaming(): Promise<void> {
   return await sensorStream.startAllSensorStreaming(sensorStreamCharacteristic);
 }
 
@@ -297,7 +297,7 @@ export async function startAllSensorStreaming() {
 /**
  * Stop all sensor streaming.
  */
-export async function stopSensorStreaming() {
+export async function stopSensorStreaming(): Promise<void> {
   return await sensorStream.stopSensorStreaming(sensorStreamCharacteristic);
 }
 
@@ -347,21 +347,21 @@ export async function stopFirmwareUpload(): Promise<void> {
  * Upload a custom audio file.
  * @param file The audio file to upload.
  */
-export async function uploadAudioFile(file: File) {
+export async function uploadAudioFile(file: File): Promise<void> {
   return await audio.uploadAudioFile(audioCharacteristic, file)
 }
 
 /**
  * Play the audio file that is currently in memory.
  */
-export async function playAudioFile() {
+export async function playAudioFile(): Promise<void> {
   return await audio.playAudioFile(audioCharacteristic);
 }
 
 /**
  * Stop the audio file that is currently playing.
  */
-export async function stopAudioFile() {
+export async function stopAudioFile(): Promise<void> {
   return await audio.stopAudioFile(audioCharacteristic);
 }
 
@@ -369,7 +369,7 @@ export async function stopAudioFile() {
  * Start recording audio to memory.
  * @param duration The duration of the recording (maximum 10 seconds).
  */
-export async function recordAudio(duration: number) {
+export async function recordAudio(duration: number): Promise<void> {
   return await audio.recordAudio(audioCharacteristic, duration);
 }
 
@@ -381,7 +381,7 @@ export async function recordAudio(duration: number) {
 export async function playFrequency(
   frequency: number,
   duration: number
-) {
+): Promise<void> {
   return await audio.playFrequency(audioCharacteristic, frequency, duration);
 }
 

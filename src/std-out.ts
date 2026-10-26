@@ -1,6 +1,6 @@
 import { THYMIO_STD_OUT_EVENT_ID } from "./constants";
 
-export function handleStdOutResponse(event: Event) {
+export function handleStdOutResponse(event: Event): void {
 	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
 
   if (value) {

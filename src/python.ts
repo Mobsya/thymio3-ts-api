@@ -75,7 +75,7 @@ export async function sendPythonScript(
 
 export async function executeLoadedScript(
   pythonCharacteristic: BluetoothRemoteGATTCharacteristic,
-) {
+): Promise<void> {
   const packet = new Uint8Array([0x02]);
 
   await queueBluetoothCall(() => pythonCharacteristic.writeValueWithResponse(packet));
@@ -83,7 +83,7 @@ export async function executeLoadedScript(
 
 export async function stopScriptExecution(
   pythonCharacteristic: BluetoothRemoteGATTCharacteristic,
-) {
+): Promise<void> {
   const packet = new Uint8Array([0x03]);
 
   await runPriorityBluetoothCall(() => pythonCharacteristic.writeValueWithResponse(packet));
@@ -92,7 +92,7 @@ export async function stopScriptExecution(
 export async function saveScriptToPartition(
 	pythonCharacteristic: BluetoothRemoteGATTCharacteristic,
 	scriptId: number
-) {
+): Promise<void> {
 	if(!scriptId) {
 		throw new Error("Script ID must not be empty");
 	}
@@ -139,13 +139,13 @@ export async function saveScriptToPartition(
 
 export async function softResetPythonInterpreter(
 	pythonCharacteristic: BluetoothRemoteGATTCharacteristic
-) {
+): Promise<void> {
 	const packet = new Uint8Array([0x05]);
 
 	await queueBluetoothCall(() => pythonCharacteristic.writeValueWithResponse(packet));
 }
 
-export function handlePythonResponse(event: Event) {
+export function handlePythonResponse(event: Event): void {
 	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
 	if (value) {
 		const id = value.getUint8(0);

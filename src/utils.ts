@@ -11,7 +11,7 @@ export type UploadProgress = {
  * @param {Uint8Array} payload
  * @returns {Uint8Array[]} Array of packet Uint8Arrays
  */
-export function createPayloadPackets(payload: Uint8Array, isAudio = false) {
+export function createPayloadPackets(payload: Uint8Array, isAudio = false): Uint8Array<ArrayBuffer>[] {
   let FIRST_PACKET_HEADER_SIZE = 1 + 2 + 4 + 2; // 9 bytes
   if (isAudio) {
     FIRST_PACKET_HEADER_SIZE = 1 + 4 + 4 + 2; // 11 bytes
@@ -67,7 +67,7 @@ export function createPayloadPackets(payload: Uint8Array, isAudio = false) {
 /**
  * Converts a number to a big-endian byte array
  */
-export function numberToBytes(value: number, byteLength: number) {
+export function numberToBytes(value: number, byteLength: number): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(byteLength);
   for (let i = 0; i < byteLength; i++) {
     bytes[byteLength - 1 - i] = value & 0xff;
@@ -92,7 +92,7 @@ export function crc16_ccitt(buffer: Uint8Array, init = 0x0000): number {
  * Calculate a CRC32 code.
  * @returns CRC32 code
  */
-export function computeCRC32(buf: Uint8Array, crc = 0xFFFFFFFF) {
+export function computeCRC32(buf: Uint8Array, crc = 0xFFFFFFFF): number {
   for (let i = 0; i < buf.length; i++) {
     crc ^= buf[i] << 24;
     for (let j = 0; j < 8; j++) {
@@ -106,7 +106,7 @@ export function computeCRC32(buf: Uint8Array, crc = 0xFFFFFFFF) {
   return crc & 0xFFFFFFFF;
 }
 
-export function delay(timeout: number) {
+export function delay(timeout: number): Promise<void> {
   return new Promise<void>(resolve => {
     setTimeout(() => resolve(), timeout);
   });
