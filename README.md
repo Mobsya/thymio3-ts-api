@@ -147,13 +147,21 @@ The API checks the connected ESP32 firmware version against the compatibility ra
 ### Firmware updates
 
 `thymio.isNewerFirmwareAvailable()` - check if a newer Thymio 3 version is available\
-`thymio.getNewFirmware()` - download the latest application image as a `Uint8Array`\
-`thymio.updateFirmware()` - update the firmware to the latest version\
-Pass `{ includePrereleases: true }` to these functions to consider GitHub prereleases.
+`thymio.getNewFirmware()` - download and verify the selected application image as a `Uint8Array`\
+`thymio.updateFirmware()` - update the firmware to the selected version
 
-Releases are discovered through the public [GitHub Releases API](https://github.com/Mobsya/thymio3-firmware-esp32/releases).
-Bluetooth OTA uses the application `.bin` file, for example `ESP32-2026-10-05-872e8c2-1.10.2.bin`.
-The `FULL-` image, bootloader, partition table, OTA data, and audio-tone files are not OTA application images.
+Releases and firmware downloads come from the public [GitHub Pages mirror](https://mobsya.github.io/thymio3-firmware-esp32/)
+and its [releases.json catalog](https://mobsya.github.io/thymio3-firmware-esp32/releases.json), which support cross-origin browser downloads without authentication.
+By default, these functions use the publisher's `latest_stable` selection, even when another stable release has a higher version number.
+Pass `{ includePrereleases: true }` to select the highest version across stable releases and prereleases instead.
+Downloads and updates require the selected version to be newer than the connected robot's firmware.
+
+Bluetooth OTA uses only the catalog asset with `role: "app"`; filenames are not used to guess the application image.
+The `full`, bootloader, partition table, OTA data, and audio-tone roles are not OTA application images.
+An unavailable release or a selected release without exactly one application asset causes an error, with no fallback to an older release or GitHub Release download.
+
+The downloaded application's byte length and SHA-256 checksum must match the catalog before bytes are returned or Bluetooth OTA starts.
+Verification requires Web Crypto, available on HTTPS pages and localhost. Catalog, download, and verification failures reject the update before Bluetooth services are stopped.
 
 ### Manual OTA updates
 

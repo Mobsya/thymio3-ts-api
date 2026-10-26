@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "latest_stable": "v1.10.2",
+  "releases": [
+    {
+      "id": 403664792,
+      "tag": "v1.10.2",
+      "name": "v1.10.2",
+      "published_at": "2026-10-05T11:59:42Z",
+      "prerelease": false,
+      "release_url": "https://github.com/Mobsya/thymio3-firmware-esp32/releases/tag/v1.10.2",
+      "assets": [
+        {
+          "name": "ESP32-2026-10-05-872e8c2-1.10.2.bin",
+          "url": "https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/ESP32-2026-10-05-872e8c2-1.10.2.bin",
+          "size": 1212112,
+          "sha256": "1a250c68a18c86bf456f7224241e2359eda5031b14d92c4c177b527da95e50ca",
+          "role": "app"
+        },
+        {
+          "name": "ESP32-2026-10-05-872e8c2-1.10.2-audio-tone.bin",
+          "url": "https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/ESP32-2026-10-05-872e8c2-1.10.2-audio-tone.bin",
+          "size": 1327914,
+          "sha256": "e423025bf420e1f5c57e4a31328163e67c91f7b2a27a80074533e731370942cd",
+          "role": "audio-tone"
+        },
+        {
+          "name": "ESP32-2026-10-05-872e8c2-1.10.2-bootloader.bin",
+          "url": "https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/ESP32-2026-10-05-872e8c2-1.10.2-bootloader.bin",
+          "size": 17488,
+          "sha256": "132fe33c132f55b11b0b02e245ddf1c055b567ee9ef7bf931554750c7c6a8f88",
+          "role": "bootloader"
+        },
+        {
+          "name": "ESP32-2026-10-05-872e8c2-1.10.2-ota-data.bin",
+          "url": "https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/ESP32-2026-10-05-872e8c2-1.10.2-ota-data.bin",
+          "size": 8192,
+          "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f",
+          "role": "ota-data"
+        },
+        {
+          "name": "ESP32-2026-10-05-872e8c2-1.10.2-partition-table.bin",
+          "url": "https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/ESP32-2026-10-05-872e8c2-1.10.2-partition-table.bin",
+          "size": 3072,
+          "sha256": "98c587e1d5a3c41206b243d0cc3621c3411e9e14e3e1177722e2c24b9b3e28bf",
+          "role": "partition-table"
+        },
+        {
+          "name": "FULL-ESP32-2026-10-05-872e8c2-1.10.2.bin",
+          "url": "https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/FULL-ESP32-2026-10-05-872e8c2-1.10.2.bin",
+          "size": 8143658,
+          "sha256": "508c37a60186a0a9f6f2462a5786dec2b03b55857f492ff46ca179b83df92416",
+          "role": "full"
+        },
+        {
+          "name": "SHA256SUMS",
+          "url": "https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/SHA256SUMS",
+          "size": 905,
+          "sha256": "c0b1d3d77be80151a441fdf0e342ef565d8eacf2498996c76ae7ad9d39e92db2",
+          "role": null
+        },
+        {
+          "name": "flash_args",
+          "url": "https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/flash_args",
+          "size": 319,
+          "sha256": "efc85deb57ec75700c703d3c5f33994356af2f3ee8875e873b224b5ab97d59c7",
+          "role": null
+        },
+        {
+          "name": "flasher_args.json",
+          "url": "https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/flasher_args.json",
+          "size": 1220,
+          "sha256": "36dcb7bf7670529d601622cf9877abfcee2ea8989de0cc823708418879609b9b",
+          "role": null
+        },
+        {
+          "name": "manifest.json",
+          "url": "https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/manifest.json",
+          "size": 2697,
+          "sha256": "68fc090c2ec227360f597a2d410018018795f47a5d61a72aeece9975b329f569",
+          "role": null
+        }
+      ]
+    }
+  ]
+}
