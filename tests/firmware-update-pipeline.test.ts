@@ -14,7 +14,7 @@ import {
   THYMIO_FIRMWARE_UPLOAD_PROGRESS_EVENT_ID,
 } from '../src/constants';
 import { crc16_ccitt } from '../src/utils';
-import publishedRelease from './fixtures/firmware-release.json';
+import publishedCatalog from './fixtures/firmware-catalog.json';
 import {
   FakeBluetoothCharacteristic,
   FakeBluetoothDevice,
@@ -23,12 +23,22 @@ import {
   collectDocumentEventDetails,
 } from './helpers/fake-bluetooth';
 
-const releasesUrl = 'https://api.github.com/repos/Mobsya/thymio3-firmware-esp32/releases?per_page=100';
-const appUrl = 'https://github.com/Mobsya/thymio3-firmware-esp32/releases/download/v1.10.2/ESP32-2026-10-05-872e8c2-1.10.2.bin';
+const { webcrypto } = await vi.importActual<{ webcrypto: Crypto }>('node:crypto');
+const releasesUrl = 'https://mobsya.github.io/thymio3-firmware-esp32/releases.json';
+const appUrl = 'https://mobsya.github.io/thymio3-firmware-esp32/releases/403664792/ESP32-2026-10-05-872e8c2-1.10.2.bin';
+
+function catalogForFirmware(firmware: Uint8Array, sha256: string) {
+  const catalog = structuredClone(publishedCatalog);
+  const app = catalog.releases[0]!.assets.find((asset) => asset.role === 'app')!;
+  app.size = firmware.byteLength;
+  app.sha256 = sha256;
+  return catalog;
+}
 
 describe('public firmware update pipeline', () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.stubGlobal('crypto', webcrypto);
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -37,8 +47,9 @@ describe('public firmware update pipeline', () => {
   it('checks the device version, downloads the app, and transfers multiple OTA sectors', async () => {
     const { thymio, server, otaCommand, otaFirmware } = await connectRobot();
     const firmware = Uint8Array.from({ length: 4113 }, (_, index) => index % 256);
+    const catalog = catalogForFirmware(firmware, '03d6129c2c88ba113a590e13960e43acf44282b8745351fd85b1e5e20a23fabf');
     const fetchMock = vi.fn(async (url: string) => {
-      if (url === releasesUrl) return { ok: true, json: async () => [publishedRelease] };
+      if (url === releasesUrl) return { ok: true, json: async () => catalog };
       expect(url).toBe(appUrl);
       return { ok: true, arrayBuffer: async () => firmware.buffer };
     });
@@ -49,7 +60,7 @@ describe('public firmware update pipeline', () => {
       await expect(thymio.isNewerFirmwareAvailable()).resolves.toBe(true);
       await thymio.updateFirmware();
 
-      expect(fetchMock).toHaveBeenCalledWith(appUrl);
+      expect(fetchMock).toHaveBeenCalledWith(appUrl, { credentials: 'omit', cache: 'no-cache' });
       const commands = otaCommand.writesWithResponse.map((bytes) => new DataView(bytes.buffer));
       expect(commands.map((view) => view.getUint16(0, true))).toEqual([1, 2]);
       expect(commands[0]!.getUint32(2, true)).toBe(firmware.length);
@@ -78,18 +89,35 @@ describe('public firmware update pipeline', () => {
     }
   });
 
-  it.each(['metadata', 'download', 'network'] as const)(
+  it.each([
+    ['metadata', 'Failed to fetch firmware releases'],
+    ['download', 'Firmware download failed'],
+    ['network', 'Failed to fetch'],
+    ['size', 'Firmware size mismatch'],
+    ['checksum', 'Firmware checksum mismatch'],
+    ['crypto', 'Web Crypto is required to verify firmware'],
+    ['selection', 'No application firmware asset found'],
+    ['schema', 'Unsupported firmware catalog schema version'],
+  ])(
     'leaves Bluetooth services usable after a %s failure',
-    async (failure) => {
+    async (failure, error) => {
       const { thymio, server, mainCharacteristics, otaCommand } = await connectRobot();
+      const firmware = new Uint8Array([1, 2, 3, 4]);
+      const catalog = catalogForFirmware(firmware, '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a');
+      if (failure === 'crypto') vi.stubGlobal('crypto', undefined);
+      if (failure === 'selection') catalog.releases[0]!.assets = [];
+      if (failure === 'schema') catalog.schema_version = 2;
       vi.stubGlobal('fetch', vi.fn(async (url: string) => {
         if (failure === 'metadata') return { ok: false };
-        if (url === releasesUrl) return { ok: true, json: async () => [publishedRelease] };
+        if (url === releasesUrl) return { ok: true, json: async () => catalog };
         if (failure === 'network') throw new TypeError('Failed to fetch');
-        return { ok: false };
+        if (failure === 'download') return { ok: false };
+        const downloaded = failure === 'size' ? firmware.slice(0, -1)
+          : failure === 'checksum' ? new Uint8Array(firmware.length) : firmware;
+        return { ok: true, arrayBuffer: async () => downloaded.buffer };
       }));
 
-      await expect(thymio.updateFirmware()).rejects.toThrow();
+      await expect(thymio.updateFirmware()).rejects.toThrow(error);
 
       expect(server.connected).toBe(true);
       expect(otaCommand.writesWithResponse).toEqual([]);
@@ -140,7 +168,7 @@ async function connectRobot() {
       characteristic.emitValue(response);
     },
   });
-  const server = new FakeBluetoothServer(new Map([
+  const server = new FakeBluetoothServer(new Map<BluetoothServiceUUID, FakeBluetoothService>([
     [MAIN_SERVICE_UUID, new FakeBluetoothService(mainCharacteristics)],
     [OTA_SERVICE_UUID, new FakeBluetoothService(new Map([
       [OTA_COMMAND_CHARACTERISTIC_UUID, otaCommand],

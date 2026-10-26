@@ -77,7 +77,7 @@ export type OtherSensorData = {
  */
 export async function startMainSensorStreaming(
   sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic,
-) {
+): Promise<void> {
   const id = 0x01;
   const body = 1;
 
@@ -91,7 +91,7 @@ export async function startMainSensorStreaming(
  */
 export async function startSecondarySensorStreaming(
   sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic,
-) {
+): Promise<void> {
   const id = 0x01;
   const body = 2;
 
@@ -105,7 +105,7 @@ export async function startSecondarySensorStreaming(
  */
 export async function startAllSensorStreaming(
   sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic,
-) {
+): Promise<void> {
   const id = 0x01;
   const body = 3;
 
@@ -119,7 +119,7 @@ export async function startAllSensorStreaming(
  */
 export async function stopSensorStreaming(
   sensorStreamCharacteristic: BluetoothRemoteGATTCharacteristic,
-) {
+): Promise<void> {
   const id = 0x01;
   const body = 0x00;
 
@@ -132,7 +132,7 @@ export async function stopSensorStreaming(
  * Handler for the stream response. Captures the event data, transforms it into the appropriate
  * object and fires the appropriate event with the transformed data.
  */
-export async function handleStreamResponse(event: Event) {
+export async function handleStreamResponse(event: Event): Promise<void> {
 	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
 
   if (value) {

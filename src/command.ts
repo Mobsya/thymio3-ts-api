@@ -31,7 +31,7 @@ export type ActuatorData = {
 export async function setActuatorState(
   commandCharacteristic: BluetoothRemoteGATTCharacteristic,
   actuatorData: ActuatorData
-) {
+): Promise<void> {
   const commandArray = createCommandByteArray(actuatorData);
   const secondaryCommandArray = createSecondaryCommandByteArray(actuatorData);
 
