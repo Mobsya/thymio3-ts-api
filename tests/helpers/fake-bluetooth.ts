@@ -30,6 +30,7 @@ export class FakeBluetoothCharacteristic extends EventTarget {
   constructor(options: FakeCharacteristicOptions = {}) {
     super();
     this.properties = {
+      write: true,
       writeWithoutResponse: options.writeWithoutResponse ?? false,
     } as BluetoothCharacteristicProperties;
     this.maxWriteWithoutResponseBytes = options.maxWriteWithoutResponseBytes;

@@ -66,7 +66,27 @@ describe('top-level Thymio connection API', () => {
     expect(characteristics.audio.startNotificationsCount).toBe(1);
     expect(characteristics.file.startNotificationsCount).toBe(1);
     expect(characteristics.deviceInfo.startNotificationsCount).toBe(1);
-    expect(characteristics.deviceInfo.writesWithoutResponse[0]!.byteLength).toBe(510);
+    const [probe, firmwareRequest] = characteristics.deviceInfo.writesWithResponse;
+    expect(probe!.byteLength).toBe(500);
+    expect(probe![0]).toBe(0x02);
+    expect(probe!.subarray(1).every((byte) => byte === 0)).toBe(true);
+    expect(firmwareRequest).toEqual(new Uint8Array([0x01]));
+    expect(characteristics.deviceInfo.writeWithoutResponseAttempts).toEqual([]);
+
+    // A late probe indication must not satisfy the firmware-info request.
+    const removeListener = vi.spyOn(characteristics.deviceInfo, 'removeEventListener');
+    characteristics.deviceInfo.emitValue(jsonInfoPacket(0x02, {
+      flash_bytes_free: 1_500_000,
+      ram_bytes_free: 200_000,
+    }));
+    expect(removeListener).not.toHaveBeenCalled();
+    characteristics.deviceInfo.emitValue(jsonInfoPacket(0x01, {
+      esp32_ver: 'v1.10.2',
+      stm32_ver: 'v2.0.0',
+    }));
+    await flushMicrotasks();
+    expect(removeListener).toHaveBeenCalledWith('characteristicvaluechanged', expect.any(Function));
+    expect(console.warn).not.toHaveBeenCalled();
 
     await thymio.disconnect();
 
@@ -107,8 +127,16 @@ function createMainCharacteristics(): {
     audio: new FakeBluetoothCharacteristic(),
     file: new FakeBluetoothCharacteristic(),
     deviceInfo: new FakeBluetoothCharacteristic({
-      writeWithoutResponse: true,
-      maxWriteWithoutResponseBytes: 510,
+      rejectWriteWithoutResponse: true,
     }),
   };
+}
+
+function jsonInfoPacket(id: number, value: unknown): Uint8Array {
+  const data = new TextEncoder().encode(JSON.stringify(value));
+  const packet = new Uint8Array(3 + data.byteLength);
+  packet[0] = id;
+  new DataView(packet.buffer).setUint16(1, data.byteLength, true);
+  packet.set(data, 3);
+  return packet;
 }
