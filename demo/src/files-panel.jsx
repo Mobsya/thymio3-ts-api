@@ -13,6 +13,9 @@ export default function FilesPanel() {
   const [fileDownloadName, setFileDownloadName] = useState("");
   const [filename, setFilename] = useState("");
   const [fileList, setFileList] = useState("Waiting for file listings...");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     const onFileProgress = (event) => setFileProgress(clampInt(event.detail?.percentage ?? 0, 0, 100));
@@ -29,10 +32,22 @@ export default function FilesPanel() {
   async function uploadFile() {
     const t = getThymio();
     const file = fileUploadRef.current?.files?.[0];
-    if (!t?.uploadFile) return;
+    if (isUploading) return;
+    if (!t?.uploadFile) return setUploadError("The file upload API is unavailable. Reload the page and try again.");
     if (!file) return alert("Pick a file first");
     setFileProgress(0);
-    await t.uploadFile(file);
+    setUploadError("");
+    setUploadStatus(`Uploading ${file.name} (${file.size} bytes)…`);
+    setIsUploading(true);
+    try {
+      await t.uploadFile(file);
+      setUploadStatus("Upload confirmed by the robot. The file is in RAM; use Save file to keep it in storage.");
+    } catch (error) {
+      setUploadStatus("");
+      setUploadError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   async function downloadFile() {
@@ -81,9 +96,11 @@ export default function FilesPanel() {
     <div className="compact-group files-panel">
       <div className="grid-title">Files</div>
       <div className="row wrap">
-        <input ref={fileUploadRef} type="file" />
-        <button onClick={uploadFile}>Upload file</button>
+        <input ref={fileUploadRef} type="file" disabled={isUploading} />
+        <button onClick={uploadFile} disabled={isUploading}>{isUploading ? "Uploading…" : "Upload file"}</button>
       </div>
+      {uploadStatus ? <div role="status" className="file-upload-status">{uploadStatus}</div> : null}
+      {uploadError ? <div role="alert" className="error-box">{uploadError}</div> : null}
 
       <div className="row wrap">
         <input
@@ -92,7 +109,7 @@ export default function FilesPanel() {
           onChange={(e) => setFileDownloadName(e.target.value)}
           placeholder="filename to download"
         />
-        <button onClick={downloadFile}>Download file</button>
+        <button onClick={downloadFile} disabled={isUploading}>Download file</button>
       </div>
 
       <div className="subhead">Upload/Download progress</div>
@@ -105,17 +122,17 @@ export default function FilesPanel() {
           onChange={(e) => setFilename(e.target.value)}
           placeholder="filename"
         />
-        <button onClick={saveFile}>Save file</button>
-        <button className="secondary" onClick={deleteFile}>
+        <button onClick={saveFile} disabled={isUploading}>Save file</button>
+        <button className="secondary" onClick={deleteFile} disabled={isUploading}>
           Delete file
         </button>
-        <button className="secondary" onClick={eraseAllFiles}>
+        <button className="secondary" onClick={eraseAllFiles} disabled={isUploading}>
           Erase all files
         </button>
-        <button className="secondary" onClick={freeMemory}>
+        <button className="secondary" onClick={freeMemory} disabled={isUploading}>
           Free memory
         </button>
-        <button className="secondary" onClick={listFiles}>
+        <button className="secondary" onClick={listFiles} disabled={isUploading}>
           List files
         </button>
       </div>

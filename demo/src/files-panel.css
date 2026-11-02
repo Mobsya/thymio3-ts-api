@@ -1,3 +1,7 @@
 .files-panel {
   min-width: 0;
 }
+
+.file-upload-status {
+  font-size: 12px;
+}

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   deleteFile,
   downloadFile,
@@ -14,8 +14,11 @@ import {
 } from '../src/constants';
 import {
   FakeBluetoothCharacteristic,
+  FakeBluetoothDevice,
+  FakeBluetoothServer,
   bytesOf,
   collectDocumentEventDetails,
+  createDeferred,
   flushMicrotasks,
 } from './helpers/fake-bluetooth';
 
@@ -39,7 +42,7 @@ describe('file characteristic', () => {
     ]);
     await flushMicrotasks();
     expect(progressEvents.details).toEqual([
-      { uploadedPackets: 0, totalPackets: 1, percentage: 0 },
+      { uploadedPackets: 1, totalPackets: 1, percentage: 100 },
     ]);
 
     characteristic.emitValue([0x01, 0x00]);
@@ -154,6 +157,172 @@ describe('file characteristic', () => {
     await freeMemory(characteristic.asBluetoothCharacteristic());
 
     expect(characteristic.writesWithResponse.map(bytesOf)).toEqual([[0x05], [0x08]]);
+  });
+});
+
+describe('file upload diagnostics', () => {
+  const uploadLogs = () => vi.mocked(console.debug).mock.calls.map(([, detail]) => detail);
+
+  beforeEach(() => {
+    vi.spyOn(console, 'debug').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    expect(console.debug).toHaveBeenCalled();
+    expect(console.log).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it('describes preparation, packet writes, waiting and confirmed success without logging contents', async () => {
+    const characteristic = new FakeBluetoothCharacteristic();
+    const file = new File(['private file contents'.repeat(50)], 'report.txt');
+    const upload = uploadFile(characteristic.asBluetoothCharacteristic(), file);
+
+    await vi.waitFor(() => expect(uploadLogs().at(-1)?.stage).toBe('waiting'));
+    expect(uploadLogs().at(-1)).toMatchObject({
+      fileName: 'report.txt', fileSize: file.size, uploadedBytes: file.size,
+      uploadedPackets: characteristic.writesWithResponse.length,
+      totalPackets: characteristic.writesWithResponse.length,
+    });
+    expect(uploadLogs().some(({ stage }) => stage === 'complete')).toBe(false);
+    expect(uploadLogs().some(({ message }) => message.includes('CRC32 0x'))).toBe(true);
+    expect(uploadLogs().filter(({ message }) => message.startsWith('Writing packet')))
+      .toHaveLength(characteristic.writesWithResponse.length);
+    expect(uploadLogs().some(({ message }) => message.includes('private file contents'))).toBe(false);
+    expect(uploadLogs().every(({ timestamp, elapsedMs }) => timestamp > 0 && elapsedMs >= 0)).toBe(true);
+
+    characteristic.emitValue([0x01, 0x00]);
+    await upload;
+    expect(uploadLogs().at(-1)).toMatchObject({ stage: 'complete', level: 'info' });
+    const logCount = uploadLogs().length;
+    characteristic.emitValue([0x01, 0x03]);
+    expect(uploadLogs()).toHaveLength(logCount);
+  });
+
+  it.each([
+    [0x01, 'CRC Mismatch'], [0x02, 'Partial upload'], [0x03, 'Wrong sequence'],
+    [0x04, 'File too big'], [0xff, 'Unknown response code'],
+  ])('logs robot error code %i and stops sending after rejection', async (code, message) => {
+    const characteristic = new FakeBluetoothCharacteristic({
+      onWriteWithResponse: (_, target) => target.emitValue([0x01, code as number]),
+    });
+    await expect(uploadFile(characteristic.asBluetoothCharacteristic(), new File([new Uint8Array(1500)], 'demo.bin')))
+      .rejects.toBe(`File upload: ${message}`);
+    await flushMicrotasks();
+    expect(characteristic.writesWithResponse).toHaveLength(1);
+    expect(uploadLogs().some(({ message: text }) => text.includes(`0x${(code as number).toString(16).padStart(2, '0')}: ${message}`)))
+      .toBe(true);
+    expect(uploadLogs().at(-1)).toMatchObject({ stage: 'failed', level: 'error' });
+    expect(uploadLogs().some(({ stage }) => stage === 'complete')).toBe(false);
+  });
+
+  it('retains an ACK received during the final write and reports the final packet before success', async () => {
+    vi.useFakeTimers();
+    const characteristic = new FakeBluetoothCharacteristic({
+      onWriteWithResponse: (_, target) => target.emitValue([0x01, 0x00]),
+    });
+    await uploadFile(characteristic.asBluetoothCharacteristic(), new File(['abc'], 'demo.txt'));
+    expect(uploadLogs().at(-1)).toMatchObject({
+      stage: 'complete', uploadedPackets: 1, totalPackets: 1, uploadedBytes: 3,
+    });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('logs a failed Bluetooth write with the packet and original error, without claiming success', async () => {
+    const error = new DOMException('Connection lost', 'NetworkError');
+    const characteristic = new FakeBluetoothCharacteristic({
+      onWriteWithResponse: () => { throw error; },
+    });
+    await expect(uploadFile(characteristic.asBluetoothCharacteristic(), new File(['abc'], 'demo.txt')))
+      .rejects.toBe(error);
+    expect(uploadLogs().some(({ message }) => message.includes('Writing packet 1/1'))).toBe(true);
+    expect(uploadLogs().at(-1)).toMatchObject({ stage: 'failed', uploadedPackets: 0, uploadedBytes: 0 });
+    expect(uploadLogs().at(-1)?.message).toContain('NetworkError: Connection lost');
+    const logCount = uploadLogs().length;
+    characteristic.emitValue([0x01, 0x00]);
+    expect(uploadLogs()).toHaveLength(logCount);
+  });
+
+  it('logs local file read failures and preserves the original rejection', async () => {
+    const characteristic = new FakeBluetoothCharacteristic();
+    const file = new File([], 'unreadable.bin');
+    const error = new Error('File could not be read');
+    vi.spyOn(file, 'arrayBuffer').mockRejectedValue(error);
+    await expect(uploadFile(characteristic.asBluetoothCharacteristic(), file)).rejects.toBe(error);
+    expect(uploadLogs().at(-1)?.message).toContain('failed during reading');
+    expect(uploadLogs().at(-1)?.message).toContain(error.message);
+    expect(characteristic.writesWithResponse).toHaveLength(0);
+  });
+
+  it('rejects and cleans up when the robot never acknowledges the upload', async () => {
+    vi.useFakeTimers();
+    const characteristic = new FakeBluetoothCharacteristic();
+    const upload = uploadFile(characteristic.asBluetoothCharacteristic(), new File(['abc'], 'demo.txt'));
+    const rejected = expect(upload).rejects.toThrow('No acknowledgement from the robot within 15 seconds');
+    await vi.advanceTimersByTimeAsync(15_000);
+    await rejected;
+    expect(uploadLogs().at(-1)).toMatchObject({ stage: 'failed', uploadedPackets: 1, uploadedBytes: 3 });
+    expect(uploadLogs().at(-1)?.message).toContain('failed during waiting');
+    expect(vi.getTimerCount()).toBe(0);
+    const logCount = uploadLogs().length;
+    characteristic.emitValue([0x01, 0x00]);
+    expect(uploadLogs()).toHaveLength(logCount);
+  });
+
+  it('reports a disconnect during a pending write and never sends remaining packets', async () => {
+    const pendingWrite = createDeferred();
+    const server = new FakeBluetoothServer(new Map());
+    const device = new FakeBluetoothDevice('THYMIO', server);
+    const characteristic = new FakeBluetoothCharacteristic({ onWriteWithResponse: () => pendingWrite.promise });
+    Object.assign(characteristic, { service: { device } });
+    const removeListener = vi.spyOn(device, 'removeEventListener');
+    const upload = uploadFile(characteristic.asBluetoothCharacteristic(), new File([new Uint8Array(1500)], 'demo.bin'));
+    const rejected = expect(upload).rejects.toThrow('Bluetooth disconnected');
+    await flushMicrotasks();
+    server.disconnect();
+    device.dispatchEvent(new Event('gattserverdisconnected'));
+    await rejected;
+    const logCount = uploadLogs().length;
+    pendingWrite.resolve();
+    await flushMicrotasks();
+    expect(characteristic.writesWithResponse).toHaveLength(1);
+    expect(uploadLogs()).toHaveLength(logCount);
+    expect(removeListener).toHaveBeenCalledWith('gattserverdisconnected', expect.any(Function));
+    expect(uploadLogs().at(-1)?.message).toContain('Bluetooth disconnected');
+  });
+
+  it('explains attempts to upload without a connection', async () => {
+    await expect(uploadFile(undefined as unknown as BluetoothRemoteGATTCharacteristic, new File(['abc'], 'demo.txt')))
+      .rejects.toThrow('Bluetooth is not connected');
+    expect(uploadLogs().at(-1)).toMatchObject({ stage: 'failed', level: 'error' });
+  });
+
+  it('ignores unrelated notifications and reads an ACK at its DataView offset', async () => {
+    const characteristic = new FakeBluetoothCharacteristic();
+    const upload = uploadFile(characteristic.asBluetoothCharacteristic(), new File(['abc'], 'demo.txt'));
+    await vi.waitFor(() => expect(uploadLogs().at(-1)?.stage).toBe('waiting'));
+    characteristic.emitValue([]);
+    characteristic.emitValue([0x02, 0x00]);
+    expect(uploadLogs().some(({ level }) => level === 'warn')).toBe(true);
+    expect(uploadLogs().at(-1)?.message).toContain('Ignoring notification 0x02');
+    characteristic.value = new DataView(new Uint8Array([0xff, 0x01, 0x00, 0xff]).buffer, 1, 2);
+    characteristic.dispatchEvent(new Event('characteristicvaluechanged'));
+    await upload;
+    expect(uploadLogs().at(-1)?.stage).toBe('complete');
+  });
+
+  it('reports malformed upload acknowledgements', async () => {
+    const characteristic = new FakeBluetoothCharacteristic();
+    const upload = uploadFile(characteristic.asBluetoothCharacteristic(), new File(['abc'], 'demo.txt'));
+    const rejected = expect(upload).rejects.toThrow('Malformed acknowledgement');
+    await flushMicrotasks();
+    characteristic.emitValue([0x01]);
+    await rejected;
+    expect(uploadLogs().at(-1)?.stage).toBe('failed');
   });
 });
 
