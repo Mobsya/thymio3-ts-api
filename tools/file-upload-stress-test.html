@@ -79,7 +79,8 @@
         <div class="grid">
           <label>Number of uploads<input id="count" type="number" min="1" max="10000" value="100" required></label>
           <label>Delay between uploads (ms)<input id="delay" type="number" min="0" max="60000" value="0" required></label>
-          <label>Operation timeout (seconds)<input id="timeout" type="number" min="1" max="600" value="30" required></label>
+          <label>Inactivity timeout (seconds)<input id="timeout" type="number" min="1" max="600" value="30" required aria-describedby="timeout-help"></label>
+          <small id="timeout-help" class="wide">The upload timer restarts after each completed packet, so a large file can take longer than this. Setup and RAM cleanup use this value as their operation deadline.</small>
           <label class="wide">File sizes in bytes, repeated in order<input id="sizes" value="1, 20, 489, 490, 500, 987, 988, 4096, 16384, 65536" required aria-describedby="sizes-help"></label>
           <small id="sizes-help" class="wide">The defaults cover small files, packet boundaries at the 500-byte write limit, and larger transfers. Sizes may range from 0 to 1,048,576 bytes.</small>
           <label>Starting seed<input id="seed" type="number" min="1" max="4294967295" value="1" required></label>

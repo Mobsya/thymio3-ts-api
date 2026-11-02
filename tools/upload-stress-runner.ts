@@ -1,3 +1,6 @@
+import { THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID } from '../src/constants';
+import type { UploadProgress } from '../src/utils';
+
 export type Settings = {
   count: number;
   sizes: number[];
@@ -52,6 +55,7 @@ export type Attempt = {
 
 export type Report = {
   schemaVersion: number;
+  uploadTimeoutMode: 'inactivity';
   startedAt: string;
   finishedAt?: string;
   outcome: 'running' | 'completed' | 'stopped' | 'failed';
@@ -68,8 +72,11 @@ export type Report = {
 };
 
 export class OperationTimeout extends Error {
-  constructor(label: string, timeoutMs: number) {
-    super(`${label} did not finish within ${timeoutMs / 1000} seconds. Reload this page before another run; the pending Bluetooth operation cannot be cancelled safely.`);
+  constructor(label: string, timeoutMs: number, inactivity = false) {
+    const reason = inactivity
+      ? `${label} made no packet progress for ${timeoutMs / 1000} seconds.`
+      : `${label} did not finish within ${timeoutMs / 1000} seconds.`;
+    super(`${reason} Reload this page before another run; the pending Bluetooth operation cannot be cancelled safely.`);
     this.name = 'OperationTimeout';
   }
 }
@@ -88,6 +95,36 @@ export async function withTimeout<T>(operation: () => Promise<T>, timeoutMs: num
   }
 }
 
+async function withUploadInactivityTimeout(
+  operation: () => Promise<void>, timeoutMs: number, label: string,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let uploadedPackets = 0;
+  let resetTimeout: () => void;
+  const timeout = new Promise<never>((_, reject) => {
+    resetTimeout = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => reject(new OperationTimeout(label, timeoutMs, true)), timeoutMs);
+    };
+    resetTimeout();
+  });
+  const onProgress = (event: Event) => {
+    const detail = (event as CustomEvent<UploadProgress>).detail;
+    // Only a completed new packet extends the deadline. Repeated notifications
+    // or verbose messages about queueing/writing are not evidence of progress.
+    if (!detail || !Number.isInteger(detail.uploadedPackets) || detail.uploadedPackets <= uploadedPackets) return;
+    uploadedPackets = detail.uploadedPackets;
+    resetTimeout();
+  };
+  document.addEventListener(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, onProgress);
+  try {
+    await Promise.race([Promise.resolve().then(operation), timeout]);
+  } finally {
+    clearTimeout(timer);
+    document.removeEventListener(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, onProgress);
+  }
+}
+
 export function validateSettings(settings: Settings): void {
   const integer = (value: number, min: number, max: number, label: string) => {
     if (!Number.isInteger(value) || value < min || value > max) {
@@ -97,7 +134,7 @@ export function validateSettings(settings: Settings): void {
   integer(settings.count, 1, 10000, 'Upload count');
   integer(settings.seed, 1, 0xffffffff, 'Seed');
   integer(settings.delayMs, 0, 60000, 'Delay');
-  integer(settings.timeoutMs, 1000, 600000, 'Operation timeout');
+  integer(settings.timeoutMs, 1000, 600000, 'Inactivity timeout');
   if (!settings.sizes.length || settings.sizes.length > 100) throw new Error('Enter between 1 and 100 file sizes.');
   for (const size of settings.sizes) integer(size, 0, 1024 * 1024, 'File size');
 }
@@ -142,7 +179,8 @@ export async function runUploadStressTest(
   if (!api.isConnected()) throw new Error('Connect to a robot before starting a run.');
 
   const report: Report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    uploadTimeoutMode: 'inactivity',
     startedAt: new Date().toISOString(),
     outcome: 'running', reason: '', requiresReload: false,
     settings: { ...settings, sizes: [...settings.sizes] },
@@ -210,7 +248,7 @@ export async function runUploadStressTest(
         }
         if (disconnected || !api.isConnected()) throw new Error('Bluetooth disconnected before upload.');
         attempt.phase = 'upload';
-        await withTimeout(() => api.uploadFile(file), settings.timeoutMs, `Upload ${attempt.number}`);
+        await withUploadInactivityTimeout(() => api.uploadFile(file), settings.timeoutMs, `Upload ${attempt.number}`);
         attempt.outcome = 'passed';
         report.passed++;
         // Preserve summaries for successes and the last 100 diagnostics for failures.
@@ -260,7 +298,12 @@ export async function runUploadStressTest(
     report.finishedAt = new Date().toISOString();
     event(report.reason);
     // Do not wait for a stuck Bluetooth operation, or start another upload behind it.
-    if (report.requiresReload) void api.disconnect().catch(() => {});
+    if (report.requiresReload) {
+      const message = `Tester requested a disconnect after its timeout: ${report.reason}`;
+      event(message);
+      console.debug(`[Upload stress test] ${message}`);
+      void api.disconnect().catch(() => {});
+    }
     onUpdate(report);
   }
   return report;

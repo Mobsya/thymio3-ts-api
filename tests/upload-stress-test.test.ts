@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestFile, runUploadStressTest, validateSettings, type Report, type Settings } from '../tools/upload-stress-runner';
-import { createDeferred } from './helpers/fake-bluetooth';
+import { createDeferred, FakeBluetoothCharacteristic } from './helpers/fake-bluetooth';
+import { THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID } from '../src/constants';
+import { uploadFile } from '../src/files';
 
 const settings: Settings = {
   count: 3, sizes: [20, 500], seed: 17, delayMs: 0, timeoutMs: 1000,
@@ -133,7 +135,8 @@ describe('standalone upload stress runner', () => {
     await vi.advanceTimersByTimeAsync(1000);
     const report = await run;
     expect(report).toMatchObject({ outcome: 'failed', passed: 0, failed: 1, requiresReload: true });
-    expect(report.reason).toContain('did not finish within 1 seconds');
+    expect(report.reason).toContain('made no packet progress for 1 seconds');
+    expect(report.events.at(-1)?.message).toContain('Tester requested a disconnect');
     expect(robot.disconnect).toHaveBeenCalledTimes(1);
     expect(robot.uploadFile).toHaveBeenCalledTimes(1);
     expect(console.debug).toBe(originalDebug);
@@ -141,6 +144,69 @@ describe('standalone upload stress runner', () => {
     await vi.advanceTimersByTimeAsync(10000);
     expect(report.passed).toBe(0);
     expect(robot.uploadFile).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('allows a 64 KiB upload taking over 30 seconds while real API packets keep progressing', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    let receivedBytes = 0;
+    const characteristic = new FakeBluetoothCharacteristic({
+      onWriteWithResponse: async (packet, target) => {
+        const firstPacket = receivedBytes === 0;
+        if (firstPacket) expect(new DataView(packet.buffer).getUint32(1)).toBe(65536);
+        receivedBytes += packet.byteLength - (firstPacket ? 11 : 2);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        if (receivedBytes === 65536) target.emitValue([0x01, 0x00]);
+      },
+    });
+    robot.uploadFile.mockImplementation((file) => uploadFile(characteristic.asBluetoothCharacteristic(), file));
+    let latest: Report | undefined;
+    const run = runUploadStressTest(
+      robot, { ...settings, count: 1, sizes: [65536], timeoutMs: 30000 },
+      new AbortController().signal, (report) => { latest = report; },
+    );
+
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(latest?.outcome).toBe('running');
+    expect(latest?.attempts[0].uploadedPackets).toBe(120);
+    expect(robot.disconnect).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(3000);
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'completed', passed: 1, failed: 0, uploadTimeoutMode: 'inactivity' });
+    expect(report.attempts[0]).toMatchObject({ uploadedPackets: 132, uploadedBytes: 65536, outcome: 'passed' });
+    expect(characteristic.writesWithResponse).toHaveLength(132);
+    expect(robot.disconnect).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('times out after progress stops, even when duplicate progress and debug messages keep arriving', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    const pending = createDeferred();
+    robot.uploadFile.mockImplementation(() => pending.promise);
+    let latest: Report | undefined;
+    const run = runUploadStressTest(robot, settings, new AbortController().signal, (report) => { latest = report; });
+    const progress = () => document.dispatchEvent(new CustomEvent(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, {
+      detail: { uploadedPackets: 1, totalPackets: 2, percentage: 50 },
+    }));
+
+    await vi.advanceTimersByTimeAsync(500);
+    progress();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(latest?.outcome).toBe('running');
+    progress();
+    diagnostic(robot.uploadFile.mock.calls[0][0], 'sending', 'Waiting for Bluetooth write response.');
+    await vi.advanceTimersByTimeAsync(499);
+    expect(latest?.outcome).toBe('running');
+    await vi.advanceTimersByTimeAsync(1);
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'failed', failed: 1, requiresReload: true });
+    expect(robot.uploadFile).toHaveBeenCalledTimes(1);
+    expect(robot.disconnect).toHaveBeenCalledTimes(1);
+    progress();
+    pending.resolve();
+    await vi.advanceTimersByTimeAsync(2000);
     expect(vi.getTimerCount()).toBe(0);
   });
 
