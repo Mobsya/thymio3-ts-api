@@ -18,6 +18,7 @@
     "test:coverage": "vitest run --coverage",
     "test:hardware": "THYMIO_HARDWARE=1 vitest run --config vitest.hardware.config.ts",
     "test:hardware:headless": "THYMIO_HARDWARE=1 THYMIO_HARDWARE_HEADLESS=1 vitest run --config vitest.hardware.config.ts",
+    "upload-test:build": "npm run build && node scripts/build-upload-stress-test.mjs",
     "demo:install": "npm install --prefix demo",
     "demo:build": "tsc --noEmit && tsdown && npm run build --prefix demo",
     "demo:run": "tsc --noEmit && tsdown && npm run dev --prefix demo"

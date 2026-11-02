@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Thymio 3 · File upload stress test</title>
+  <style>
+    :root { color-scheme: light; font: 15px/1.5 system-ui, sans-serif; color: #162b3b; background: #edf2f5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1120px; margin: 36px auto; padding: 0 20px 40px; }
+    h1 { margin: 0 0 8px; font-size: clamp(24px, 4vw, 36px); letter-spacing: -.03em; }
+    h2 { font-size: 17px; margin: 0 0 14px; }
+    p { margin: 8px 0; }
+    header { margin-bottom: 24px; }
+    .eyebrow { color: #246c75; font-weight: 750; letter-spacing: .12em; font-size: 12px; text-transform: uppercase; }
+    .muted, small { color: #526675; }
+    .card { background: white; border: 1px solid #ccd8e0; border-radius: 12px; padding: 22px; margin: 16px 0; }
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .spread { justify-content: space-between; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .wide { grid-column: 1 / -1; }
+    label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+    .check { flex-direction: row; align-items: center; font-weight: 400; }
+    input { min-width: 0; width: 100%; padding: 10px; border: 1px solid #aebfca; border-radius: 6px; font: inherit; }
+    input[type=checkbox] { width: 18px; height: 18px; }
+    fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+    button { font: inherit; font-weight: 650; padding: 10px 16px; border-radius: 6px; border: 1px solid #146675; background: #146675; color: white; cursor: pointer; }
+    button.secondary { color: #254455; background: white; border-color: #aebfca; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    :focus-visible { outline: 3px solid #b47500; outline-offset: 3px; }
+    .actions { margin-top: 20px; }
+    .badge { padding: 4px 10px; background: #edf2f5; border-radius: 20px; font-size: 13px; }
+    #notice { white-space: pre-wrap; overflow-wrap: anywhere; }
+    #notice[data-error=true] { color: #a32128; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+    .stat { background: #f3f7f9; padding: 12px; border-radius: 8px; }
+    .stat strong { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
+    .stat span { font-size: 12px; color: #526675; }
+    .passed { color: #126644; }
+    .failed { color: #a32128; }
+    progress { width: 100%; height: 12px; accent-color: #146675; }
+    .table-wrap { overflow: auto; max-height: 480px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; position: sticky; top: 0; background: #edf2f5; }
+    th, td { padding: 10px; border-bottom: 1px solid #dce5eb; vertical-align: top; }
+    td:last-child { min-width: 240px; overflow-wrap: anywhere; }
+    td { font-variant-numeric: tabular-nums; }
+    code { font-size: .9em; }
+    @media (max-width: 650px) { .grid { grid-template-columns: 1fr 1fr; } .stats { grid-template-columns: 1fr 1fr; } main { margin-top: 20px; } .card { padding: 16px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Thymio 3 · Diagnostics</p>
+    <h1>File upload stress test</h1>
+    <p class="muted">Repeat uploads, catch intermittent failures, and save the evidence.</p>
+  </header>
+
+  <section class="card" aria-labelledby="connection-heading">
+    <div class="row spread">
+      <h2 id="connection-heading">1. Connect your robot</h2>
+      <span id="connection" class="badge">Disconnected</span>
+    </div>
+    <p>Open this file in a browser with Web Bluetooth, such as Chrome or Edge. If Bluetooth is unavailable when opened directly, serve it from <code>localhost</code> or HTTPS.</p>
+    <div class="row actions">
+      <button id="connect">Connect robot</button>
+      <button id="disconnect" class="secondary" disabled>Disconnect</button>
+      <span id="api-version" class="muted"></span>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="settings-heading">
+    <h2 id="settings-heading">2. Configure the barrage</h2>
+    <p class="muted">Uploads run one at a time, as fast as the robot acknowledges them. Generated files stay in RAM; this test does not save or erase files in storage.</p>
+    <form id="settings-form">
+      <fieldset id="settings">
+        <div class="grid">
+          <label>Number of uploads<input id="count" type="number" min="1" max="10000" value="100" required></label>
+          <label>Delay between uploads (ms)<input id="delay" type="number" min="0" max="60000" value="0" required></label>
+          <label>Operation timeout (seconds)<input id="timeout" type="number" min="1" max="600" value="30" required></label>
+          <label class="wide">File sizes in bytes, repeated in order<input id="sizes" value="1, 20, 489, 490, 500, 987, 988, 4096, 16384, 65536" required aria-describedby="sizes-help"></label>
+          <small id="sizes-help" class="wide">The defaults cover small files, packet boundaries at the 500-byte write limit, and larger transfers. Sizes may range from 0 to 1,048,576 bytes.</small>
+          <label>Starting seed<input id="seed" type="number" min="1" max="4294967295" value="1" required></label>
+          <div class="wide">
+            <label class="check"><input id="free-memory" type="checkbox">Release uploaded-file RAM before each attempt</label>
+            <label class="check"><input id="stop-on-failure" type="checkbox" checked>Stop on the first failure</label>
+          </div>
+        </div>
+      </fieldset>
+      <div class="row actions">
+        <button id="start" type="submit" disabled>Start test</button>
+        <button id="stop" type="button" class="secondary" disabled>Stop after current upload</button>
+      </div>
+    </form>
+    <p><small>Keeping the same sizes and seed reproduces the generated bytes. Disconnections and unconfirmed transfers always stop the run. A stalled operation requires a page reload.</small></p>
+  </section>
+
+  <section class="card" aria-labelledby="results-heading">
+    <div class="row spread">
+      <h2 id="results-heading">3. Review the results</h2>
+      <button id="download" class="secondary" disabled>Download JSON report</button>
+    </div>
+    <p id="notice" role="status" aria-live="polite">Connect a robot to begin.</p>
+    <div class="stats">
+      <div class="stat"><strong id="attempted">0 / 0</strong><span>FINISHED / PLANNED</span></div>
+      <div class="stat"><strong id="passed" class="passed">0</strong><span>PASSED</span></div>
+      <div class="stat"><strong id="failed" class="failed">0</strong><span>FAILED</span></div>
+      <div class="stat"><strong id="elapsed">0.0 s</strong><span>ELAPSED</span></div>
+    </div>
+    <progress id="run-progress" value="0" max="100" aria-label="Completed uploads"></progress>
+    <p id="current" class="muted">No upload in progress.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Attempt</th><th scope="col">Bytes</th><th scope="col">Seed</th><th scope="col">Duration</th><th scope="col">Result</th><th scope="col">Details</th></tr></thead>
+        <tbody id="results"></tbody>
+      </table>
+    </div>
+    <p><small>Pass means the robot acknowledged the upload in RAM. The report includes settings, firmware, memory, per-attempt timing, and the last 100 verbose entries for each failed attempt. Successful attempts retain packet summaries. Full diagnostics remain in the console under <strong>Verbose</strong>.</small></p>
+  </section>
+</main>
+<script>/* EMBED_THYMIO_API */</script>
+<script>/* EMBED_UPLOAD_RUNNER */</script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const api = window.thymio;
+  const runner = window.uploadStressRunner;
+  let report;
+  let controller;
+  let busy = false;
+  let connecting = false;
+  let requiresReload = false;
+  let timer;
+  const rows = new Map();
+  const notice = (message, error = false) => {
+    $('notice').textContent = message;
+    $('notice').dataset.error = String(error);
+  };
+  function controls() {
+    const connected = Boolean(api?.isConnected());
+    $('connection').textContent = connected ? api.getDeviceName() : 'Disconnected';
+    $('connect').disabled = busy || connecting || connected || requiresReload || !navigator.bluetooth;
+    $('disconnect').disabled = busy || connecting || !connected;
+    $('start').disabled = busy || connecting || !connected || requiresReload;
+    $('stop').disabled = !busy || controller?.signal.aborted;
+    $('settings').disabled = busy || connecting || requiresReload;
+    $('download').disabled = !report;
+  }
+  function render(next) {
+    report = next;
+    requiresReload = next.requiresReload;
+    $('attempted').textContent = `${next.passed + next.failed} / ${next.settings.count}`;
+    $('passed').textContent = next.passed;
+    $('failed').textContent = next.failed;
+    $('run-progress').max = next.settings.count;
+    $('run-progress').value = next.passed + next.failed;
+    // Only the newest attempt can change; keep rendering inexpensive during a barrage.
+    const attempt = next.attempts.at(-1);
+    if (attempt) {
+      let row = rows.get(attempt.number);
+      if (!row) {
+        row = document.createElement('tr');
+        for (let i = 0; i < 6; i++) row.append(document.createElement('td'));
+        $('results').append(row);
+        rows.set(attempt.number, row);
+      }
+      const cells = [attempt.number, attempt.size.toLocaleString(), attempt.seed,
+        attempt.outcome === 'running' ? '—' : `${attempt.durationMs} ms`, attempt.outcome,
+        attempt.error || (attempt.outcome === 'passed' ? `Robot acknowledged ${attempt.uploadedPackets} packets.` : `${attempt.phase} in progress…`)];
+      cells.forEach((value, index) => { row.children[index].textContent = value; });
+      row.children[4].className = attempt.outcome;
+      $('current').textContent = attempt.outcome === 'running'
+        ? `Attempt ${attempt.number}: ${attempt.fileName} · ${attempt.phase}…`
+        : `Last attempt: ${attempt.number} · ${attempt.outcome}`;
+    }
+    if (next.outcome !== 'running') {
+      notice(`${next.outcome.toUpperCase()}: ${next.reason} ${next.passed} passed, ${next.failed} failed, ${next.settings.count - next.attempts.length} not attempted.`, next.failed > 0 || next.outcome === 'failed');
+    }
+    updateElapsed();
+    controls();
+  }
+  function updateElapsed() {
+    if (!report) return;
+    const end = report.finishedAt ? Date.parse(report.finishedAt) : Date.now();
+    $('elapsed').textContent = `${((end - Date.parse(report.startedAt)) / 1000).toFixed(1)} s`;
+  }
+  $('connect').addEventListener('click', async () => {
+    connecting = true;
+    controls();
+    notice('Choose your Thymio in the Bluetooth chooser.');
+    try {
+      // Call directly from the click handler to retain the chooser's user gesture.
+      const connection = api.requestAndConnect();
+      await runner.withTimeout(() => connection, 60000, 'Connecting to the robot');
+      if (!api.isConnected()) throw new Error('Connection did not complete. Check the robot and try connecting again.');
+      notice(`Connected to ${api.getDeviceName()}. Ready to test.`);
+    } catch (error) {
+      requiresReload = error instanceof runner.OperationTimeout;
+      notice(error.message || String(error), true);
+    } finally {
+      connecting = false;
+      controls();
+    }
+  });
+  $('disconnect').addEventListener('click', async () => {
+    try { await api.disconnect(); notice('Robot disconnected.'); }
+    catch (error) { notice(error.message || String(error), true); }
+    controls();
+  });
+  $('settings-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (busy || connecting || requiresReload) return;
+    const settings = {
+      count: Number($('count').value), delayMs: Number($('delay').value),
+      timeoutMs: Number($('timeout').value) * 1000, seed: Number($('seed').value),
+      sizes: $('sizes').value.trim().split(/[\s,]+/).filter(Boolean).map(Number),
+      freeMemory: $('free-memory').checked, stopOnFailure: $('stop-on-failure').checked,
+    };
+    try {
+      runner.validateSettings(settings);
+      if (!api.isConnected()) throw new Error('Connect to a robot before starting a run.');
+      busy = true;
+      controller = new AbortController();
+      $('results').replaceChildren();
+      rows.clear();
+      $('current').textContent = 'Reading firmware and memory information…';
+      notice('Test running. Keep this page open.');
+      controls();
+      timer = setInterval(updateElapsed, 250);
+      await runner.runUploadStressTest(api, settings, controller.signal, render);
+    } catch (error) {
+      notice(error.message || String(error), true);
+    } finally {
+      clearInterval(timer);
+      busy = false;
+      controls();
+    }
+  });
+  $('stop').addEventListener('click', () => {
+    controller?.abort();
+    notice('Stopping after the current operation finishes or times out…');
+    controls();
+  });
+  $('download').addEventListener('click', () => {
+    if (!report) return;
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `thymio-upload-test-${report.startedAt.replace(/[:.]/g, '-')}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  document.addEventListener('thymio-connected', () => {
+    controls();
+    if (busy && !api.isConnected()) notice('Bluetooth disconnected. Waiting for the current operation to settle; this run will stop.', true);
+  });
+  document.addEventListener('thymio-file-upload-progress', (event) => {
+    if (!busy) return;
+    const progress = event.detail;
+    $('current').textContent = `Attempt ${report?.attempts.length || 1}: ${progress.uploadedPackets}/${progress.totalPackets} packets sent (${progress.percentage.toFixed(1)}%). Waiting for robot confirmation.`;
+  });
+  window.addEventListener('beforeunload', (event) => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
+  if (!api || !runner) {
+    notice('This is the source template. Run npm run upload-test:build and open dist/file-upload-stress-test.html.', true);
+    $('connect').disabled = true;
+    return;
+  }
+  $('api-version').textContent = `API ${api.getAPIVersion()} · embedded in this file`;
+  controls();
+  if (!window.isSecureContext || !navigator.bluetooth) {
+    notice('Web Bluetooth is unavailable. Open this page in a compatible browser using localhost or HTTPS.', true);
+    $('connect').disabled = true;
+  }
+})();
+</script>
+</body>
+</html>
