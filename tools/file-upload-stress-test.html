@@ -22,7 +22,7 @@
     .wide { grid-column: 1 / -1; }
     label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
     .check { flex-direction: row; align-items: center; font-weight: 400; }
-    input { min-width: 0; width: 100%; padding: 10px; border: 1px solid #aebfca; border-radius: 6px; font: inherit; }
+    input, select { min-width: 0; width: 100%; padding: 10px; border: 1px solid #aebfca; border-radius: 6px; font: inherit; }
     input[type=checkbox] { width: 18px; height: 18px; }
     fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
     button { font: inherit; font-weight: 650; padding: 10px 16px; border-radius: 6px; border: 1px solid #146675; background: #146675; color: white; cursor: pointer; }
@@ -84,6 +84,13 @@
           <label class="wide">File sizes in bytes, repeated in order<input id="sizes" value="1, 20, 489, 490, 500, 987, 988, 4096, 16384, 65536" required aria-describedby="sizes-help"></label>
           <small id="sizes-help" class="wide">The defaults cover small files, packet boundaries at the 500-byte write limit, and larger transfers. Sizes may range from 0 to 1,048,576 bytes.</small>
           <label>Starting seed<input id="seed" type="number" min="1" max="4294967295" value="1" required></label>
+          <label>Sensor streaming<select id="sensor-streaming" aria-describedby="streaming-help">
+            <option value="off">Off (baseline)</option>
+            <option value="main">Main sensors</option>
+            <option value="secondary">Secondary sensors</option>
+            <option value="all">All sensors</option>
+          </select></label>
+          <small id="streaming-help" class="wide">Compare Off and All sensors using the same sizes and seed. Streaming starts before uploads, stays enabled throughout the run, and stops afterward. Each selected stream must deliver data before uploads begin.</small>
           <div class="wide">
             <label class="check"><input id="free-memory" type="checkbox">Release uploaded-file RAM before each attempt</label>
             <label class="check"><input id="stop-on-failure" type="checkbox" checked>Stop on the first failure</label>
@@ -112,13 +119,14 @@
     </div>
     <progress id="run-progress" value="0" max="100" aria-label="Completed uploads"></progress>
     <p id="current" class="muted">No upload in progress.</p>
+    <p id="sensor-status" class="muted" role="status">Sensor streaming: no run yet.</p>
     <div class="table-wrap">
       <table>
-        <thead><tr><th scope="col">Attempt</th><th scope="col">Bytes</th><th scope="col">Seed</th><th scope="col">Duration</th><th scope="col">Result</th><th scope="col">Details</th></tr></thead>
+        <thead><tr><th scope="col">Attempt</th><th scope="col">Bytes</th><th scope="col">Seed</th><th scope="col">Duration</th><th scope="col">Result</th><th scope="col">Sensor events (main / secondary)</th><th scope="col">Details</th></tr></thead>
         <tbody id="results"></tbody>
       </table>
     </div>
-    <p><small>Pass means the robot acknowledged the upload in RAM. The report includes settings, firmware, memory, per-attempt timing, and the last 100 verbose entries for each failed attempt. Successful attempts retain packet summaries. Full diagnostics remain in the console under <strong>Verbose</strong>.</small></p>
+    <p><small>Pass means the robot acknowledged the upload in RAM. Sensor event counts cover each upload through its acknowledgement; a short upload may finish between sensor notifications. The report includes streaming mode, notification counts and first/last timestamps, settings, firmware, memory, per-attempt timing, and the last 100 verbose entries for each failed attempt. Successful attempts retain packet summaries. Full diagnostics remain in the console under <strong>Verbose</strong>.</small></p>
   </section>
 </main>
 <script>/* EMBED_THYMIO_API */</script>
@@ -163,18 +171,23 @@
       let row = rows.get(attempt.number);
       if (!row) {
         row = document.createElement('tr');
-        for (let i = 0; i < 6; i++) row.append(document.createElement('td'));
+        for (let i = 0; i < 7; i++) row.append(document.createElement('td'));
         $('results').append(row);
         rows.set(attempt.number, row);
       }
       const cells = [attempt.number, attempt.size.toLocaleString(), attempt.seed,
         attempt.outcome === 'running' ? '—' : `${attempt.durationMs} ms`, attempt.outcome,
+        `${attempt.sensorNotifications.main} / ${attempt.sensorNotifications.secondary}`,
         attempt.error || (attempt.outcome === 'passed' ? `Robot acknowledged ${attempt.uploadedPackets} packets.` : `${attempt.phase} in progress…`)];
       cells.forEach((value, index) => { row.children[index].textContent = value; });
       row.children[4].className = attempt.outcome;
       $('current').textContent = attempt.outcome === 'running'
         ? `Attempt ${attempt.number}: ${attempt.fileName} · ${attempt.phase}…`
         : `Last attempt: ${attempt.number} · ${attempt.outcome}`;
+    } else {
+      $('current').textContent = next.outcome === 'running'
+        ? next.events.at(-1)?.message || 'Preparing the test…'
+        : 'No uploads were attempted.';
     }
     if (next.outcome !== 'running') {
       notice(`${next.outcome.toUpperCase()}: ${next.reason} ${next.passed} passed, ${next.failed} failed, ${next.settings.count - next.attempts.length} not attempted.`, next.failed > 0 || next.outcome === 'failed');
@@ -186,6 +199,12 @@
     if (!report) return;
     const end = report.finishedAt ? Date.parse(report.finishedAt) : Date.now();
     $('elapsed').textContent = `${((end - Date.parse(report.startedAt)) / 1000).toFixed(1)} s`;
+    const stream = report.sensorStreaming;
+    const status = stream.mode === 'off' ? 'baseline' : stream.confirmed ? 'observed before uploads' : 'not confirmed';
+    $('sensor-status').textContent = `Sensor streaming: ${stream.mode} (${status}). Received ${stream.notifications.main} main / ${stream.notifications.secondary} secondary events during this run.`;
+    const attempt = report.attempts.at(-1);
+    const row = attempt && rows.get(attempt.number);
+    if (row) row.children[5].textContent = `${attempt.sensorNotifications.main} / ${attempt.sensorNotifications.secondary}`;
   }
   $('connect').addEventListener('click', async () => {
     connecting = true;
@@ -218,6 +237,7 @@
       timeoutMs: Number($('timeout').value) * 1000, seed: Number($('seed').value),
       sizes: $('sizes').value.trim().split(/[\s,]+/).filter(Boolean).map(Number),
       freeMemory: $('free-memory').checked, stopOnFailure: $('stop-on-failure').checked,
+      sensorStreaming: $('sensor-streaming').value,
     };
     try {
       runner.validateSettings(settings);

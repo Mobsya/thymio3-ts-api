@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestFile, runUploadStressTest, validateSettings, type Report, type Settings } from '../tools/upload-stress-runner';
 import { createDeferred, FakeBluetoothCharacteristic } from './helpers/fake-bluetooth';
-import { THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID } from '../src/constants';
+import { THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, THYMIO_SENSOR_VALUES_EVENT_ID } from '../src/constants';
 import { uploadFile } from '../src/files';
+import * as sensorStream from '../src/sensor-stream';
 
 const settings: Settings = {
   count: 3, sizes: [20, 500], seed: 17, delayMs: 0, timeoutMs: 1000,
-  freeMemory: false, stopOnFailure: true,
+  freeMemory: false, stopOnFailure: true, sensorStreaming: 'off',
 };
+
+function emitSensors(kind: 'main' | 'secondary' = 'main') {
+  document.dispatchEvent(new CustomEvent(kind === 'main' ? THYMIO_SENSOR_VALUES_EVENT_ID : THYMIO_OTHER_SENSOR_VALUES_EVENT_ID));
+}
 
 function fakeRobot() {
   return {
@@ -18,6 +23,10 @@ function fakeRobot() {
     getMemoryInfo: vi.fn(async () => ({ ram_bytes_free: 100000, flash_bytes_free: 200000 })),
     freeMemory: vi.fn(async () => {}),
     uploadFile: vi.fn(async (file: File) => { diagnostic(file, 'complete', 'Upload complete'); }),
+    startMainSensorStreaming: vi.fn(async () => { emitSensors(); }),
+    startSecondarySensorStreaming: vi.fn(async () => { emitSensors('secondary'); }),
+    startAllSensorStreaming: vi.fn(async () => { emitSensors(); emitSensors('secondary'); }),
+    stopSensorStreaming: vi.fn(async () => {}),
     disconnect: vi.fn(async () => {}),
   };
 }
@@ -66,6 +75,220 @@ describe('standalone upload stress runner', () => {
     expect(report.attempts.every(({ outcome, diagnostics, uploadedPackets }) => outcome === 'passed' && diagnostics.length === 0 && uploadedPackets === 1)).toBe(true);
     expect(report.attempts[0].preparation).toContain('CRC32');
     expect(report.finishedAt).toBeDefined();
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(1);
+    expect(robot.stopSensorStreaming.mock.invocationCallOrder[0]).toBeLessThan(robot.uploadFile.mock.invocationCallOrder[0]);
+    expect(robot.startAllSensorStreaming).not.toHaveBeenCalled();
+    expect(report.sensorStreaming).toMatchObject({ mode: 'off', confirmed: false, notifications: { main: 0, secondary: 0 } });
+  });
+
+  it.each(['main', 'secondary', 'all'] as const)('keeps %s streaming enabled across uploads and records overlapping notifications', async (mode) => {
+    const robot = fakeRobot();
+    robot.freeMemory.mockImplementation(async () => { emitSensors(); });
+    robot.uploadFile.mockImplementation(async (file) => {
+      // The only stop so far establishes the initial state; cleanup is after all uploads.
+      expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(1);
+      if (mode !== 'secondary') emitSensors();
+      if (mode !== 'main') emitSensors('secondary');
+      diagnostic(file, 'complete', 'Upload complete');
+    });
+    const report = await runUploadStressTest(robot, { ...settings, sensorStreaming: mode, freeMemory: true }, new AbortController().signal);
+    expect(report).toMatchObject({ schemaVersion: 3, outcome: 'completed', passed: 3, sensorStreaming: { mode, confirmed: true } });
+    expect(robot.startMainSensorStreaming).toHaveBeenCalledTimes(mode === 'main' ? 1 : 0);
+    expect(robot.startSecondarySensorStreaming).toHaveBeenCalledTimes(mode === 'secondary' ? 1 : 0);
+    expect(robot.startAllSensorStreaming).toHaveBeenCalledTimes(mode === 'all' ? 1 : 0);
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(2);
+    expect(report.sensorStreaming.notifications).toMatchObject({
+      main: mode === 'secondary' ? 3 : 7, secondary: mode === 'main' ? 0 : 4,
+      firstAt: expect.any(String), lastAt: expect.any(String),
+    });
+    for (const attempt of report.attempts) {
+      // Startup and RAM cleanup notifications are excluded from the upload counts.
+      expect(attempt.sensorNotifications).toEqual({
+        main: mode === 'secondary' ? 0 : 1, secondary: mode === 'main' ? 0 : 1,
+        firstAt: expect.any(String), lastAt: expect.any(String),
+      });
+    }
+    const snapshot = JSON.stringify(report);
+    emitSensors();
+    emitSensors('secondary');
+    expect(JSON.stringify(report)).toBe(snapshot);
+  });
+
+  it('waits for both selected streams before uploading, even when notifications start after the command resolves', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.startAllSensorStreaming.mockImplementation(async () => {});
+    const run = runUploadStressTest(robot, { ...settings, count: 1, sensorStreaming: 'all' }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(0);
+    emitSensors();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(robot.uploadFile).not.toHaveBeenCalled();
+    emitSensors('secondary');
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'completed', sensorStreaming: { confirmed: true } });
+    expect(robot.uploadFile).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('fails setup if either requested stream is absent and stops streaming without requiring a reload', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.startAllSensorStreaming.mockImplementation(async () => { emitSensors(); });
+    const run = runUploadStressTest(robot, { ...settings, sensorStreaming: 'all' }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(1000);
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'failed', attempts: [], requiresReload: false, sensorStreaming: { confirmed: false } });
+    expect(report.reason).toContain('main: 1, secondary: 0');
+    expect(robot.uploadFile).not.toHaveBeenCalled();
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(2);
+    expect(robot.disconnect).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('honors Stop while waiting for sensor data and removes the readiness listeners', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.startAllSensorStreaming.mockImplementation(async () => {});
+    const controller = new AbortController();
+    const run = runUploadStressTest(robot, { ...settings, sensorStreaming: 'all' }, controller.signal);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'stopped', attempts: [] });
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(2);
+    emitSensors();
+    emitSensors('secondary');
+    expect(report.sensorStreaming.notifications).toEqual({ main: 0, secondary: 0 });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not resume or send stream cleanup commands after a disconnect and reconnection during startup', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.startAllSensorStreaming.mockImplementation(async () => {});
+    const run = runUploadStressTest(robot, { ...settings, sensorStreaming: 'all' }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(0);
+    document.dispatchEvent(new CustomEvent('thymio-connected', { detail: false }));
+    document.dispatchEvent(new CustomEvent('thymio-connected', { detail: true }));
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'failed', attempts: [] });
+    expect(report.reason).toContain('disconnected');
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('reports a rejected streaming command before any uploads and attempts stream cleanup', async () => {
+    const robot = fakeRobot();
+    robot.startAllSensorStreaming.mockRejectedValue(new Error('Stream start failed'));
+    const report = await runUploadStressTest(robot, { ...settings, sensorStreaming: 'all' }, new AbortController().signal);
+    expect(report).toMatchObject({ outcome: 'failed', reason: 'Error: Stream start failed', attempts: [] });
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(2);
+  });
+
+  it('never queues cleanup behind a stuck streaming start', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    const pending = createDeferred();
+    robot.startAllSensorStreaming.mockImplementation(() => pending.promise);
+    const run = runUploadStressTest(robot, { ...settings, sensorStreaming: 'all' }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(1000);
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'failed', requiresReload: true, attempts: [] });
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(1);
+    expect(robot.disconnect).toHaveBeenCalledTimes(1);
+    pending.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(robot.uploadFile).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stops streaming after an upload rejection and preserves that error if stream cleanup also fails', async () => {
+    const robot = fakeRobot();
+    robot.uploadFile.mockRejectedValueOnce('File upload: Wrong sequence');
+    robot.stopSensorStreaming.mockResolvedValueOnce().mockRejectedValueOnce(new Error('Stream stop failed'));
+    const report = await runUploadStressTest(robot, { ...settings, sensorStreaming: 'all' }, new AbortController().signal);
+    expect(report).toMatchObject({
+      outcome: 'failed', failed: 1, reason: 'File upload: Wrong sequence',
+      sensorStreaming: { cleanupError: 'Error: Stream stop failed' },
+    });
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports a stream cleanup timeout after successful uploads and requires a reload', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.stopSensorStreaming.mockResolvedValueOnce().mockImplementationOnce(() => new Promise(() => {}));
+    const run = runUploadStressTest(robot, { ...settings, count: 1, sensorStreaming: 'all' }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(1000);
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'failed', passed: 1, failed: 0, requiresReload: true });
+    expect(report.sensorStreaming.cleanupError).toContain('Stopping sensor streaming after the run');
+    expect(robot.disconnect).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('times out a stalled upload while sensors keep streaming, without queueing stream cleanup behind it', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    const pending = createDeferred();
+    robot.uploadFile.mockImplementation(() => pending.promise);
+    const run = runUploadStressTest(robot, { ...settings, sensorStreaming: 'all' }, new AbortController().signal);
+    const notifications = setInterval(() => { emitSensors(); emitSensors('secondary'); }, 100);
+    await vi.advanceTimersByTimeAsync(1000);
+    const report = await run;
+    clearInterval(notifications);
+    expect(report).toMatchObject({ outcome: 'failed', requiresReload: true, failed: 1 });
+    expect(report.reason).toContain('made no packet progress');
+    expect(report.attempts[0].sensorNotifications.main).toBeGreaterThan(0);
+    expect(report.attempts[0].sensorNotifications.secondary).toBeGreaterThan(0);
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(1);
+    expect(robot.disconnect).toHaveBeenCalledTimes(1);
+    pending.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([0x00, 0x03])('handles real upload packets with interleaved parsed sensor notifications and ACK code %i', async (ackCode) => {
+    const robot = fakeRobot();
+    let mode = 0;
+    let remaining = 0;
+    const streamCharacteristic = new FakeBluetoothCharacteristic({
+      onWriteWithResponse: (packet, target) => {
+        mode = packet[1];
+        if (mode === 3) {
+          target.emitValue([0x01, ...new Uint8Array(38)]);
+          target.emitValue([0x02, ...new Uint8Array(30)]);
+        }
+      },
+    });
+    streamCharacteristic.addEventListener('characteristicvaluechanged', sensorStream.handleStreamResponse);
+    const fileCharacteristic = new FakeBluetoothCharacteristic({
+      onWriteWithResponse: async (packet, target) => {
+        expect(mode).toBe(3);
+        const first = remaining === 0;
+        if (first) remaining = new DataView(packet.buffer).getUint32(1);
+        remaining -= packet.byteLength - (first ? 11 : 2);
+        streamCharacteristic.emitValue([0x01, ...new Uint8Array(38)]);
+        await Promise.resolve();
+        streamCharacteristic.emitValue([0x02, ...new Uint8Array(30)]);
+        if (remaining === 0) target.emitValue([0x01, ackCode]);
+      },
+    });
+    robot.startAllSensorStreaming.mockImplementation(() => sensorStream.startAllSensorStreaming(streamCharacteristic.asBluetoothCharacteristic()));
+    robot.stopSensorStreaming.mockImplementation(() => sensorStream.stopSensorStreaming(streamCharacteristic.asBluetoothCharacteristic()));
+    robot.uploadFile.mockImplementation((file) => uploadFile(fileCharacteristic.asBluetoothCharacteristic(), file));
+    const report = await runUploadStressTest(robot, {
+      ...settings, count: 1, sizes: [4096], sensorStreaming: 'all',
+    }, new AbortController().signal);
+    expect(report).toMatchObject({
+      outcome: ackCode === 0 ? 'completed' : 'failed', passed: ackCode === 0 ? 1 : 0, failed: ackCode === 0 ? 0 : 1,
+      sensorStreaming: { confirmed: true, notifications: { main: 10, secondary: 10 } },
+    });
+    expect(report.attempts[0].sensorNotifications).toMatchObject({ main: 9, secondary: 9 });
+    expect(fileCharacteristic.writesWithResponse).toHaveLength(9);
+    expect(streamCharacteristic.writesWithResponse.map((packet) => [...packet])).toEqual([[1, 0], [1, 3], [1, 0]]);
+    if (ackCode === 0x03) expect(report.attempts[0].error).toContain('Wrong sequence');
+    expect(mode).toBe(0);
   });
 
   it('stops at a rejection and retains bounded diagnostics plus the preparation summary', async () => {
@@ -250,6 +473,7 @@ describe('standalone upload stress runner', () => {
   it.each([
     { count: 0 }, { count: 1.5 }, { seed: 0 }, { sizes: [] }, { sizes: [NaN] },
     { sizes: [-1] }, { sizes: [1048577] }, { delayMs: -1 }, { timeoutMs: Infinity },
+    { sensorStreaming: 'unknown' as Settings['sensorStreaming'] },
   ])('rejects invalid settings before contacting the robot: %j', (invalid) => {
     expect(() => validateSettings({ ...settings, ...invalid })).toThrow();
   });

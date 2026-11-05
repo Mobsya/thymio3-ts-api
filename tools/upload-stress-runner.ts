@@ -1,5 +1,11 @@
-import { THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID } from '../src/constants';
+import {
+  THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID,
+  THYMIO_OTHER_SENSOR_VALUES_EVENT_ID,
+  THYMIO_SENSOR_VALUES_EVENT_ID,
+} from '../src/constants';
 import type { UploadProgress } from '../src/utils';
+
+export type SensorStreamingMode = 'off' | 'main' | 'secondary' | 'all';
 
 export type Settings = {
   count: number;
@@ -9,6 +15,7 @@ export type Settings = {
   timeoutMs: number;
   freeMemory: boolean;
   stopOnFailure: boolean;
+  sensorStreaming: SensorStreamingMode;
 };
 
 type RobotAPI = {
@@ -19,7 +26,18 @@ type RobotAPI = {
   getMemoryInfo(): Promise<unknown>;
   freeMemory(): Promise<void>;
   uploadFile(file: File): Promise<void>;
+  startMainSensorStreaming(): Promise<void>;
+  startSecondarySensorStreaming(): Promise<void>;
+  startAllSensorStreaming(): Promise<void>;
+  stopSensorStreaming(): Promise<void>;
   disconnect(): Promise<void>;
+};
+
+type SensorActivity = {
+  main: number;
+  secondary: number;
+  firstAt?: string;
+  lastAt?: string;
 };
 
 type Diagnostic = {
@@ -51,6 +69,7 @@ export type Attempt = {
   uploadedBytes: number;
   diagnostics: Diagnostic[];
   omittedDiagnostics: number;
+  sensorNotifications: SensorActivity;
 };
 
 export type Report = {
@@ -65,6 +84,12 @@ export type Report = {
   environment: { apiVersion: string; deviceName: string; userAgent: string; secureContext: boolean };
   firmware?: unknown;
   memoryBefore?: unknown;
+  sensorStreaming: {
+    mode: SensorStreamingMode;
+    confirmed: boolean;
+    notifications: SensorActivity;
+    cleanupError?: string;
+  };
   passed: number;
   failed: number;
   attempts: Attempt[];
@@ -135,6 +160,9 @@ export function validateSettings(settings: Settings): void {
   integer(settings.seed, 1, 0xffffffff, 'Seed');
   integer(settings.delayMs, 0, 60000, 'Delay');
   integer(settings.timeoutMs, 1000, 600000, 'Inactivity timeout');
+  if (!['off', 'main', 'secondary', 'all'].includes(settings.sensorStreaming)) {
+    throw new Error('Sensor streaming must be off, main, secondary, or all.');
+  }
   if (!settings.sizes.length || settings.sizes.length > 100) throw new Error('Enter between 1 and 100 file sizes.');
   for (const size of settings.sizes) integer(size, 0, 1024 * 1024, 'File size');
 }
@@ -169,6 +197,41 @@ function waitBetweenUploads(delayMs: number, signal: AbortSignal): Promise<void>
   });
 }
 
+function hasRequestedSensors(mode: SensorStreamingMode, activity: SensorActivity): boolean {
+  return (mode === 'secondary' || activity.main > 0) && (mode === 'main' || activity.secondary > 0);
+}
+
+// A successful start write alone does not prove the robot is sending sensor data.
+function waitForSensors(
+  mode: SensorStreamingMode, activity: SensorActivity, timeoutMs: number, signal: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const finish = (error?: Error) => {
+      clearTimeout(timer);
+      document.removeEventListener(THYMIO_SENSOR_VALUES_EVENT_ID, check);
+      document.removeEventListener(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, check);
+      document.removeEventListener('thymio-connected', onConnection);
+      signal.removeEventListener('abort', onAbort);
+      if (error) reject(error);
+      else resolve();
+    };
+    const check = () => { if (hasRequestedSensors(mode, activity)) finish(); };
+    const onAbort = () => finish();
+    const onConnection = (event: Event) => {
+      if (!(event as CustomEvent<boolean>).detail) finish(new Error('Bluetooth disconnected while waiting for sensor notifications.'));
+    };
+    const timer = setTimeout(() => finish(new Error(
+      `Requested ${mode} sensor streaming was not observed within ${timeoutMs / 1000} seconds (main: ${activity.main}, secondary: ${activity.secondary}). No uploads were attempted.`,
+    )), timeoutMs);
+    document.addEventListener(THYMIO_SENSOR_VALUES_EVENT_ID, check);
+    document.addEventListener(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, check);
+    document.addEventListener('thymio-connected', onConnection);
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) finish();
+    else check();
+  });
+}
+
 export async function runUploadStressTest(
   api: RobotAPI,
   settings: Settings,
@@ -179,7 +242,7 @@ export async function runUploadStressTest(
   if (!api.isConnected()) throw new Error('Connect to a robot before starting a run.');
 
   const report: Report = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     uploadTimeoutMode: 'inactivity',
     startedAt: new Date().toISOString(),
     outcome: 'running', reason: '', requiresReload: false,
@@ -188,11 +251,30 @@ export async function runUploadStressTest(
       apiVersion: api.getAPIVersion(), deviceName: api.getDeviceName(),
       userAgent: navigator.userAgent, secureContext: window.isSecureContext,
     },
+    sensorStreaming: {
+      mode: settings.sensorStreaming, confirmed: false,
+      notifications: { main: 0, secondary: 0 },
+    },
     passed: 0, failed: 0, attempts: [], events: [],
   };
   let active: Attempt | undefined;
   let disconnected = false;
+  let streamingRequested = false;
+  let observingSensors = false;
+  let uploading = false;
   const event = (message: string) => report.events.push({ at: new Date().toISOString(), message });
+  const onSensor = (notification: Event) => {
+    if (!observingSensors) return;
+    const kind = notification.type === THYMIO_SENSOR_VALUES_EVENT_ID ? 'main' : 'secondary';
+    const at = new Date().toISOString();
+    const record = (activity: SensorActivity) => {
+      activity[kind]++;
+      activity.firstAt ??= at;
+      activity.lastAt = at;
+    };
+    record(report.sensorStreaming.notifications);
+    if (active && uploading) record(active.sensorNotifications);
+  };
   const onConnection = (notification: Event) => {
     if (!(notification as CustomEvent<boolean>).detail) {
       disconnected = true;
@@ -219,12 +301,38 @@ export async function runUploadStressTest(
   console.debug = captureDebug;
   document.addEventListener('thymio-connected', onConnection);
   document.addEventListener('visibilitychange', onVisibility);
+  document.addEventListener(THYMIO_SENSOR_VALUES_EVENT_ID, onSensor);
+  document.addEventListener(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, onSensor);
 
   try {
     event('Reading firmware and memory information.');
     onUpdate(report);
     report.firmware = await withTimeout(() => api.getFirmwareInfo(), settings.timeoutMs, 'Reading firmware information');
     report.memoryBefore = await withTimeout(() => api.getMemoryInfo(), settings.timeoutMs, 'Reading memory information');
+
+    if (!signal.aborted && !disconnected && api.isConnected()) {
+      event('Stopping sensor streaming to establish the selected mode.');
+      await withTimeout(() => api.stopSensorStreaming(), settings.timeoutMs, 'Stopping sensor streaming');
+      observingSensors = true;
+      if (settings.sensorStreaming !== 'off' && !signal.aborted && !disconnected && api.isConnected()) {
+        const start = {
+          main: () => api.startMainSensorStreaming(),
+          secondary: () => api.startSecondarySensorStreaming(),
+          all: () => api.startAllSensorStreaming(),
+        }[settings.sensorStreaming];
+        streamingRequested = true;
+        event(`Starting ${settings.sensorStreaming} sensor streaming and waiting for notifications.`);
+        onUpdate(report);
+        await withTimeout(start, settings.timeoutMs, 'Starting sensor streaming');
+        if (disconnected || !api.isConnected()) throw new Error('Bluetooth disconnected while starting sensor streaming.');
+        await waitForSensors(settings.sensorStreaming, report.sensorStreaming.notifications, settings.timeoutMs, signal);
+        report.sensorStreaming.confirmed = hasRequestedSensors(settings.sensorStreaming, report.sensorStreaming.notifications);
+        if (report.sensorStreaming.confirmed) event('Requested sensor streaming confirmed by received notifications.');
+      } else if (settings.sensorStreaming === 'off') {
+        event('Sensor streaming disabled for this run.');
+      }
+      onUpdate(report);
+    }
 
     for (let index = 0; index < settings.count; index++) {
       if (signal.aborted || disconnected || !api.isConnected()) break;
@@ -237,6 +345,7 @@ export async function runUploadStressTest(
         phase: settings.freeMemory ? 'cleanup' : 'upload', outcome: 'running',
         uploadedPackets: 0, totalPackets: 0, uploadedBytes: 0,
         diagnostics: [], omittedDiagnostics: 0,
+        sensorNotifications: { main: 0, secondary: 0 },
       };
       active = attempt;
       report.attempts.push(attempt);
@@ -248,6 +357,7 @@ export async function runUploadStressTest(
         }
         if (disconnected || !api.isConnected()) throw new Error('Bluetooth disconnected before upload.');
         attempt.phase = 'upload';
+        uploading = true;
         await withUploadInactivityTimeout(() => api.uploadFile(file), settings.timeoutMs, `Upload ${attempt.number}`);
         attempt.outcome = 'passed';
         report.passed++;
@@ -266,6 +376,7 @@ export async function runUploadStressTest(
           report.reason = attempt.error;
         }
       } finally {
+        uploading = false;
         attempt.durationMs = Math.round(performance.now() - started);
         active = undefined;
         onUpdate(report);
@@ -292,6 +403,24 @@ export async function runUploadStressTest(
     report.requiresReload = error instanceof OperationTimeout;
   } finally {
     active = undefined;
+    observingSensors = false;
+    document.removeEventListener(THYMIO_SENSOR_VALUES_EVENT_ID, onSensor);
+    document.removeEventListener(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, onSensor);
+    // A stalled GATT call cannot be cancelled; never queue cleanup behind it.
+    if (streamingRequested && !report.requiresReload && !disconnected && api.isConnected()) {
+      try {
+        event('Stopping sensor streaming after the run.');
+        await withTimeout(() => api.stopSensorStreaming(), settings.timeoutMs, 'Stopping sensor streaming after the run');
+      } catch (error) {
+        report.sensorStreaming.cleanupError = describeError(error);
+        event(report.sensorStreaming.cleanupError);
+        if (report.outcome !== 'failed') {
+          report.outcome = 'failed';
+          report.reason = report.sensorStreaming.cleanupError;
+        }
+        if (error instanceof OperationTimeout) report.requiresReload = true;
+      }
+    }
     if (console.debug === captureDebug) console.debug = originalDebug;
     document.removeEventListener('thymio-connected', onConnection);
     document.removeEventListener('visibilitychange', onVisibility);
