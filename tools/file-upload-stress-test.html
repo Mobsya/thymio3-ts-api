@@ -40,6 +40,14 @@
     .passed { color: #126644; }
     .failed { color: #a32128; }
     progress { width: 100%; height: 12px; accent-color: #146675; }
+    .speed-panel { margin: 22px 0; padding: 16px; border: 1px solid #dce5eb; border-radius: 8px; }
+    .speed-panel h3 { margin: 0; font-size: 16px; }
+    .speed-summary { font-size: 13px; font-variant-numeric: tabular-nums; }
+    #speed-chart { display: block; width: 100%; height: 260px; }
+    #speed-chart text { fill: #526675; font: 12px system-ui, sans-serif; }
+    .chart-grid { stroke: #dce5eb; stroke-width: 1; }
+    .chart-line { fill: none; stroke: #146675; stroke-width: 2; stroke-linejoin: round; }
+    .chart-points { fill: none; stroke: #146675; stroke-width: 5; stroke-linecap: round; }
     .table-wrap { overflow: auto; max-height: 480px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th { text-align: left; position: sticky; top: 0; background: #edf2f5; }
@@ -120,13 +128,24 @@
     <progress id="run-progress" value="0" max="100" aria-label="Completed uploads"></progress>
     <p id="current" class="muted">No upload in progress.</p>
     <p id="sensor-status" class="muted" role="status">Sensor streaming: no run yet.</p>
+    <div class="speed-panel">
+      <h3 id="speed-heading">File upload speed</h3>
+      <p id="speed-description" class="muted"><small>Each point shows a successful file's average upload speed, including preparation and robot acknowledgement. RAM cleanup and delays between uploads are excluded. 1 KiB = 1,024 bytes.</small></p>
+      <p id="speed-summary" class="speed-summary">Last successful: — · Average: — · Peak: —</p>
+      <svg id="speed-chart" role="img" aria-labelledby="speed-heading" aria-describedby="speed-description speed-summary">
+        <g id="speed-axes"></g>
+        <path id="speed-line" class="chart-line"></path>
+        <path id="speed-points" class="chart-points"></path>
+        <text id="speed-empty" text-anchor="middle">Waiting for a successful upload.</text>
+      </svg>
+    </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th scope="col">Attempt</th><th scope="col">Bytes</th><th scope="col">Seed</th><th scope="col">Duration</th><th scope="col">Result</th><th scope="col">Sensor events (main / secondary)</th><th scope="col">Details</th></tr></thead>
+        <thead><tr><th scope="col">Attempt</th><th scope="col">Bytes</th><th scope="col">Seed</th><th scope="col">Duration</th><th scope="col">Result</th><th scope="col">Sensor events (main / secondary)</th><th scope="col">Speed (KiB/s)</th><th scope="col">Details</th></tr></thead>
         <tbody id="results"></tbody>
       </table>
     </div>
-    <p><small>Pass means the robot acknowledged the upload in RAM. Sensor event counts cover each upload through its acknowledgement; a short upload may finish between sensor notifications. The report includes streaming mode, notification counts and first/last timestamps, settings, firmware, memory, per-attempt timing, and the last 100 verbose entries for each failed attempt. Successful attempts retain packet summaries. Full diagnostics remain in the console under <strong>Verbose</strong>.</small></p>
+    <p><small>Pass means the robot acknowledged the upload in RAM. Sensor event counts cover each upload through its acknowledgement; a short upload may finish between sensor notifications. The report includes streaming mode, notification counts and first/last timestamps, settings, firmware, memory, per-attempt timing and upload speed in bytes per second, and the last 100 verbose entries for each failed attempt. Successful attempts retain packet summaries. Full diagnostics remain in the console under <strong>Verbose</strong>.</small></p>
   </section>
 </main>
 <script>/* EMBED_THYMIO_API */</script>
@@ -143,6 +162,92 @@
   let requiresReload = false;
   let timer;
   const rows = new Map();
+  const speedSamples = [];
+  let lastChartAttempt = 0;
+  let chartElapsedMs = 0;
+  let successfulBytes = 0;
+  let successfulUploadMs = 0;
+  let peakSpeed = 0;
+  let chartFrame;
+  const speedValue = (bytesPerSecond) => (bytesPerSecond / 1024).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const axisValue = (value) => value.toLocaleString(undefined, { maximumSignificantDigits: 3 });
+  function scheduleSpeedChart() {
+    if (chartFrame !== undefined) return;
+    chartFrame = requestAnimationFrame(() => {
+      chartFrame = undefined;
+      drawSpeedChart();
+    });
+  }
+  function resetSpeedChart() {
+    speedSamples.length = 0;
+    lastChartAttempt = chartElapsedMs = successfulBytes = successfulUploadMs = peakSpeed = 0;
+    $('speed-summary').textContent = 'Last successful: — · Average: — · Peak: —';
+    scheduleSpeedChart();
+  }
+  function recordSpeed(attempt) {
+    if (!attempt || attempt.outcome === 'running' || attempt.number <= lastChartAttempt) return;
+    lastChartAttempt = attempt.number;
+    chartElapsedMs = attempt.finishedElapsedMs;
+    if (attempt.outcome === 'passed' && Number.isFinite(attempt.uploadBytesPerSecond)) {
+      speedSamples.push({ number: attempt.number, elapsedMs: attempt.finishedElapsedMs, speed: attempt.uploadBytesPerSecond });
+      successfulBytes += attempt.size;
+      successfulUploadMs += attempt.uploadDurationMs;
+      peakSpeed = Math.max(peakSpeed, attempt.uploadBytesPerSecond);
+      const average = successfulBytes * 1000 / successfulUploadMs;
+      $('speed-summary').textContent = `Last successful: ${speedValue(attempt.uploadBytesPerSecond)} KiB/s · Average: ${speedValue(average)} KiB/s · Peak: ${speedValue(peakSpeed)} KiB/s`;
+    }
+    scheduleSpeedChart();
+  }
+  function drawSpeedChart() {
+    const width = Math.max(260, $('speed-chart').clientWidth);
+    const height = 260;
+    const left = 58, right = width - 18, top = 30, bottom = height - 44;
+    const maxSeconds = Math.max(1, chartElapsedMs / 1000);
+    const maxKiB = peakSpeed > 0 ? peakSpeed / 1024 * 1.1 : 1;
+    const x = (ms) => left + (ms / 1000 / maxSeconds) * (right - left);
+    const y = (speed) => bottom - (speed / 1024 / maxKiB) * (bottom - top);
+    $('speed-chart').setAttribute('viewBox', `0 0 ${width} ${height}`);
+    const axes = $('speed-axes');
+    axes.replaceChildren();
+    const element = (tag, attributes, text) => {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+      if (text !== undefined) node.textContent = text;
+      axes.append(node);
+    };
+    for (let tick = 0; tick <= 4; tick++) {
+      const cy = bottom - tick / 4 * (bottom - top);
+      element('line', { x1: left, x2: right, y1: cy, y2: cy, class: 'chart-grid' });
+      element('text', { x: left - 8, y: cy + 4, 'text-anchor': 'end' }, axisValue(maxKiB * tick / 4));
+    }
+    const timeTicks = width < 500 ? 2 : 4;
+    for (let tick = 0; tick <= timeTicks; tick++) {
+      element('text', {
+        x: left + tick / timeTicks * (right - left), y: bottom + 20,
+        'text-anchor': tick === timeTicks ? 'end' : tick === 0 ? 'start' : 'middle',
+      }, axisValue(maxSeconds * tick / timeTicks));
+    }
+    element('text', { x: left, y: 16 }, 'KiB/s');
+    element('text', { x: (left + right) / 2, y: height - 3, 'text-anchor': 'middle' }, 'Elapsed time (s)');
+    let previousNumber;
+    const line = [];
+    const points = [];
+    for (const sample of speedSamples) {
+      const cx = x(sample.elapsedMs).toFixed(2), cy = y(sample.speed).toFixed(2);
+      // Leave a gap for failed attempts instead of implying a successful transfer.
+      line.push(`${sample.number === previousNumber + 1 ? 'L' : 'M'}${cx},${cy}`);
+      points.push(`M${cx},${cy}h0`);
+      previousNumber = sample.number;
+    }
+    $('speed-line').setAttribute('d', line.join(' '));
+    $('speed-points').setAttribute('d', points.join(' '));
+    $('speed-empty').setAttribute('x', (left + right) / 2);
+    $('speed-empty').setAttribute('y', (top + bottom) / 2);
+    $('speed-empty').style.display = speedSamples.length ? 'none' : '';
+    $('speed-empty').textContent = lastChartAttempt ? 'No successful speed measurements yet.' : 'Waiting for a successful upload.';
+  }
+  window.addEventListener('resize', scheduleSpeedChart);
+  scheduleSpeedChart();
   const notice = (message, error = false) => {
     $('notice').textContent = message;
     $('notice').dataset.error = String(error);
@@ -171,13 +276,14 @@
       let row = rows.get(attempt.number);
       if (!row) {
         row = document.createElement('tr');
-        for (let i = 0; i < 7; i++) row.append(document.createElement('td'));
+        for (let i = 0; i < 8; i++) row.append(document.createElement('td'));
         $('results').append(row);
         rows.set(attempt.number, row);
       }
       const cells = [attempt.number, attempt.size.toLocaleString(), attempt.seed,
         attempt.outcome === 'running' ? '—' : `${attempt.durationMs} ms`, attempt.outcome,
         `${attempt.sensorNotifications.main} / ${attempt.sensorNotifications.secondary}`,
+        Number.isFinite(attempt.uploadBytesPerSecond) ? speedValue(attempt.uploadBytesPerSecond) : '—',
         attempt.error || (attempt.outcome === 'passed' ? `Robot acknowledged ${attempt.uploadedPackets} packets.` : `${attempt.phase} in progress…`)];
       cells.forEach((value, index) => { row.children[index].textContent = value; });
       row.children[4].className = attempt.outcome;
@@ -189,6 +295,7 @@
         ? next.events.at(-1)?.message || 'Preparing the test…'
         : 'No uploads were attempted.';
     }
+    recordSpeed(attempt);
     if (next.outcome !== 'running') {
       notice(`${next.outcome.toUpperCase()}: ${next.reason} ${next.passed} passed, ${next.failed} failed, ${next.settings.count - next.attempts.length} not attempted.`, next.failed > 0 || next.outcome === 'failed');
     }
@@ -246,6 +353,7 @@
       controller = new AbortController();
       $('results').replaceChildren();
       rows.clear();
+      resetSpeedChart();
       $('current').textContent = 'Reading firmware and memory information…';
       notice('Test running. Keep this page open.');
       controls();

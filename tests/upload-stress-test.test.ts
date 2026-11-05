@@ -92,7 +92,7 @@ describe('standalone upload stress runner', () => {
       diagnostic(file, 'complete', 'Upload complete');
     });
     const report = await runUploadStressTest(robot, { ...settings, sensorStreaming: mode, freeMemory: true }, new AbortController().signal);
-    expect(report).toMatchObject({ schemaVersion: 3, outcome: 'completed', passed: 3, sensorStreaming: { mode, confirmed: true } });
+    expect(report).toMatchObject({ schemaVersion: 4, outcome: 'completed', passed: 3, sensorStreaming: { mode, confirmed: true } });
     expect(robot.startMainSensorStreaming).toHaveBeenCalledTimes(mode === 'main' ? 1 : 0);
     expect(robot.startSecondarySensorStreaming).toHaveBeenCalledTimes(mode === 'secondary' ? 1 : 0);
     expect(robot.startAllSensorStreaming).toHaveBeenCalledTimes(mode === 'all' ? 1 : 0);
@@ -467,7 +467,51 @@ describe('standalone upload stress runner', () => {
     robot.freeMemory.mockRejectedValue(new Error('Cleanup failed'));
     const report = await runUploadStressTest(robot, { ...settings, freeMemory: true }, new AbortController().signal);
     expect(report.attempts[0]).toMatchObject({ phase: 'cleanup', outcome: 'failed' });
+    expect(report.attempts[0].uploadDurationMs).toBeUndefined();
+    expect(report.attempts[0].uploadBytesPerSecond).toBeUndefined();
     expect(robot.uploadFile).not.toHaveBeenCalled();
+  });
+
+  it('measures successful upload speed through acknowledgement, excluding cleanup and delays', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.freeMemory.mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 200)));
+    robot.uploadFile.mockImplementation(async (file) => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      diagnostic(file, 'sending', 'All bytes sent; waiting for acknowledgement.');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+    const run = runUploadStressTest(robot, {
+      ...settings, count: 2, sizes: [1024, 0], freeMemory: true, delayMs: 300,
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(1700);
+    const report = await run;
+    expect(report.attempts[0]).toMatchObject({
+      durationMs: 700, uploadDurationMs: 500, finishedElapsedMs: 700, uploadBytesPerSecond: 2048,
+    });
+    expect(report.attempts[1]).toMatchObject({
+      durationMs: 700, uploadDurationMs: 500, finishedElapsedMs: 1700, uploadBytesPerSecond: 0,
+    });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not report a successful speed for rejected uploads or zero-duration measurements', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.uploadFile.mockImplementationOnce(async (file) => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      diagnostic(file, 'failed', 'All bytes sent, but robot rejected the upload.');
+      throw 'File upload: CRC Mismatch';
+    });
+    const run = runUploadStressTest(robot, {
+      ...settings, count: 2, stopOnFailure: false,
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(501);
+    const report = await run;
+    expect(report.attempts[0]).toMatchObject({ outcome: 'failed', uploadDurationMs: 500 });
+    expect(report.attempts[1]).toMatchObject({ outcome: 'passed', uploadDurationMs: 0 });
+    expect(report.attempts.every((attempt) => attempt.uploadBytesPerSecond === undefined)).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it.each([

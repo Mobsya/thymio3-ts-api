@@ -60,6 +60,9 @@ export type Attempt = {
   seed: number;
   startedAt: string;
   durationMs: number;
+  finishedElapsedMs?: number;
+  uploadDurationMs?: number;
+  uploadBytesPerSecond?: number;
   phase: 'cleanup' | 'upload';
   outcome: 'running' | 'passed' | 'failed';
   error?: string;
@@ -241,8 +244,9 @@ export async function runUploadStressTest(
   validateSettings(settings);
   if (!api.isConnected()) throw new Error('Connect to a robot before starting a run.');
 
+  const runStarted = performance.now();
   const report: Report = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     uploadTimeoutMode: 'inactivity',
     startedAt: new Date().toISOString(),
     outcome: 'running', reason: '', requiresReload: false,
@@ -350,6 +354,7 @@ export async function runUploadStressTest(
       active = attempt;
       report.attempts.push(attempt);
       const started = performance.now();
+      let uploadStarted: number | undefined;
       onUpdate(report);
       try {
         if (settings.freeMemory) {
@@ -358,7 +363,10 @@ export async function runUploadStressTest(
         if (disconnected || !api.isConnected()) throw new Error('Bluetooth disconnected before upload.');
         attempt.phase = 'upload';
         uploading = true;
-        await withUploadInactivityTimeout(() => api.uploadFile(file), settings.timeoutMs, `Upload ${attempt.number}`);
+        await withUploadInactivityTimeout(() => {
+          uploadStarted = performance.now();
+          return api.uploadFile(file);
+        }, settings.timeoutMs, `Upload ${attempt.number}`);
         attempt.outcome = 'passed';
         report.passed++;
         // Preserve summaries for successes and the last 100 diagnostics for failures.
@@ -377,7 +385,16 @@ export async function runUploadStressTest(
         }
       } finally {
         uploading = false;
-        attempt.durationMs = Math.round(performance.now() - started);
+        const finished = performance.now();
+        attempt.durationMs = Math.round(finished - started);
+        attempt.finishedElapsedMs = finished - runStarted;
+        if (uploadStarted !== undefined) {
+          // Include preparation and the robot's ACK, but exclude RAM cleanup and inter-upload delays.
+          attempt.uploadDurationMs = finished - uploadStarted;
+          if (attempt.outcome === 'passed' && attempt.uploadDurationMs > 0) {
+            attempt.uploadBytesPerSecond = attempt.size * 1000 / attempt.uploadDurationMs;
+          }
+        }
         active = undefined;
         onUpdate(report);
       }
