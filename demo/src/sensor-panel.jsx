@@ -19,7 +19,11 @@ export default function SensorPanel() {
     const onConnected = (event) => {
       const isConnected = Boolean(event.detail);
 
-      if (!isConnected) return;
+      if (!isConnected) {
+        setMainSensors(null);
+        setOtherSensors(null);
+        return;
+      }
 
       void (async () => {
         try {
