@@ -34,22 +34,6 @@ let audioCharacteristic: BluetoothRemoteGATTCharacteristic;
 let fileCharacteristic: BluetoothRemoteGATTCharacteristic;
 let deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic;
 
-// TO BE REMOVED: Temporary workaround for a device issue where file uploads fail
-// while sensor data is streaming. Remove this workaround and its state tracking
-// once the device supports simultaneous file upload and sensor streaming.
-type SensorStreamingMode = 0 | 1 | 2 | 3;
-type SensorStreamingState = {
-  mode: SensorStreamingMode,
-  pending: Set<Promise<void>>,
-  uploadInProgress: boolean
-};
-
-function createSensorStreamingState(): SensorStreamingState {
-  return { mode: 0, pending: new Set(), uploadInProgress: false };
-}
-
-let sensorStreamingState = createSensorStreamingState();
-
 function getDeviceRequestOptions(): RequestDeviceOptions {
   // Bluefy requires service filters; name filters with optionalServices failed there.
   if (/Bluefy/i.test(navigator.userAgent ?? '')) {
@@ -112,10 +96,6 @@ export async function disconnect(): Promise<void> {
   if (device) {
     connectionGeneration++;
     connectionReady = false;
-    // TO BE REMOVED: Temporary workaround for a device issue where file uploads fail
-    // while sensor data is streaming. Remove this workaround and its state tracking
-    // once the device supports simultaneous file upload and sensor streaming.
-    sensorStreamingState = createSensorStreamingState();
     detachCharacteristicListeners();
     device.removeEventListener('gattserverdisconnected', onDisconnected);
     // Let clients stop polling while the old GATT connection is torn down.
@@ -213,10 +193,6 @@ async function connect(generation = connectionGeneration) {
   };
   connectionReady = false;
   if (device && device.gatt) {
-    // TO BE REMOVED: Temporary workaround for a device issue where file uploads fail
-    // while sensor data is streaming. Remove this workaround and its state tracking
-    // once the device supports simultaneous file upload and sensor streaming.
-    sensorStreamingState = createSensorStreamingState();
     detachCharacteristicListeners();
     const gatt = device.gatt;
     server = await gattCall(() => connectGattWithTimeout(gatt));
@@ -325,10 +301,6 @@ function onDisconnected() {
   notificationsNeedReset = true;
   connectionGeneration++;
   resetBluetoothQueue();
-  // TO BE REMOVED: Temporary workaround for a device issue where file uploads fail
-  // while sensor data is streaming. Remove this workaround and its state tracking
-  // once the device supports simultaneous file upload and sensor streaming.
-  sensorStreamingState = createSensorStreamingState();
   detachCharacteristicListeners();
   dispatchConnectedEvent(false);
 
@@ -419,49 +391,16 @@ export async function softResetPythonInterpreter(): Promise<void> {
 
 //// SENSOR STREAM CHARACTERISTIC
 
-// TO BE REMOVED: Temporary workaround for a device issue where file uploads fail
-// while sensor data is streaming. Remove this workaround and its state tracking
-// once the device supports simultaneous file upload and sensor streaming.
-// Restore direct sensorStream calls in the public wrappers when removing these helpers.
-async function setSensorStreamingMode(
-  mode: SensorStreamingMode,
-  state = sensorStreamingState,
-  characteristic = sensorStreamCharacteristic
-): Promise<void> {
-  const commands = {
-    0: sensorStream.stopSensorStreaming,
-    1: sensorStream.startMainSensorStreaming,
-    2: sensorStream.startSecondarySensorStreaming,
-    3: sensorStream.startAllSensorStreaming
-  };
-  const operation = commands[mode](characteristic).then(() => {
-    state.mode = mode;
-  });
-  state.pending.add(operation);
-  try {
-    await operation;
-  } finally {
-    state.pending.delete(operation);
-  }
-}
-
-async function changeSensorStreamingMode(mode: SensorStreamingMode): Promise<void> {
-  if (sensorStreamingState.uploadInProgress) {
-    throw new Error("Cannot change sensor streaming while a file upload is in progress.");
-  }
-  await setSensorStreamingMode(mode);
-}
-
 export async function startMainSensorStreaming(): Promise<void> {
-  return await changeSensorStreamingMode(1);
+  return await sensorStream.startMainSensorStreaming(sensorStreamCharacteristic);
 }
 
 export async function startSecondarySensorStreaming(): Promise<void> {
-  return await changeSensorStreamingMode(2);
+  return await sensorStream.startSecondarySensorStreaming(sensorStreamCharacteristic);
 }
 
 export async function startAllSensorStreaming(): Promise<void> {
-  return await changeSensorStreamingMode(3);
+  return await sensorStream.startAllSensorStreaming(sensorStreamCharacteristic);
 }
 
 
@@ -469,7 +408,7 @@ export async function startAllSensorStreaming(): Promise<void> {
  * Stop all sensor streaming.
  */
 export async function stopSensorStreaming(): Promise<void> {
-  return await changeSensorStreamingMode(0);
+  return await sensorStream.stopSensorStreaming(sensorStreamCharacteristic);
 }
 
 //// FIRMWARE UPDATE
@@ -563,49 +502,7 @@ export async function playFrequency(
  * @param file File to upload
  */
 export async function uploadFile(file: File): Promise<void> {
-  // TO BE REMOVED: Temporary workaround for a device issue where file uploads fail
-  // while sensor data is streaming. Remove this workaround and its state tracking
-  // once the device supports simultaneous file upload and sensor streaming.
-  const state = sensorStreamingState;
-  if (state.uploadInProgress) {
-    throw new Error("File upload: Another file upload is already in progress.");
-  }
-  state.uploadInProgress = true;
-
-  const uploadDevice = device;
-  const uploadServer = server;
-  const uploadCharacteristic = fileCharacteristic;
-  const streamCharacteristic = sensorStreamCharacteristic;
-  const isCurrentConnection = () => sensorStreamingState === state &&
-    device === uploadDevice && server === uploadServer &&
-    uploadDevice?.gatt?.connected && uploadServer?.connected;
-  let previousMode: SensorStreamingMode = 0;
-  let paused = false;
-
-  try {
-    // A priority stop must not overtake an earlier, still queued start command.
-    await Promise.allSettled(state.pending);
-    if (!isCurrentConnection()) {
-      throw new Error("File upload: Bluetooth is not connected or the connection changed.");
-    }
-    previousMode = state.mode;
-    await setSensorStreamingMode(0, state, streamCharacteristic);
-    paused = true;
-    if (!isCurrentConnection()) {
-      throw new Error("File upload: Bluetooth disconnected or the connection changed while stopping sensor streaming.");
-    }
-    await files.uploadFile(uploadCharacteristic, file);
-  } finally {
-    if (paused && previousMode !== 0 && isCurrentConnection()) {
-      try {
-        await setSensorStreamingMode(previousMode, state, streamCharacteristic);
-      } catch (error) {
-        console.warn("[Thymio 3 API] Could not restore sensor streaming after file upload:", error);
-      }
-    }
-    // Only release this connection's guard; a newer connection has its own state.
-    state.uploadInProgress = false;
-  }
+  return await files.uploadFile(fileCharacteristic, file);
 }
 
 /**
@@ -693,10 +590,7 @@ function getConnectedServer(): BluetoothRemoteGATTServer {
 
 async function stopMainBluetoothServices(): Promise<void> {
   try {
-    // TO BE REMOVED: Temporary workaround for a device issue where file uploads fail
-    // while sensor data is streaming. Remove this workaround and its state tracking
-    // once the device supports simultaneous file upload and sensor streaming.
-    await setSensorStreamingMode(0);
+    await sensorStream.stopSensorStreaming(sensorStreamCharacteristic);
   } catch (error) {
     console.warn("[Thymio 3 API] Could not stop sensor streaming before OTA:", error);
   }
