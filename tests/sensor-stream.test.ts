@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   handleStreamResponse,
   startAllSensorStreaming,
@@ -140,13 +140,65 @@ describe('sensor stream characteristic', () => {
     ]);
   });
 
-  it('throws on current fixed-packet sensor length mismatches', async () => {
+  it.each([
+    [0x01, 39, THYMIO_SENSOR_VALUES_EVENT_ID],
+    [0x02, 31, THYMIO_OTHER_SENSOR_VALUES_EVENT_ID],
+  ] as const)('discards truncated or oversized 0x%s packets and recovers on the next complete sample', async (id, size, eventName) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const characteristic = new FakeBluetoothCharacteristic();
+    const events = collectDocumentEventDetails(eventName);
+    const event = { target: characteristic } as unknown as Event;
 
-    characteristic.setValue([0x01, 0x00]);
+    for (const length of [1, 20, size + 1]) {
+      const packet = new Uint8Array(length);
+      packet[0] = id;
+      characteristic.setValue(packet);
+      await expect(handleStreamResponse(event)).resolves.toBeUndefined();
+    }
+    expect(events.details).toEqual([]);
+    // Repeated malformed notifications should not flood the log.
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(`expected ${size} bytes, received 1`));
 
-    await expect(
-      handleStreamResponse({ target: characteristic } as unknown as Event)
-    ).rejects.toThrow('Invalid byte array length. Expected 38 bytes.');
+    const complete = new Uint8Array(size);
+    complete[0] = id;
+    characteristic.setValue(complete);
+    await handleStreamResponse(event);
+    expect(events.details).toHaveLength(1);
+
+    characteristic.setValue([id]);
+    await handleStreamResponse(event);
+    expect(console.warn).toHaveBeenCalledTimes(2);
+    expect(events.details).toHaveLength(1);
+  });
+
+  it.each([
+    [0x01, 39, THYMIO_SENSOR_VALUES_EVENT_ID, 'colorSensor', 'h'],
+    [0x02, 31, THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, 'colorRaw', 'red'],
+  ] as const)('respects the DataView boundaries for 0x%s packets', async (id, size, eventName, field, component) => {
+    const characteristic = new FakeBluetoothCharacteristic();
+    const events = collectDocumentEventDetails<Record<string, Record<string, number>>>(eventName);
+    const backing = new Uint8Array(size + 12).fill(0xff);
+    const view = new DataView(backing.buffer, 5, size);
+    view.setUint8(0, id);
+    view.setUint16(1, 0x1234, true);
+    characteristic.value = view;
+
+    await handleStreamResponse({ target: characteristic } as unknown as Event);
+
+    expect(events.details).toHaveLength(1);
+    expect(events.details[0]![field]![component]).toBe(0x1234);
+  });
+
+  it('ignores missing, empty, and unknown notification values', async () => {
+    const characteristic = new FakeBluetoothCharacteristic();
+    const events = collectDocumentEventDetails(THYMIO_SENSOR_VALUES_EVENT_ID);
+    const event = { target: characteristic } as unknown as Event;
+    await expect(handleStreamResponse(event)).resolves.toBeUndefined();
+    characteristic.setValue([]);
+    await expect(handleStreamResponse(event)).resolves.toBeUndefined();
+    characteristic.setValue([0xff]);
+    await expect(handleStreamResponse(event)).resolves.toBeUndefined();
+    expect(events.details).toEqual([]);
   });
 });

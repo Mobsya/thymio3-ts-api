@@ -10,6 +10,8 @@ import {
   SENSOR_STREAM_CHARACTERISTIC_UUID,
   STD_OUT_CHARACTERISTIC_UUID,
   THYMIO_CONNECTED_EVENT_ID,
+  THYMIO_SENSOR_VALUES_EVENT_ID,
+  THYMIO_OTHER_SENSOR_VALUES_EVENT_ID,
 } from '../src/constants';
 import {
   FakeBluetoothCharacteristic,
@@ -103,7 +105,7 @@ describe('top-level Thymio connection API', () => {
     expect(requestDevice).toHaveBeenCalledTimes(1);
     expect(thymio.isConnected()).toBe(true);
     expect(thymio.getDeviceName()).toBe(deviceName);
-    expect(connectedEvents.details).toEqual([true, true]);
+    expect(connectedEvents.details).toEqual([true]);
     expect(characteristics.sensorStream.startNotificationsCount).toBe(1);
     expect(characteristics.python.startNotificationsCount).toBe(1);
     expect(characteristics.stdOut.startNotificationsCount).toBe(1);
@@ -171,6 +173,233 @@ describe('top-level Thymio connection API', () => {
 
     expect(connectedEvents.details).toEqual([false]);
     expect(thymio.isConnected()).toBe(false);
+  });
+
+  it.each(['manual', 'automatic'] as const)('resets streaming and listeners before %s reconnection finishes', async (mode) => {
+    vi.useFakeTimers();
+    const { thymio, characteristics, server, device } = await connectUploadRobot();
+    await thymio.startAllSensorStreaming();
+    const connectedEvents = collectDocumentEventDetails<boolean>(THYMIO_CONNECTED_EVENT_ID);
+    const sensorEvents = collectDocumentEventDetails(THYMIO_SENSOR_VALUES_EVENT_ID);
+    const packet = new Uint8Array(39);
+    packet[0] = 0x01;
+    const probe = createDeferred();
+    const order: string[] = [];
+    let probing = false;
+    const writeInfo = characteristics.deviceInfo.onWriteWithResponse;
+    characteristics.deviceInfo.onWriteWithResponse = async (data, characteristic) => {
+      if (data.byteLength > 1) {
+        order.push('probe');
+        probing = true;
+        await probe.promise;
+      } else {
+        await writeInfo?.(data, characteristic);
+      }
+    };
+    characteristics.sensorStream.onWriteWithResponse = data => { order.push(`stream:${data[1]}`); };
+    const startNotifications = characteristics.sensorStream.startNotifications.bind(characteristics.sensorStream);
+    vi.spyOn(characteristics.sensorStream, 'startNotifications').mockImplementation(() => {
+      order.push('subscribe');
+      return startNotifications();
+    });
+
+    if (mode === 'manual') {
+      await thymio.disconnect();
+    } else {
+      server.disconnect();
+      device.dispatchEvent(new Event('gattserverdisconnected'));
+    }
+    order.length = 0;
+    // Old characteristic objects can still deliver buffered notifications.
+    characteristics.sensorStream.emitValue(packet);
+    expect(sensorEvents.details).toEqual([]);
+
+    const reconnection = mode === 'manual' ? thymio.requestAndConnect() : undefined;
+    try {
+      if (mode === 'automatic') await vi.advanceTimersByTimeAsync(3000);
+      await vi.waitFor(() => expect(probing).toBe(true));
+      expect(order).toEqual(['stream:0', 'probe']);
+      expect(connectedEvents.details).toEqual([false]);
+      characteristics.sensorStream.emitValue(packet);
+      expect(sensorEvents.details).toEqual([]);
+    } finally {
+      probe.resolve();
+      await reconnection;
+      await vi.waitFor(() => expect(connectedEvents.details).toContain(true));
+    }
+
+    expect(order).toEqual(['stream:0', 'probe', 'subscribe']);
+    expect(connectedEvents.details).toEqual([false, true]);
+    characteristics.sensorStream.emitValue(packet);
+    expect(sensorEvents.details).toHaveLength(1);
+    await thymio.disconnect();
+  });
+
+  it('releases notification subscriptions before explicitly disconnecting GATT', async () => {
+    const { thymio, characteristics, server } = await connectUploadRobot();
+    const notifications = [characteristics.sensorStream, characteristics.python, characteristics.stdOut,
+      characteristics.audio, characteristics.file, characteristics.deviceInfo];
+    const disconnect = server.disconnect.bind(server);
+    vi.spyOn(server, 'disconnect').mockImplementation(() => {
+      expect(notifications.every(characteristic => !characteristic.notificationsStarted)).toBe(true);
+      disconnect();
+    });
+
+    await thymio.disconnect();
+
+    expect(server.connected).toBe(false);
+    for (const characteristic of notifications) expect(characteristic.stopNotificationsCount).toBe(1);
+  });
+
+  it('reconnects with working reads and streaming even if an old native memory write never finishes', async () => {
+    vi.useFakeTimers();
+    const { thymio, characteristics } = await connectUploadRobot();
+    const oldWrite = createDeferred();
+    const writeInfo = characteristics.deviceInfo.onWriteWithResponse;
+    characteristics.deviceInfo.onWriteWithResponse = () => oldWrite.promise;
+    const oldRead = thymio.getMemoryInfo();
+    const rejectedRead = expect(oldRead).rejects.toThrow('Bluetooth disconnected');
+    await flushMicrotasks();
+    const oldStream = thymio.startAllSensorStreaming();
+    const rejectedStream = expect(oldStream).rejects.toThrow('cancelled');
+    const disconnect = thymio.disconnect();
+    await vi.advanceTimersByTimeAsync(1000);
+    await disconnect;
+    await Promise.all([rejectedRead, rejectedStream]);
+
+    characteristics.deviceInfo.onWriteWithResponse = (data, characteristic) => {
+      if (data[0] === 2 && data.length === 1) characteristic.emitValue(jsonInfoPacket(2, { ram_bytes_free: 123, flash_bytes_free: 456 }));
+      else return writeInfo?.(data, characteristic);
+    };
+    await thymio.requestAndConnect();
+    await expect(thymio.getFirmwareInfo()).resolves.toMatchObject({ esp32_ver: 'v1.10.2' });
+    await expect(thymio.getMemoryInfo()).resolves.toMatchObject({ ram_bytes_free: 123 });
+    await thymio.startAllSensorStreaming();
+    expect(characteristics.sensorStream.writesWithResponse.map(bytesOf)).toEqual([[1, 0], [1, 3]]);
+    oldWrite.resolve();
+    await thymio.disconnect();
+  });
+
+  it('cancels a sleeping automatic reconnect when the user connects manually', async () => {
+    vi.useFakeTimers();
+    const { thymio, device, server } = await connectUploadRobot();
+    const events = collectDocumentEventDetails<boolean>(THYMIO_CONNECTED_EVENT_ID);
+    const connect = vi.spyOn(server, 'connect');
+    server.disconnect();
+    device.dispatchEvent(new Event('gattserverdisconnected'));
+    await thymio.requestAndConnect();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(events.details).toEqual([false, true]);
+    await thymio.disconnect();
+  });
+
+  it('restores request replies and both sensor streams when native subscriptions still target old objects', async () => {
+    vi.useFakeTimers();
+    const { thymio, device, server, characteristics: old } = await connectUploadRobot();
+    const fresh = createMainCharacteristics();
+    const receivers = new Map(Object.entries(old));
+    for (const [name, characteristic] of Object.entries(fresh)) {
+      Object.assign(characteristic, { service: { device } });
+      const start = characteristic.startNotifications.bind(characteristic);
+      vi.spyOn(characteristic, 'startNotifications').mockImplementation(async () => {
+        // Native "already active" success leaves the previous receiver intact.
+        if (!receivers.has(name)) receivers.set(name, characteristic);
+        return start();
+      });
+      const stop = characteristic.stopNotifications.bind(characteristic);
+      vi.spyOn(characteristic, 'stopNotifications').mockImplementation(async () => {
+        receivers.delete(name);
+        return stop();
+      });
+      vi.spyOn(old[name as keyof typeof old], 'stopNotifications').mockRejectedValue(new Error('Old characteristic is invalid'));
+    }
+    fresh.deviceInfo.onWriteWithResponse = data => {
+      if (data.length !== 1) return;
+      receivers.get('deviceInfo')?.emitValue(jsonInfoPacket(data[0]!, data[0] === 1
+        ? { esp32_ver: 'v1.10.3', stm32_ver: '0' }
+        : { ram_bytes_free: 123, flash_bytes_free: 456 }));
+    };
+    fresh.sensorStream.onWriteWithResponse = data => {
+      if (data[1] !== 3) return;
+      const main = new Uint8Array(39);
+      const secondary = new Uint8Array(31);
+      main[0] = 1;
+      secondary[0] = 2;
+      receivers.get('sensorStream')?.emitValue(main);
+      receivers.get('sensorStream')?.emitValue(secondary);
+    };
+    const service = new FakeBluetoothService(new Map([
+      [COMMAND_CHARACTERISTIC_UUID, fresh.command],
+      [SENSOR_STREAM_CHARACTERISTIC_UUID, fresh.sensorStream],
+      [DEVICE_INFO_CHARACTERISTIC_UUID, fresh.deviceInfo],
+      [PYTHON_CHARACTERISTIC_UUID, fresh.python],
+      [STD_OUT_CHARACTERISTIC_UUID, fresh.stdOut],
+      [AUDIO_CHARACTERISTIC_UUID, fresh.audio],
+      [FILE_CHARACTERISTIC_UUID, fresh.file],
+    ]));
+    vi.spyOn(server, 'getPrimaryService').mockResolvedValue(service as unknown as BluetoothRemoteGATTService);
+    const connected = collectDocumentEventDetails<boolean>(THYMIO_CONNECTED_EVENT_ID);
+    const main = collectDocumentEventDetails(THYMIO_SENSOR_VALUES_EVENT_ID);
+    const secondary = collectDocumentEventDetails(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID);
+
+    server.disconnect();
+    device.dispatchEvent(new Event('gattserverdisconnected'));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(connected.details).toEqual([false, true]);
+    await expect(thymio.getFirmwareInfo()).resolves.toMatchObject({ esp32_ver: 'v1.10.3' });
+    await expect(thymio.getMemoryInfo()).resolves.toMatchObject({ ram_bytes_free: 123 });
+    await thymio.startAllSensorStreaming();
+    expect(main.details).toHaveLength(1);
+    expect(secondary.details).toHaveLength(1);
+    for (const name of ['python', 'stdOut', 'audio', 'file']) {
+      expect(receivers.get(name)).toBe(fresh[name as keyof typeof fresh]);
+    }
+    expect(navigator.bluetooth.requestDevice).toHaveBeenCalledTimes(1);
+    await thymio.disconnect();
+  });
+
+  it('keeps a silent reconnection unavailable and retries until a firmware reply arrives', async () => {
+    vi.useFakeTimers();
+    const { thymio, device, server, characteristics } = await connectUploadRobot();
+    const writeInfo = characteristics.deviceInfo.onWriteWithResponse;
+    characteristics.deviceInfo.onWriteWithResponse = undefined;
+    const events = collectDocumentEventDetails<boolean>(THYMIO_CONNECTED_EVENT_ID);
+    server.disconnect();
+    device.dispatchEvent(new Event('gattserverdisconnected'));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(server.connected).toBe(true);
+    expect(thymio.isConnected()).toBe(false);
+    expect(events.details).toEqual([false]);
+    // Let the missing-reply timeout expire. No ready event may escape.
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(events.details).toEqual([false]);
+    characteristics.deviceInfo.onWriteWithResponse = writeInfo;
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(thymio.isConnected()).toBe(true);
+    expect(events.details).toEqual([false, true]);
+    await thymio.disconnect();
+  });
+
+  it('disconnects even if notification cleanup hangs, without cleaning up a later connection', async () => {
+    vi.useFakeTimers();
+    const { thymio, characteristics, server } = await connectUploadRobot();
+    const unsubscribe = createDeferred<BluetoothRemoteGATTCharacteristic>();
+    vi.spyOn(characteristics.sensorStream, 'stopNotifications').mockReturnValue(unsubscribe.promise);
+    const disconnect = thymio.disconnect();
+    await flushMicrotasks();
+    expect(server.connected).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await disconnect;
+    expect(server.connected).toBe(false);
+
+    // The old pending native call finishes after a subsequent link is established.
+    server.connected = true;
+    unsubscribe.resolve(characteristics.sensorStream.asBluetoothCharacteristic());
+    await flushMicrotasks();
+    expect(characteristics.python.stopNotificationsCount).toBe(0);
+    expect(server.connected).toBe(true);
   });
 });
 
@@ -382,7 +611,7 @@ describe('temporary file upload sensor streaming workaround', () => {
     characteristics.file.onWriteWithResponse = acknowledgeFileUpload;
     await thymio.uploadFile(new File(['abc'], 'next.txt'));
     expect(characteristics.sensorStream.writesWithResponse.map(bytesOf)).toEqual([
-      [0x01, 0x03], [0x01, 0x00], [0x01, 0x00],
+      [0x01, 0x03], [0x01, 0x00], [0x01, 0x00], [0x01, 0x00],
     ]);
   });
 
@@ -392,7 +621,7 @@ describe('temporary file upload sensor streaming workaround', () => {
     const stop = createDeferred();
     characteristics.sensorStream.onWriteWithResponse = () => stop.promise;
     const upload = thymio.uploadFile(new File(['abc'], 'demo.txt'));
-    const rejected = expect(upload).rejects.toThrow('Bluetooth disconnected or the connection changed');
+    const rejected = expect(upload).rejects.toThrow('Bluetooth disconnected');
     await vi.waitFor(() => expect(characteristics.sensorStream.writesWithResponse).toHaveLength(2));
 
     await thymio.disconnect();
@@ -426,7 +655,7 @@ describe('temporary file upload sensor streaming workaround', () => {
     await expect(newRobot.thymio.uploadFile(newFile)).rejects.toThrow('Another file upload is already in progress');
     newRobot.characteristics.file.emitValue([0x01, 0x00]);
     await newUpload;
-    expect(oldRobot.characteristics.sensorStream.writesWithResponse.map(bytesOf)).toEqual([[0x01, 0x03], [0x01, 0x00]]);
+    expect(oldRobot.characteristics.sensorStream.writesWithResponse.map(bytesOf)).toEqual([[0x01, 0x03], [0x01, 0x00], [0x01, 0x00]]);
     expect(newRobot.characteristics.sensorStream.writesWithResponse.map(bytesOf)).toEqual([
       [0x01, 0x02], [0x01, 0x00], [0x01, 0x02],
     ]);
@@ -477,7 +706,10 @@ async function connectUploadRobot() {
   vi.stubGlobal('navigator', { bluetooth: { requestDevice: vi.fn().mockResolvedValue(robot.device.asBluetoothDevice()) } });
   const thymio = await import('../src/thymio');
   await thymio.requestAndConnect();
-  await flushMicrotasks();
+  const { queueBluetoothCall } = await import('../src/bluetooth-queue');
+  await queueBluetoothCall(() => {});
+  // Upload tests observe streaming commands after connection setup.
+  robot.characteristics.sensorStream.writesWithResponse.length = 0;
   return { thymio, ...robot };
 }
 
@@ -511,7 +743,7 @@ function jsonInfoPacket(id: number, value: unknown): Uint8Array {
   const data = new TextEncoder().encode(JSON.stringify(value));
   const packet = new Uint8Array(3 + data.byteLength);
   packet[0] = id;
-  new DataView(packet.buffer).setUint16(1, data.byteLength, true);
+  new DataView(packet.buffer).setUint16(1, data.byteLength);
   packet.set(data, 3);
   return packet;
 }

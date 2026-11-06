@@ -105,6 +105,28 @@ The API checks the connected ESP32 firmware version against the compatibility ra
 `thymio.disconnect()` - disconnects the Thymio device\
 `thymio.getAPIVersion()` - returns the API firmware version from `package.json`
 
+Each connection stops sensor streaming retained by the firmware before setting
+up notifications. Resume streaming after `thymio-connected` with `detail: true`,
+which fires once per completed connection; the demo does this automatically.
+Disconnect removes the old event listeners and releases notification subscriptions
+before closing GATT. Notification cleanup is limited to one second so a stuck
+Bluetooth operation cannot block disconnection indefinitely. Disconnect also
+cancels pending Bluetooth work; unfinished operations from an old connection do
+not block a new one. Setup completes before `isConnected()` returns `true`.
+Explicit native "already in progress" errors are retried with bounded backoff
+within the Bluetooth queue; this does not reopen the device chooser.
+
+After an unexpected link loss, automatic reconnection resets all notification
+subscriptions through newly discovered characteristics and verifies a firmware
+reply before emitting `thymio-connected: true`. A failed verification stays in
+the reconnect loop instead of exposing a connection that cannot receive replies.
+
+Firmware and memory requests wait for both the GATT write and the corresponding
+response before the next queued operation runs. Device-info response listeners
+expire after three seconds; failed requests still wait for their native write
+to settle before releasing the queue. Disconnect clears a stuck queue. The demo clears stale
+readings on disconnect and reloads firmware, memory, and sensors on reconnect.
+
 #### Events
 
 `thymio-connected` - event that tells if the robot is connected or not/
@@ -134,6 +156,11 @@ The API checks the connected ESP32 firmware version against the compatibility ra
 `thymio.startSecondarySensorStreaming()` - starts secondary sensor streaming\
 `thymio.startAllSensorStreaming()` - starts all sensor streaming\
 `thymio.stopSensorStreaming()` - stops sensor streaming
+
+Incomplete or oversized sensor notifications are discarded. A warning reports
+the packet ID and expected/received lengths once per affected stream until a
+valid sample arrives. Notification parsing respects the `DataView` boundaries,
+including views into larger buffers.
 
 #### Events
 

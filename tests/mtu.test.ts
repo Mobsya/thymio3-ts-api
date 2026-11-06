@@ -92,6 +92,17 @@ describe('BLE write payload size probing', () => {
     expect(getMTU()).toBe(500);
   });
 
+  it('does not report a smaller usable payload when the connection remains busy', async () => {
+    vi.useFakeTimers();
+    const busy = new DOMException('GATT operation already in progress.', 'NetworkError');
+    const characteristic = new FakeBluetoothCharacteristic({ onWriteWithResponse: () => { throw busy; } });
+    const rejected = expect(negotiateMTU(characteristic.asBluetoothCharacteristic())).rejects.toBe(busy);
+    await vi.advanceTimersByTimeAsync(3100);
+    await rejected;
+    expect(characteristic.writesWithResponse.map(packet => packet.length)).toEqual([500, 500, 500, 500, 500, 500]);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
   it.each([185, 20])('uploads a multi-packet Python script using the accepted %i-byte size', async (limit) => {
     await negotiateMTU(createWriteOnlyCharacteristic(limit).asBluetoothCharacteristic());
 
