@@ -8,10 +8,17 @@ import * as sensorStream from '../src/sensor-stream';
 const settings: Settings = {
   count: 3, sizes: [20, 500], seed: 17, delayMs: 0, timeoutMs: 1000,
   freeMemory: false, stopOnFailure: true, sensorStreaming: 'off',
+  trafficStart: 'before-uploads', memoryPolling: false, memoryPollIntervalMs: 1000, memoryPollTimeoutMs: 4000,
 };
 
 function emitSensors(kind: 'main' | 'secondary' = 'main') {
   document.dispatchEvent(new CustomEvent(kind === 'main' ? THYMIO_SENSOR_VALUES_EVENT_ID : THYMIO_OTHER_SENSOR_VALUES_EVENT_ID));
+}
+
+function emitProgress(uploadedPackets = 1, totalPackets = 87) {
+  document.dispatchEvent(new CustomEvent(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, {
+    detail: { uploadedPackets, totalPackets, percentage: uploadedPackets / totalPackets * 100 },
+  }));
 }
 
 function fakeRobot() {
@@ -92,7 +99,7 @@ describe('standalone upload stress runner', () => {
       diagnostic(file, 'complete', 'Upload complete');
     });
     const report = await runUploadStressTest(robot, { ...settings, sensorStreaming: mode, freeMemory: true }, new AbortController().signal);
-    expect(report).toMatchObject({ schemaVersion: 4, outcome: 'completed', passed: 3, sensorStreaming: { mode, confirmed: true } });
+    expect(report).toMatchObject({ schemaVersion: 5, outcome: 'completed', passed: 3, sensorStreaming: { mode, confirmed: true } });
     expect(robot.startMainSensorStreaming).toHaveBeenCalledTimes(mode === 'main' ? 1 : 0);
     expect(robot.startSecondarySensorStreaming).toHaveBeenCalledTimes(mode === 'secondary' ? 1 : 0);
     expect(robot.startAllSensorStreaming).toHaveBeenCalledTimes(mode === 'all' ? 1 : 0);
@@ -515,9 +522,294 @@ describe('standalone upload stress runner', () => {
   });
 
   it.each([
+    { sensorStreaming: 'off', memoryPolling: false },
+    { sensorStreaming: 'all', memoryPolling: false },
+    { sensorStreaming: 'off', memoryPolling: true },
+    { sensorStreaming: 'all', memoryPolling: true },
+  ] as const)('isolates the first-packet reproduction traffic: %j', async (traffic) => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.uploadFile.mockImplementation(async () => {
+      if (robot.uploadFile.mock.calls.length === 1) {
+        expect(robot.getMemoryInfo).toHaveBeenCalledTimes(1); // Setup snapshot only.
+        expect(robot.startAllSensorStreaming).not.toHaveBeenCalled();
+      }
+      emitProgress();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      emitProgress(2);
+    });
+    const run = runUploadStressTest(robot, {
+      ...settings, ...traffic, count: 2, sizes: [43000], freeMemory: true, trafficStart: 'first-packet',
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(201);
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'completed', passed: 2, traffic: { triggerAttempt: 1, triggerPacket: 1 } });
+    expect(robot.startAllSensorStreaming).toHaveBeenCalledTimes(traffic.sensorStreaming === 'all' ? 1 : 0);
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(traffic.memoryPolling ? 2 : 1);
+    expect(report.memoryPolling.requested).toBe(traffic.memoryPolling ? 1 : 0);
+    expect(report.sensorStreaming.confirmed).toBe(traffic.sensorStreaming === 'all');
+    expect(report.requiresReload).toBe(false);
+    expect(robot.disconnect).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('starts polling after the first-packet stream command completes without waiting for sensor notifications', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    const streamStart = createDeferred();
+    const upload = createDeferred();
+    robot.startAllSensorStreaming.mockImplementation(() => streamStart.promise);
+    robot.uploadFile.mockImplementation(async () => { emitProgress(); await upload.promise; });
+    const run = runUploadStressTest(robot, {
+      ...settings, count: 1, trafficStart: 'first-packet', sensorStreaming: 'all', memoryPolling: true,
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(1);
+    streamStart.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(2);
+    emitSensors();
+    emitSensors('secondary');
+    upload.resolve();
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'completed', sensorStreaming: { confirmed: true }, memoryPolling: { succeeded: 1 } });
+    expect(report.memoryPolling.samples[0]).toMatchObject({ attempt: 1, uploadedPackets: 1 });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('uses a response-or-timeout plus delay cadence, continues after GATT errors, and records late responses', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const robot = fakeRobot();
+    const late = createDeferred<{ ram_bytes_free: number; flash_bytes_free: number }>();
+    const upload = createDeferred();
+    robot.getMemoryInfo
+      .mockResolvedValueOnce({ ram_bytes_free: 10, flash_bytes_free: 20 })
+      .mockImplementationOnce(() => late.promise)
+      .mockRejectedValueOnce(new Error('GATT operation failed for unknown reason.'));
+    robot.uploadFile.mockImplementation(async () => { emitProgress(); await upload.promise; });
+    const run = runUploadStressTest(robot, {
+      ...settings, count: 1, trafficStart: 'first-packet', memoryPolling: true, timeoutMs: 30000,
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(4);
+    late.resolve({ ram_bytes_free: 8, flash_bytes_free: 20 });
+    await vi.advanceTimersByTimeAsync(0);
+    upload.resolve();
+    const report = await run;
+    expect(report).toMatchObject({
+      outcome: 'completed', requiresReload: false,
+      memoryPolling: { requested: 3, succeeded: 1, failed: 1, timedOut: 1, pending: 0, peakPending: 2 },
+    });
+    expect(report.memoryPolling.samples.map(({ outcome }) => outcome)).toEqual(['timeout', 'failed', 'passed']);
+    expect(report.memoryPolling.samples[0]).toMatchObject({ durationMs: 4000, connectedAtEnd: true, settledAt: expect.any(String) });
+    expect(report.memoryPolling.samples[1].error).toContain('GATT operation failed');
+    expect(report.memoryPolling.firstIssue?.number).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('lets an in-flight memory read finish at normal shutdown without issuing another poll', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.getMemoryInfo.mockResolvedValueOnce({ ram_bytes_free: 10, flash_bytes_free: 20 }).mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return { ram_bytes_free: 9, flash_bytes_free: 20 };
+    });
+    robot.uploadFile.mockImplementation(async () => {
+      emitProgress();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    const run = runUploadStressTest(robot, {
+      ...settings, count: 1, trafficStart: 'first-packet', memoryPolling: true,
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(500);
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'completed', requiresReload: false, memoryPolling: { requested: 1, succeeded: 1, pending: 0 } });
+    expect(robot.disconnect).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('captures the reported 62/87-packet stall with an open link and stops all background work', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const robot = fakeRobot();
+    const stuckWrite = createDeferred();
+    const stuckMemory = createDeferred<{ ram_bytes_free: number; flash_bytes_free: number }>();
+    robot.getMemoryInfo.mockResolvedValueOnce({ ram_bytes_free: 100000, flash_bytes_free: 200000 })
+      .mockImplementation(() => stuckMemory.promise);
+    const characteristic = new FakeBluetoothCharacteristic({
+      onWriteWithResponse: async (_, target) => {
+        if (target.writesWithResponse.length === 63) {
+          await stuckWrite.promise;
+          throw new Error('Test released the stalled write');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 320));
+      },
+    });
+    robot.uploadFile.mockImplementation((file) => uploadFile(characteristic.asBluetoothCharacteristic(), file));
+    const sensors = setInterval(() => { emitSensors(); emitSensors('secondary'); }, 200);
+    const run = runUploadStressTest(robot, {
+      ...settings, count: 10, sizes: [43000], freeMemory: true, timeoutMs: 30000,
+      trafficStart: 'first-packet', sensorStreaming: 'all', memoryPolling: true,
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(49840);
+    const report = await run;
+    clearInterval(sensors);
+    expect(report).toMatchObject({
+      outcome: 'failed', passed: 0, failed: 1, requiresReload: true,
+      connection: { connectedBeforeTesterDisconnect: true, testerDisconnectRequestedAt: expect.any(String) },
+      sensorStreaming: { confirmed: true },
+    });
+    expect(report.connection.disconnectedAt).toBeUndefined();
+    expect(report.attempts[0]).toMatchObject({
+      uploadedPackets: 62, totalPackets: 87, uploadedBytes: 30867,
+      lastPacketIntervalMs: 320, noProgressMs: 30000, connectedAtEnd: true,
+    });
+    expect(report.memoryPolling.timedOut).toBeGreaterThan(0);
+    expect(report.memoryPolling.pending).toBeGreaterThan(0);
+    expect(report.memoryPolling.firstIssue?.connectedAtEnd).toBe(true);
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(1); // No cleanup behind the stuck write.
+    expect(robot.disconnect).toHaveBeenCalledTimes(1);
+    const snapshot = JSON.stringify(report);
+    const readCount = robot.getMemoryInfo.mock.calls.length;
+    stuckWrite.resolve();
+    stuckMemory.reject(new Error('Late memory failure after tester shutdown'));
+    emitProgress(63);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(JSON.stringify(report)).toBe(snapshot);
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(readCount);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('records first-packet sensor startup failures without an unhandled background rejection', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.startAllSensorStreaming.mockRejectedValue(new Error('Stream start failed'));
+    robot.uploadFile.mockImplementation(async () => {
+      emitProgress();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    const run = runUploadStressTest(robot, {
+      ...settings, trafficStart: 'first-packet', sensorStreaming: 'all', memoryPolling: true,
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(100);
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'failed', passed: 1, traffic: { startError: 'Error: Stream start failed' } });
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(1);
+    expect(robot.uploadFile).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not start another upload if sensor startup fails during the inter-upload delay', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    robot.startAllSensorStreaming.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      throw new Error('Delayed stream start failure');
+    });
+    robot.uploadFile.mockImplementation(async () => { emitProgress(); });
+    const run = runUploadStressTest(robot, {
+      ...settings, delayMs: 500, trafficStart: 'first-packet', sensorStreaming: 'all',
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(500);
+    const report = await run;
+    expect(report.outcome).toBe('failed');
+    expect(robot.uploadFile).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('requires reload when a memory request stays pending after a successful upload', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const robot = fakeRobot();
+    robot.getMemoryInfo.mockResolvedValueOnce({ ram_bytes_free: 10, flash_bytes_free: 20 })
+      .mockImplementationOnce(() => new Promise(() => {}));
+    robot.uploadFile.mockImplementation(async () => {
+      emitProgress();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    const run = runUploadStressTest(robot, {
+      ...settings, count: 1, trafficStart: 'first-packet', sensorStreaming: 'all', memoryPolling: true,
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(4000);
+    const report = await run;
+    expect(report).toMatchObject({ passed: 1, failed: 0, requiresReload: true, memoryPolling: { timedOut: 1, pending: 1, requested: 1 } });
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(1);
+    expect(robot.disconnect).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not start deferred traffic when cleanup fails before the first packet', async () => {
+    const robot = fakeRobot();
+    robot.freeMemory.mockRejectedValue(new Error('Cleanup failed'));
+    const report = await runUploadStressTest(robot, {
+      ...settings, freeMemory: true, trafficStart: 'first-packet', sensorStreaming: 'all', memoryPolling: true,
+    }, new AbortController().signal);
+    expect(report.traffic.startedAt).toBeUndefined();
+    expect(report.memoryPolling.requested).toBe(0);
+    expect(robot.startAllSensorStreaming).not.toHaveBeenCalled();
+    emitProgress();
+    expect(robot.startAllSensorStreaming).not.toHaveBeenCalled();
+  });
+
+  it('times out a stuck first-packet stream command and never starts polling after it resolves late', async () => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    const pending = createDeferred();
+    robot.startAllSensorStreaming.mockImplementation(() => pending.promise);
+    robot.uploadFile.mockImplementation(async () => {
+      emitProgress();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    const run = runUploadStressTest(robot, {
+      ...settings, count: 1, trafficStart: 'first-packet', sensorStreaming: 'all', memoryPolling: true,
+    }, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(1000);
+    const report = await run;
+    expect(report).toMatchObject({ outcome: 'failed', requiresReload: true, memoryPolling: { requested: 0 } });
+    const snapshot = JSON.stringify(report);
+    pending.resolve();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(JSON.stringify(report)).toBe(snapshot);
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(1);
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(['stop', 'disconnect'] as const)('stops memory polling after %s and ignores late API results', async (action) => {
+    vi.useFakeTimers();
+    const robot = fakeRobot();
+    const upload = createDeferred();
+    const controller = new AbortController();
+    robot.uploadFile.mockImplementation(async () => { emitProgress(); await upload.promise; });
+    const run = runUploadStressTest(robot, {
+      ...settings, trafficStart: 'first-packet', memoryPolling: true,
+    }, controller.signal);
+    await vi.advanceTimersByTimeAsync(100);
+    if (action === 'stop') controller.abort();
+    else {
+      document.dispatchEvent(new CustomEvent('thymio-connected', { detail: false }));
+      document.dispatchEvent(new CustomEvent('thymio-connected', { detail: true }));
+    }
+    upload.resolve();
+    const report = await run;
+    expect(report.outcome).toBe(action === 'stop' ? 'stopped' : 'failed');
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(robot.getMemoryInfo).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([
     { count: 0 }, { count: 1.5 }, { seed: 0 }, { sizes: [] }, { sizes: [NaN] },
     { sizes: [-1] }, { sizes: [1048577] }, { delayMs: -1 }, { timeoutMs: Infinity },
     { sensorStreaming: 'unknown' as Settings['sensorStreaming'] },
+    { trafficStart: 'unknown' as Settings['trafficStart'] },
+    { memoryPollIntervalMs: 0 }, { memoryPollTimeoutMs: 99 }, { memoryPollTimeoutMs: Infinity },
   ])('rejects invalid settings before contacting the robot: %j', (invalid) => {
     expect(() => validateSettings({ ...settings, ...invalid })).toThrow();
   });

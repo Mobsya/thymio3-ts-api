@@ -4,6 +4,7 @@ import {
   THYMIO_SENSOR_VALUES_EVENT_ID,
 } from '../src/constants';
 import type { UploadProgress } from '../src/utils';
+import { createMemoryPoller, type MemoryPollingReport } from './upload-stress-memory';
 
 export type SensorStreamingMode = 'off' | 'main' | 'secondary' | 'all';
 
@@ -16,6 +17,10 @@ export type Settings = {
   freeMemory: boolean;
   stopOnFailure: boolean;
   sensorStreaming: SensorStreamingMode;
+  trafficStart: 'before-uploads' | 'first-packet';
+  memoryPolling: boolean;
+  memoryPollIntervalMs: number;
+  memoryPollTimeoutMs: number;
 };
 
 type RobotAPI = {
@@ -62,7 +67,13 @@ export type Attempt = {
   durationMs: number;
   finishedElapsedMs?: number;
   uploadDurationMs?: number;
+  uploadStartedAt?: string;
   uploadBytesPerSecond?: number;
+  lastProgressAt?: string;
+  lastProgressElapsedMs?: number;
+  lastPacketIntervalMs?: number;
+  noProgressMs?: number;
+  connectedAtEnd?: boolean;
   phase: 'cleanup' | 'upload';
   outcome: 'running' | 'passed' | 'failed';
   error?: string;
@@ -90,8 +101,21 @@ export type Report = {
   sensorStreaming: {
     mode: SensorStreamingMode;
     confirmed: boolean;
+    confirmedAt?: string;
     notifications: SensorActivity;
     cleanupError?: string;
+  };
+  traffic: {
+    startedAt?: string;
+    triggerAttempt?: number;
+    triggerPacket?: number;
+    startError?: string;
+  };
+  memoryPolling: MemoryPollingReport;
+  connection: {
+    disconnectedAt?: string;
+    testerDisconnectRequestedAt?: string;
+    connectedBeforeTesterDisconnect?: boolean;
   };
   passed: number;
   failed: number;
@@ -163,6 +187,12 @@ export function validateSettings(settings: Settings): void {
   integer(settings.seed, 1, 0xffffffff, 'Seed');
   integer(settings.delayMs, 0, 60000, 'Delay');
   integer(settings.timeoutMs, 1000, 600000, 'Inactivity timeout');
+  integer(settings.memoryPollIntervalMs, 1, 60000, 'Delay after memory reads');
+  integer(settings.memoryPollTimeoutMs, 100, 600000, 'Memory read timeout');
+  if (typeof settings.memoryPolling !== 'boolean') throw new Error('Memory polling must be enabled or disabled.');
+  if (!['before-uploads', 'first-packet'].includes(settings.trafficStart)) {
+    throw new Error('Background traffic must start before uploads or after the first packet.');
+  }
   if (!['off', 'main', 'secondary', 'all'].includes(settings.sensorStreaming)) {
     throw new Error('Sensor streaming must be off, main, secondary, or all.');
   }
@@ -246,7 +276,7 @@ export async function runUploadStressTest(
 
   const runStarted = performance.now();
   const report: Report = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     uploadTimeoutMode: 'inactivity',
     startedAt: new Date().toISOString(),
     outcome: 'running', reason: '', requiresReload: false,
@@ -259,6 +289,12 @@ export async function runUploadStressTest(
       mode: settings.sensorStreaming, confirmed: false,
       notifications: { main: 0, secondary: 0 },
     },
+    traffic: {},
+    memoryPolling: {
+      enabled: settings.memoryPolling, requested: 0, succeeded: 0, failed: 0, timedOut: 0,
+      pending: 0, peakPending: 0, samples: [], omittedSamples: 0,
+    },
+    connection: {},
     passed: 0, failed: 0, attempts: [], events: [],
   };
   let active: Attempt | undefined;
@@ -266,7 +302,16 @@ export async function runUploadStressTest(
   let streamingRequested = false;
   let observingSensors = false;
   let uploading = false;
+  let finishing = false;
+  let lastPacketTime = runStarted;
+  let trafficStartTask: Promise<void> | undefined;
   const event = (message: string) => report.events.push({ at: new Date().toISOString(), message });
+  const memoryPoller = createMemoryPoller(
+    () => api.getMemoryInfo(), () => api.isConnected(),
+    () => ({ attempt: active?.number, uploadedPackets: active?.uploadedPackets }),
+    settings.memoryPollIntervalMs, settings.memoryPollTimeoutMs, report.memoryPolling,
+    () => !disconnected && api.isConnected(),
+  );
   const onSensor = (notification: Event) => {
     if (!observingSensors) return;
     const kind = notification.type === THYMIO_SENSOR_VALUES_EVENT_ID ? 'main' : 'secondary';
@@ -278,11 +323,61 @@ export async function runUploadStressTest(
     };
     record(report.sensorStreaming.notifications);
     if (active && uploading) record(active.sensorNotifications);
+    if (streamingRequested && !report.sensorStreaming.confirmed && hasRequestedSensors(settings.sensorStreaming, report.sensorStreaming.notifications)) {
+      report.sensorStreaming.confirmed = true;
+      report.sensorStreaming.confirmedAt = at;
+      event('Requested sensor streaming confirmed by received notifications.');
+    }
   };
   const onConnection = (notification: Event) => {
     if (!(notification as CustomEvent<boolean>).detail) {
       disconnected = true;
+      report.connection.disconnectedAt ??= new Date().toISOString();
       event('Bluetooth disconnected. This run will not resume after reconnection.');
+    }
+  };
+  const startTraffic = async () => {
+    report.traffic.startedAt = new Date().toISOString();
+    event(`Starting background traffic: ${settings.sensorStreaming} sensors, memory polling ${settings.memoryPolling ? 'on' : 'off'}.`);
+    if (settings.sensorStreaming !== 'off') {
+      const start = {
+        main: () => api.startMainSensorStreaming(),
+        secondary: () => api.startSecondarySensorStreaming(),
+        all: () => api.startAllSensorStreaming(),
+      }[settings.sensorStreaming];
+      streamingRequested = true;
+      await withTimeout(start, settings.timeoutMs, 'Starting sensor streaming');
+      if (disconnected || !api.isConnected()) throw new Error('Bluetooth disconnected while starting sensor streaming.');
+      // The reproduction starts polling once the stream command completes,
+      // without delaying uploads until sensor notifications arrive.
+      if (settings.trafficStart === 'before-uploads') {
+        await waitForSensors(settings.sensorStreaming, report.sensorStreaming.notifications, settings.timeoutMs, signal);
+      }
+    }
+    if (!finishing && !signal.aborted && !disconnected && api.isConnected()) memoryPoller.start();
+  };
+  const onProgress = (notification: Event) => {
+    const detail = (notification as CustomEvent<UploadProgress>).detail;
+    if (!active || !uploading || !detail || !Number.isInteger(detail.uploadedPackets) || detail.uploadedPackets <= active.uploadedPackets) return;
+    const now = performance.now();
+    active.uploadedPackets = detail.uploadedPackets;
+    active.totalPackets = detail.totalPackets;
+    active.lastProgressAt = new Date().toISOString();
+    active.lastProgressElapsedMs = now - runStarted;
+    active.lastPacketIntervalMs = now - lastPacketTime;
+    lastPacketTime = now;
+    if (settings.trafficStart === 'first-packet' && !trafficStartTask && !finishing && !signal.aborted && !disconnected) {
+      report.traffic.triggerAttempt = active.number;
+      report.traffic.triggerPacket = detail.uploadedPackets;
+      trafficStartTask = startTraffic().catch((error) => {
+        report.traffic.startError = describeError(error);
+        event(report.traffic.startError);
+        if (error instanceof OperationTimeout) report.requiresReload = true;
+        if (report.outcome === 'running' || report.outcome === 'completed') {
+          report.outcome = 'failed';
+          report.reason = report.traffic.startError;
+        }
+      });
     }
   };
   const onVisibility = () => event(`Page visibility: ${document.visibilityState}`);
@@ -307,6 +402,7 @@ export async function runUploadStressTest(
   document.addEventListener('visibilitychange', onVisibility);
   document.addEventListener(THYMIO_SENSOR_VALUES_EVENT_ID, onSensor);
   document.addEventListener(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, onSensor);
+  document.addEventListener(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, onProgress);
 
   try {
     event('Reading firmware and memory information.');
@@ -318,28 +414,18 @@ export async function runUploadStressTest(
       event('Stopping sensor streaming to establish the selected mode.');
       await withTimeout(() => api.stopSensorStreaming(), settings.timeoutMs, 'Stopping sensor streaming');
       observingSensors = true;
-      if (settings.sensorStreaming !== 'off' && !signal.aborted && !disconnected && api.isConnected()) {
-        const start = {
-          main: () => api.startMainSensorStreaming(),
-          secondary: () => api.startSecondarySensorStreaming(),
-          all: () => api.startAllSensorStreaming(),
-        }[settings.sensorStreaming];
-        streamingRequested = true;
-        event(`Starting ${settings.sensorStreaming} sensor streaming and waiting for notifications.`);
+      if (settings.trafficStart === 'before-uploads' && !signal.aborted && !disconnected && api.isConnected()) {
+        event('Starting background traffic before uploads.');
         onUpdate(report);
-        await withTimeout(start, settings.timeoutMs, 'Starting sensor streaming');
-        if (disconnected || !api.isConnected()) throw new Error('Bluetooth disconnected while starting sensor streaming.');
-        await waitForSensors(settings.sensorStreaming, report.sensorStreaming.notifications, settings.timeoutMs, signal);
-        report.sensorStreaming.confirmed = hasRequestedSensors(settings.sensorStreaming, report.sensorStreaming.notifications);
-        if (report.sensorStreaming.confirmed) event('Requested sensor streaming confirmed by received notifications.');
-      } else if (settings.sensorStreaming === 'off') {
-        event('Sensor streaming disabled for this run.');
+        await startTraffic();
+      } else if (settings.trafficStart === 'first-packet') {
+        event('Background traffic will start after the first completed upload packet.');
       }
       onUpdate(report);
     }
 
     for (let index = 0; index < settings.count; index++) {
-      if (signal.aborted || disconnected || !api.isConnected()) break;
+      if (report.outcome !== 'running' || signal.aborted || disconnected || !api.isConnected()) break;
       const size = settings.sizes[index % settings.sizes.length];
       const seed = ((settings.seed - 1 + index) % 0xffffffff) + 1;
       const file = createTestFile(size, seed, index + 1);
@@ -365,6 +451,8 @@ export async function runUploadStressTest(
         uploading = true;
         await withUploadInactivityTimeout(() => {
           uploadStarted = performance.now();
+          attempt.uploadStartedAt = new Date().toISOString();
+          lastPacketTime = uploadStarted;
           return api.uploadFile(file);
         }, settings.timeoutMs, `Upload ${attempt.number}`);
         attempt.outcome = 'passed';
@@ -388,7 +476,9 @@ export async function runUploadStressTest(
         const finished = performance.now();
         attempt.durationMs = Math.round(finished - started);
         attempt.finishedElapsedMs = finished - runStarted;
+        attempt.connectedAtEnd = api.isConnected();
         if (uploadStarted !== undefined) {
+          attempt.noProgressMs = finished - lastPacketTime;
           // Include preparation and the robot's ACK, but exclude RAM cleanup and inter-upload delays.
           attempt.uploadDurationMs = finished - uploadStarted;
           if (attempt.outcome === 'passed' && attempt.uploadDurationMs > 0) {
@@ -417,9 +507,17 @@ export async function runUploadStressTest(
   } catch (error) {
     report.outcome = 'failed';
     report.reason = describeError(error);
-    report.requiresReload = error instanceof OperationTimeout;
+    if (error instanceof OperationTimeout) report.requiresReload = true;
   } finally {
     active = undefined;
+    finishing = true;
+    document.removeEventListener(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, onProgress);
+    await memoryPoller.stop(report.requiresReload || disconnected || !api.isConnected());
+    await trafficStartTask;
+    if (report.memoryPolling.pending > 0) {
+      report.requiresReload = true;
+      event(`${report.memoryPolling.pending} memory request(s) still pending at shutdown. Reload before another run.`);
+    }
     observingSensors = false;
     document.removeEventListener(THYMIO_SENSOR_VALUES_EVENT_ID, onSensor);
     document.removeEventListener(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, onSensor);
@@ -445,7 +543,9 @@ export async function runUploadStressTest(
     event(report.reason);
     // Do not wait for a stuck Bluetooth operation, or start another upload behind it.
     if (report.requiresReload) {
-      const message = `Tester requested a disconnect after its timeout: ${report.reason}`;
+      report.connection.testerDisconnectRequestedAt = new Date().toISOString();
+      report.connection.connectedBeforeTesterDisconnect = api.isConnected();
+      const message = `Tester requested a disconnect after a timeout or pending operation: ${report.reason}`;
       event(message);
       console.debug(`[Upload stress test] ${message}`);
       void api.disconnect().catch(() => {});

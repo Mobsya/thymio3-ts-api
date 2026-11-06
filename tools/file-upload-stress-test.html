@@ -85,6 +85,14 @@
     <form id="settings-form">
       <fieldset id="settings">
         <div class="grid">
+          <label class="wide">43,000-byte reproduction preset<select id="reproduction-preset" aria-describedby="reproduction-help">
+            <option value="custom">Custom settings</option>
+            <option value="baseline">Upload only (baseline)</option>
+            <option value="sensors">Sensors only</option>
+            <option value="memory">Memory reads only</option>
+            <option value="combined">Sensors + memory reads (reported failure)</option>
+          </select></label>
+          <small id="reproduction-help" class="wide">Each preset uses 10 × 43,000-byte uploads, RAM cleanup, a 30-second upload inactivity timeout, and stops on the first upload failure. Enabled background traffic starts after the first packet. For comparable runs, restart the robot and reload this page between scenarios, then connect and select a preset. No console commands are needed.</small>
           <label>Number of uploads<input id="count" type="number" min="1" max="10000" value="100" required></label>
           <label>Delay between uploads (ms)<input id="delay" type="number" min="0" max="60000" value="0" required></label>
           <label>Inactivity timeout (seconds)<input id="timeout" type="number" min="1" max="600" value="30" required aria-describedby="timeout-help"></label>
@@ -98,7 +106,15 @@
             <option value="secondary">Secondary sensors</option>
             <option value="all">All sensors</option>
           </select></label>
-          <small id="streaming-help" class="wide">Compare Off and All sensors using the same sizes and seed. Streaming starts before uploads, stays enabled throughout the run, and stops afterward. Each selected stream must deliver data before uploads begin.</small>
+          <label>Start background traffic<select id="traffic-start" aria-describedby="streaming-help">
+            <option value="before-uploads">Before uploads</option>
+            <option value="first-packet">After first upload packet</option>
+          </select></label>
+          <small id="streaming-help" class="wide">Before uploads waits for data from each selected sensor stream. After first packet starts streaming once during the first upload, then starts memory polling as soon as the streaming command completes, matching the reported reproduction. Background traffic stays active across uploads until the run ends.</small>
+          <label class="check"><input id="memory-polling" type="checkbox">Poll memory during the run</label>
+          <label>Delay after memory reads (ms)<input id="memory-interval" type="number" min="1" max="60000" value="1000" required aria-describedby="memory-help"></label>
+          <label>Memory read timeout (seconds)<input id="memory-timeout" type="number" min="0.1" max="600" step="0.1" value="4" required aria-describedby="memory-help"></label>
+          <small id="memory-help" class="wide">Each memory read waits for a response or its timeout, then waits the configured delay before the next read. Like the reproduction script, polling continues after errors and timeouts; a timed-out API request may still be pending. The initial firmware/memory snapshot is separate from polling. Any requests still pending at shutdown require disconnection and a page reload.</small>
           <div class="wide">
             <label class="check"><input id="free-memory" type="checkbox">Release uploaded-file RAM before each attempt</label>
             <label class="check"><input id="stop-on-failure" type="checkbox" checked>Stop on the first failure</label>
@@ -128,6 +144,8 @@
     <progress id="run-progress" value="0" max="100" aria-label="Completed uploads"></progress>
     <p id="current" class="muted">No upload in progress.</p>
     <p id="sensor-status" class="muted" role="status">Sensor streaming: no run yet.</p>
+    <p id="memory-status" class="muted" role="status">Memory polling: no run yet.</p>
+    <p id="packet-status" class="muted">Packet progress: no run yet.</p>
     <div class="speed-panel">
       <h3 id="speed-heading">File upload speed</h3>
       <p id="speed-description" class="muted"><small>Each point shows a successful file's average upload speed, including preparation and robot acknowledgement. RAM cleanup and delays between uploads are excluded. 1 KiB = 1,024 bytes.</small></p>
@@ -145,7 +163,7 @@
         <tbody id="results"></tbody>
       </table>
     </div>
-    <p><small>Pass means the robot acknowledged the upload in RAM. Sensor event counts cover each upload through its acknowledgement; a short upload may finish between sensor notifications. The report includes streaming mode, notification counts and first/last timestamps, settings, firmware, memory, per-attempt timing and upload speed in bytes per second, and the last 100 verbose entries for each failed attempt. Successful attempts retain packet summaries. Full diagnostics remain in the console under <strong>Verbose</strong>.</small></p>
+    <p><small>Pass means the robot acknowledged the upload in RAM; memory polling errors are reported separately. Sensor event counts cover each upload through its acknowledgement. The JSON report includes settings, firmware, upload timing and speed, last packet progress, sensor counts, memory read outcomes and timestamps (last 1,000 reads plus the first issue), connection loss and tester-requested disconnection, and the last 100 verbose entries for each failed attempt. Full diagnostics remain in the console under <strong>Verbose</strong>.</small></p>
   </section>
 </main>
 <script>/* EMBED_THYMIO_API */</script>
@@ -297,7 +315,9 @@
     }
     recordSpeed(attempt);
     if (next.outcome !== 'running') {
-      notice(`${next.outcome.toUpperCase()}: ${next.reason} ${next.passed} passed, ${next.failed} failed, ${next.settings.count - next.attempts.length} not attempted.`, next.failed > 0 || next.outcome === 'failed');
+      const memoryIssues = next.memoryPolling.failed + next.memoryPolling.timedOut;
+      const reload = next.requiresReload ? ' Reload this page before another run.' : '';
+      notice(`${next.outcome.toUpperCase()}: ${next.reason} ${next.passed} passed, ${next.failed} failed, ${next.settings.count - next.attempts.length} not attempted. ${memoryIssues} memory polling errors/timeouts.${reload}`, next.failed > 0 || next.outcome === 'failed' || memoryIssues > 0);
     }
     updateElapsed();
     controls();
@@ -307,9 +327,22 @@
     const end = report.finishedAt ? Date.parse(report.finishedAt) : Date.now();
     $('elapsed').textContent = `${((end - Date.parse(report.startedAt)) / 1000).toFixed(1)} s`;
     const stream = report.sensorStreaming;
-    const status = stream.mode === 'off' ? 'baseline' : stream.confirmed ? 'observed before uploads' : 'not confirmed';
+    const status = stream.mode === 'off' ? 'disabled' : stream.confirmed ? 'confirmed by notifications' : 'not confirmed';
     $('sensor-status').textContent = `Sensor streaming: ${stream.mode} (${status}). Received ${stream.notifications.main} main / ${stream.notifications.secondary} secondary events during this run.`;
+    const memory = report.memoryPolling;
+    const memoryState = !memory.enabled ? 'off' : memory.stoppedAt ? 'stopped' : memory.startedAt ? 'active' : 'waiting to start';
+    const firstIssue = memory.firstIssue ? ` First issue at ${memory.firstIssue.finishedAt}: ${memory.firstIssue.error}` : '';
+    $('memory-status').textContent = `Memory polling: ${memoryState}. ${memory.requested} requested / ${memory.succeeded} responses / ${memory.failed} errors / ${memory.timedOut} timeouts / ${memory.pending} pending.${firstIssue}`;
     const attempt = report.attempts.at(-1);
+    if (attempt) {
+      const lastProgress = attempt.lastProgressAt || attempt.uploadStartedAt;
+      const quietMs = attempt.outcome === 'running'
+        ? lastProgress ? Date.now() - Date.parse(lastProgress) : 0
+        : attempt.noProgressMs || 0;
+      const interval = attempt.lastPacketIntervalMs === undefined ? '—' : `${Math.round(attempt.lastPacketIntervalMs)} ms`;
+      const connected = attempt.outcome === 'running' ? api.isConnected() : attempt.connectedAtEnd;
+      $('packet-status').textContent = `Packet progress: ${attempt.uploadedPackets}/${attempt.totalPackets || '?'} sent · last packet interval: ${interval} · no progress for ${(quietMs / 1000).toFixed(1)} s · link ${connected ? 'open' : 'closed'}${attempt.outcome === 'running' ? '' : ' at upload end'}.`;
+    } else $('packet-status').textContent = 'Packet progress: waiting for an upload.';
     const row = attempt && rows.get(attempt.number);
     if (row) row.children[5].textContent = `${attempt.sensorNotifications.main} / ${attempt.sensorNotifications.secondary}`;
   }
@@ -336,6 +369,25 @@
     catch (error) { notice(error.message || String(error), true); }
     controls();
   });
+  $('reproduction-preset').addEventListener('change', () => {
+    const preset = $('reproduction-preset').value;
+    if (preset === 'custom') return;
+    $('count').value = '10';
+    $('sizes').value = '43000';
+    $('seed').value = '1';
+    $('delay').value = '0';
+    $('timeout').value = '30';
+    $('free-memory').checked = true;
+    $('stop-on-failure').checked = true;
+    $('traffic-start').value = 'first-packet';
+    $('sensor-streaming').value = ['sensors', 'combined'].includes(preset) ? 'all' : 'off';
+    $('memory-polling').checked = ['memory', 'combined'].includes(preset);
+    $('memory-interval').value = '1000';
+    $('memory-timeout').value = '4';
+  });
+  $('settings').addEventListener('input', (event) => {
+    if (event.target.id !== 'reproduction-preset') $('reproduction-preset').value = 'custom';
+  });
   $('settings-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     if (busy || connecting || requiresReload) return;
@@ -345,6 +397,10 @@
       sizes: $('sizes').value.trim().split(/[\s,]+/).filter(Boolean).map(Number),
       freeMemory: $('free-memory').checked, stopOnFailure: $('stop-on-failure').checked,
       sensorStreaming: $('sensor-streaming').value,
+      trafficStart: $('traffic-start').value,
+      memoryPolling: $('memory-polling').checked,
+      memoryPollIntervalMs: Number($('memory-interval').value),
+      memoryPollTimeoutMs: Number($('memory-timeout').value) * 1000,
     };
     try {
       runner.validateSettings(settings);
