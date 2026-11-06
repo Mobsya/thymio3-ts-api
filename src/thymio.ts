@@ -47,6 +47,26 @@ function createSensorStreamingState(): SensorStreamingState {
 
 let sensorStreamingState = createSensorStreamingState();
 
+function getDeviceRequestOptions(): RequestDeviceOptions {
+  // Bluefy requires service filters; name filters with optionalServices failed there.
+  if (/Bluefy/i.test(navigator.userAgent ?? '')) {
+    return {
+      filters: [
+        { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID] }
+      ]
+    };
+  }
+
+  // Discover by name on Chromium, while authorizing both services for GATT access.
+  return {
+    filters: [
+      { namePrefix: 'THYMIO' },
+      { namePrefix: 'T3' }
+    ],
+    optionalServices: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID]
+  };
+}
+
 /**
  * Request a bluetooth device and connect to it.
  */
@@ -56,22 +76,7 @@ export async function requestAndConnect(): Promise<void> {
       throw new Error("Web Bluetooth not supported");
     }
 
-    // For Chromium-based browsers
-    /*
-    device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: 'THYMIO' }],
-      optionalServices: [
-        MAIN_SERVICE_UUID,
-        OTA_SERVICE_UUID
-      ]
-    });
-    */
-
-    device = await navigator.bluetooth.requestDevice({
-      filters: [
-        { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID]}
-      ]
-    });
+    device = await navigator.bluetooth.requestDevice(getDeviceRequestOptions());
 
     // Remove the T3 prefix upon 1.0 release
     if (!device.name?.startsWith('THYMIO') && !device.name?.startsWith('T3')) {

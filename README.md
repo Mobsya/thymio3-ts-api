@@ -32,6 +32,28 @@ npm run demo:run
 
 And open the `localhost:5173` in your browser.
 
+## Bluetooth browsers and discovery
+
+Use a browser that exposes `navigator.bluetooth`, a Bluetooth Low Energy adapter,
+and a powered-on, advertising robot. Open the demo over HTTPS, or on `localhost`
+for local Chromium development. Call `thymio.requestAndConnect()` directly from
+a click or tap handler so the browser can open its device chooser.
+
+| Browser / platform | Discovery | Prerequisites |
+| --- | --- | --- |
+| Chromium-derived browsers on Windows, macOS, and Android | Names starting with `THYMIO` or `T3` | Web Bluetooth enabled in the browser; Bluetooth and browser/site permissions enabled |
+| Chromium-derived browsers on Linux | Names starting with `THYMIO` or `T3` | Working BlueZ and BLE adapter; enable `chrome://flags/#enable-experimental-web-platform-features` and relaunch; allow browser/site access |
+| Bluefy on iOS / iPadOS | Both main and OTA service UUIDs | HTTPS, Bluetooth permission for Bluefy, and its normal user-agent containing `Bluefy` |
+
+For Chromium, both robot services are declared in `optionalServices`, authorizing
+GATT access after selection without requiring their UUIDs during discovery.
+Bluefy retains service-based discovery because name filters with
+`optionalServices` failed there. Bluefy detection is case-insensitive and does not
+depend on the operating system; browsers without a user-agent string use the
+Chromium request options. Custom user-agent overrides that hide Bluefy are not
+supported. Every Connect action opens at most one chooser; cancellation does not
+automatically retry with another filter.
+
 ## Testing
 
 Run the deterministic API and protocol-characterization tests with:

@@ -22,6 +22,59 @@ import {
   flushMicrotasks,
 } from './helpers/fake-bluetooth';
 
+const chromiumRequestOptions: RequestDeviceOptions = {
+  filters: [{ namePrefix: 'THYMIO' }, { namePrefix: 'T3' }],
+  optionalServices: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID],
+};
+
+const bluefyRequestOptions: RequestDeviceOptions = {
+  filters: [{ services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID] }],
+};
+
+// Representative user agents exercise option selection, not browser BLE implementations.
+const discoveryBrowsers = [
+  {
+    browser: 'Edge on Windows',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
+    options: chromiumRequestOptions,
+  },
+  {
+    browser: 'Chrome on macOS',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    options: chromiumRequestOptions,
+  },
+  {
+    browser: 'Chromium on Linux',
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    options: chromiumRequestOptions,
+  },
+  {
+    browser: 'Chrome on Android',
+    userAgent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+    options: chromiumRequestOptions,
+  },
+  {
+    browser: 'Bluefy on iPhone',
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Bluefy/3.3.0',
+    options: bluefyRequestOptions,
+  },
+  {
+    browser: 'Bluefy on iPad',
+    userAgent: 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Bluefy/3.3.0',
+    options: bluefyRequestOptions,
+  },
+  {
+    browser: 'Bluefy with a desktop user agent and mixed-case browser token',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15 bLuEfY/3.3.0',
+    options: bluefyRequestOptions,
+  },
+  {
+    browser: 'a browser without a user-agent string',
+    userAgent: undefined,
+    options: chromiumRequestOptions,
+  },
+];
+
 describe('top-level Thymio connection API', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -29,23 +82,27 @@ describe('top-level Thymio connection API', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  it('requests a Thymio device, connects characteristics, and dispatches connection events', async () => {
-    const { characteristics, device } = createRobot();
+  it.each(discoveryBrowsers.flatMap(browser =>
+    ['THYMIO-test', 'T3-test'].map(deviceName => ({ ...browser, deviceName }))
+  ))('connects $deviceName in $browser and initializes characteristics and events', async ({ userAgent, options, deviceName }) => {
+    const { characteristics, device } = createRobot(deviceName);
     const requestDevice = vi.fn().mockResolvedValue(device.asBluetoothDevice());
-    vi.stubGlobal('navigator', { bluetooth: { requestDevice } });
+    vi.stubGlobal('navigator', {
+      ...(userAgent === undefined ? {} : { userAgent }),
+      bluetooth: { requestDevice },
+    });
     const connectedEvents = collectDocumentEventDetails<boolean>(THYMIO_CONNECTED_EVENT_ID);
     const thymio = await import('../src/thymio');
 
-    await thymio.requestAndConnect();
+    const connection = thymio.requestAndConnect();
+    // Open the chooser synchronously within the caller's user gesture.
+    expect(requestDevice).toHaveBeenCalledWith(options);
+    await connection;
     await flushMicrotasks();
 
-    expect(requestDevice).toHaveBeenCalledWith({
-      filters: [
-        { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID] },
-      ],
-    });
+    expect(requestDevice).toHaveBeenCalledTimes(1);
     expect(thymio.isConnected()).toBe(true);
-    expect(thymio.getDeviceName()).toBe('THYMIO-test');
+    expect(thymio.getDeviceName()).toBe(deviceName);
     expect(connectedEvents.details).toEqual([true, true]);
     expect(characteristics.sensorStream.startNotificationsCount).toBe(1);
     expect(characteristics.python.startNotificationsCount).toBe(1);
@@ -79,6 +136,26 @@ describe('top-level Thymio connection API', () => {
 
     expect(thymio.isConnected()).toBe(false);
     expect(connectedEvents.details.at(-1)).toBe(false);
+  });
+
+  it.each(discoveryBrowsers)('does not reopen the chooser after cancellation in $browser', async ({ userAgent, options }) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = new DOMException('User cancelled the device chooser', 'NotFoundError');
+    const requestDevice = vi.fn().mockRejectedValue(error);
+    vi.stubGlobal('navigator', {
+      ...(userAgent === undefined ? {} : { userAgent }),
+      bluetooth: { requestDevice },
+    });
+    const connectedEvents = collectDocumentEventDetails<boolean>(THYMIO_CONNECTED_EVENT_ID);
+    const thymio = await import('../src/thymio');
+
+    await expect(thymio.requestAndConnect()).resolves.toBeUndefined();
+
+    expect(requestDevice).toHaveBeenCalledTimes(1);
+    expect(requestDevice).toHaveBeenCalledWith(options);
+    expect(connectedEvents.details).toEqual([false]);
+    expect(thymio.isConnected()).toBe(false);
+    expect(console.error).toHaveBeenCalledWith('Could not connect to the Thymio device', error);
   });
 
   it('dispatches a failed connection event when the selected device name is not Thymio', async () => {
@@ -372,7 +449,7 @@ describe('temporary file upload sensor streaming workaround', () => {
   });
 });
 
-function createRobot() {
+function createRobot(deviceName = 'THYMIO-test') {
   const characteristics = createMainCharacteristics();
   const server = new FakeBluetoothServer(new Map([
     [MAIN_SERVICE_UUID, new FakeBluetoothService(new Map([
@@ -385,7 +462,7 @@ function createRobot() {
       [DEVICE_INFO_CHARACTERISTIC_UUID, characteristics.deviceInfo],
     ]))],
   ]), false);
-  const device = new FakeBluetoothDevice('THYMIO-test', server);
+  const device = new FakeBluetoothDevice(deviceName, server);
   for (const characteristic of Object.values(characteristics)) {
     Object.assign(characteristic, { service: { device } });
   }
