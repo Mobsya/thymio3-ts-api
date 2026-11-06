@@ -1,6 +1,22 @@
 import { THYMIO_FILE_DOWNLOAD_PROGRESS_EVENT_ID, THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID } from "./constants";
 import { queueBluetoothCall } from "./bluetooth-queue";
 import { createPayloadPackets, type UploadProgress } from "./utils";
+import { getMTU } from "./mtu";
+
+const FILE_UPLOAD_ACK_TIMEOUT_MS = 15_000;
+
+type FileUploadLog = {
+  timestamp: number,
+  elapsedMs: number,
+  level: "info" | "warn" | "error",
+  stage: "reading" | "preparing" | "sending" | "waiting" | "complete" | "failed",
+  message: string,
+  fileName: string,
+  fileSize: number,
+  uploadedPackets: number,
+  totalPackets: number,
+  uploadedBytes: number
+};
 
 export type FileListing = {
   name: string,
@@ -11,71 +27,152 @@ export async function uploadFile(
   fileCharacteristic: BluetoothRemoteGATTCharacteristic,
   file: File
 ): Promise<void> {
-  return new Promise<void>(async (resolve, reject) => {
-    const onResponse = (event: Event) => {
-      const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
-      if (!value) return;
+  const startedAt = Date.now();
+  let stage: FileUploadLog["stage"] = "reading";
+  let uploadedPackets = 0;
+  let totalPackets = 0;
+  let uploadedBytes = 0;
 
-      const view = new DataView(value.buffer);
-      const id = view.getUint8(0);
+  const log = (level: FileUploadLog["level"], message: string) => {
+    const timestamp = Date.now();
+    const detail: FileUploadLog = {
+      timestamp, elapsedMs: timestamp - startedAt, level, stage, message,
+      fileName: file.name, fileSize: file.size, uploadedPackets, totalPackets, uploadedBytes
+    };
+    console.debug(
+      `[File upload: ${JSON.stringify(file.name)} +${detail.elapsedMs}ms] ${message}`,
+      detail
+    );
+  };
 
-      if (id !== 0x01) return;
+  return new Promise<void>((resolve, reject) => {
+    const device = fileCharacteristic?.service?.device;
+    let settled = false;
+    let acknowledged = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-      const responseCode = view.getUint8(1);
-
-      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
-
-      switch(responseCode) {
-        case 0x00:
-          resolve();
-          break;
-        case 0x01:
-          reject(`File upload: CRC Mismatch`);
-          break;
-        case 0x02:
-          reject('File upload: Partial upload');
-          break;
-        case 0x03:
-          reject('File upload: Wrong sequence');
-          break;
-        case 0x04:
-          reject('File upload: File too big');
-          break;
-        default:
-          reject('File upload: Unknown response code')
-      }
+    const cleanup = () => {
+      fileCharacteristic?.removeEventListener("characteristicvaluechanged", onResponse);
+      device?.removeEventListener("gattserverdisconnected", onDisconnected);
+      clearTimeout(timeoutId);
     };
 
-    fileCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      const failedStage = stage;
+      stage = "failed";
+      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      log("error", `Upload failed during ${failedStage} after ${uploadedPackets}/${totalPackets} packets (${uploadedBytes}/${file.size} file bytes): ${message}`);
+      reject(error);
+    };
 
-    try {
+    const complete = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      stage = "complete";
+      log("info", `Upload complete: robot confirmed ${uploadedBytes} bytes in RAM. Use Save file to keep it in storage.`);
+      resolve();
+    };
+
+    const onDisconnected = () => fail(new Error("File upload: Bluetooth disconnected. Reconnect to the robot and try again."));
+
+    const onResponse = (event: Event) => {
+      const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
+      if (settled) return;
+      if (!value || value.byteLength === 0) {
+        log("warn", "Received an empty notification; still waiting for the upload acknowledgement.");
+        return;
+      }
+
+      const id = value.getUint8(0);
+      if (id !== 0x01) {
+        log("info", `Ignoring notification 0x${id.toString(16).padStart(2, "0")} (${value.byteLength} bytes); upload acknowledgement uses 0x01.`);
+        return;
+      }
+      if (value.byteLength < 2) {
+        fail(new Error("File upload: Malformed acknowledgement (missing response code)"));
+        return;
+      }
+
+      const responseCode = value.getUint8(1);
+      const responses: Record<number, string> = {
+        0x00: "Success",
+        0x01: "CRC Mismatch",
+        0x02: "Partial upload",
+        0x03: "Wrong sequence",
+        0x04: "File too big"
+      };
+      const response = responses[responseCode] ?? "Unknown response code";
+      log(responseCode === 0 ? "info" : "error", `Robot acknowledgement 0x${responseCode.toString(16).padStart(2, "0")}: ${response}.`);
+      if (responseCode !== 0) {
+        fail(`File upload: ${response}`);
+        return;
+      }
+
+      // Notifications can arrive before the last GATT write promise resolves.
+      acknowledged = true;
+      if (totalPackets > 0 && uploadedPackets === totalPackets) complete();
+    };
+
+    const send = async () => {
+      log("info", `Starting upload of ${JSON.stringify(file.name)} (${file.size} bytes, type ${file.type || "unspecified"}).`);
+      if (!fileCharacteristic || device?.gatt?.connected === false) {
+        throw new Error("File upload: Bluetooth is not connected. Connect to the robot and try again.");
+      }
+      fileCharacteristic.addEventListener("characteristicvaluechanged", onResponse);
+      device?.addEventListener("gattserverdisconnected", onDisconnected);
+      log("info", "Listening for robot acknowledgements. Reading the local file.");
+
       const buffer = await file.arrayBuffer();
+      if (settled) return;
       const payload = new Uint8Array(buffer);
-
+      stage = "preparing";
+      log("info", `Read ${payload.byteLength} bytes. Calculating CRC32 and preparing Bluetooth packets.`);
       const packets = createPayloadPackets(payload, true);
+      totalPackets = packets.length;
+      const crc = new DataView(packets[0].buffer).getUint32(5);
+      log("info", `Prepared ${totalPackets} packets; BLE write limit ${getMTU()} bytes; CRC32 0x${crc.toString(16).padStart(8, "0")}.`);
 
-      const totalPackets = packets.length;
-      let uploadedPackets = 0;
+      stage = "sending";
+      for (const [index, packet] of packets.entries()) {
+        if (settled) return;
+        const packetBytes = packet.byteLength - (index === 0 ? 11 : 2);
+        log("info", `Queueing packet ${index + 1}/${totalPackets} (sequence ${index}, ${packet.byteLength} Bluetooth bytes, ${packetBytes} file bytes).`);
+        await queueBluetoothCall(() => {
+          if (settled) return;
+          log("info", `Writing packet ${index + 1}/${totalPackets}; waiting for Bluetooth write response.`);
+          return fileCharacteristic.writeValueWithResponse(packet);
+        });
+        if (settled) return;
 
-      for(const packet of packets) {
-        await queueBluetoothCall(() => fileCharacteristic.writeValueWithResponse(packet));
-
+        uploadedPackets++;
+        uploadedBytes += packetBytes;
         const uploadProgressData: UploadProgress = {
           uploadedPackets,
           totalPackets,
           percentage: (uploadedPackets / totalPackets) * 100
         };
-        const uploadProgressEvent = new CustomEvent(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, {
+        document.dispatchEvent(new CustomEvent(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, {
           detail: uploadProgressData
-        });
-        document.dispatchEvent(uploadProgressEvent);
-        uploadedPackets++;
+        }));
+        log("info", `Sent packet ${uploadedPackets}/${totalPackets}: ${uploadedBytes}/${payload.byteLength} file bytes (${uploadProgressData.percentage.toFixed(1)}%).`);
       }
-    } catch (err) {
-      console.error(err);
-      fileCharacteristic.removeEventListener("characteristicvaluechanged", onResponse);
-      reject(err);
-    }
+
+      if (acknowledged) {
+        complete();
+        return;
+      }
+      stage = "waiting";
+      log("info", `All packets sent. Waiting up to ${FILE_UPLOAD_ACK_TIMEOUT_MS / 1000} seconds for the robot to confirm the upload; 100% sent does not yet mean success.`);
+      timeoutId = setTimeout(() => {
+        fail(new Error(`File upload: No acknowledgement from the robot within ${FILE_UPLOAD_ACK_TIMEOUT_MS / 1000} seconds. The upload could not be confirmed; reconnect and try again.`));
+      }, FILE_UPLOAD_ACK_TIMEOUT_MS);
+    };
+
+    void send().catch(fail);
   });
 }
 

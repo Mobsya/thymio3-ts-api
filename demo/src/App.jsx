@@ -84,6 +84,7 @@ export default function App() {
 
   // --- Event listeners from thymio.global.js ---
   useEffect(() => {
+    let connectionGeneration = 0;
     const onStdOut = (event) => {
       const value = String(event.detail ?? "");
       setStdOut((entries) => [
@@ -92,6 +93,7 @@ export default function App() {
       ]);
     };
     const onConnected = (event) => {
+      const generation = ++connectionGeneration;
       const isConnected = Boolean(event.detail);
 
       if (isConnected) {
@@ -104,9 +106,11 @@ export default function App() {
         void (async () => {
           try {
             const info = await getThymio()?.getFirmwareInfo?.();
-            if (info) setFirmwareInfo(info);
+            if (generation === connectionGeneration && info) setFirmwareInfo(info);
           } catch (err) {
-            setFirmwareInfoError(err?.message ?? "Failed to read firmware info");
+            if (generation === connectionGeneration) {
+              setFirmwareInfoError(err?.message ?? "Failed to read firmware info");
+            }
           }
         })();
       } else {
@@ -138,6 +142,7 @@ export default function App() {
     document.addEventListener("thymio-std-out-values", onStdOut);
 
     return () => {
+      connectionGeneration++;
       document.removeEventListener("thymio-connected", onConnected);
       document.removeEventListener("thymio-prompt-manual-reconnection", onManualReconn);
       document.removeEventListener("thymio-python-execution-status", onPythonExecStatus);

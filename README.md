@@ -32,6 +32,28 @@ npm run demo:run
 
 And open the `localhost:5173` in your browser.
 
+## Bluetooth browsers and discovery
+
+Use a browser that exposes `navigator.bluetooth`, a Bluetooth Low Energy adapter,
+and a powered-on, advertising robot. Open the demo over HTTPS, or on `localhost`
+for local Chromium development. Call `thymio.requestAndConnect()` directly from
+a click or tap handler so the browser can open its device chooser.
+
+| Browser / platform | Discovery | Prerequisites |
+| --- | --- | --- |
+| Chromium-derived browsers on Windows, macOS, and Android | Names starting with `THYMIO` or `T3` | Web Bluetooth enabled in the browser; Bluetooth and browser/site permissions enabled |
+| Chromium-derived browsers on Linux | Names starting with `THYMIO` or `T3` | Working BlueZ and BLE adapter; enable `chrome://flags/#enable-experimental-web-platform-features` and relaunch; allow browser/site access |
+| Bluefy on iOS / iPadOS | Both main and OTA service UUIDs | HTTPS, Bluetooth permission for Bluefy, and its normal user-agent containing `Bluefy` |
+
+For Chromium, both robot services are declared in `optionalServices`, authorizing
+GATT access after selection without requiring their UUIDs during discovery.
+Bluefy retains service-based discovery because name filters with
+`optionalServices` failed there. Bluefy detection is case-insensitive and does not
+depend on the operating system; browsers without a user-agent string use the
+Chromium request options. Custom user-agent overrides that hide Bluefy are not
+supported. Every Connect action opens at most one chooser; cancellation does not
+automatically retry with another filter.
+
 ## Testing
 
 Run the deterministic API and protocol-characterization tests with:
@@ -83,6 +105,28 @@ The API checks the connected ESP32 firmware version against the compatibility ra
 `thymio.disconnect()` - disconnects the Thymio device\
 `thymio.getAPIVersion()` - returns the API firmware version from `package.json`
 
+Each connection stops sensor streaming retained by the firmware before setting
+up notifications. Resume streaming after `thymio-connected` with `detail: true`,
+which fires once per completed connection; the demo does this automatically.
+Disconnect removes the old event listeners and releases notification subscriptions
+before closing GATT. Notification cleanup is limited to one second so a stuck
+Bluetooth operation cannot block disconnection indefinitely. Disconnect also
+cancels pending Bluetooth work; unfinished operations from an old connection do
+not block a new one. Setup completes before `isConnected()` returns `true`.
+Explicit native "already in progress" errors are retried with bounded backoff
+within the Bluetooth queue; this does not reopen the device chooser.
+
+After an unexpected link loss, automatic reconnection resets all notification
+subscriptions through newly discovered characteristics and verifies a firmware
+reply before emitting `thymio-connected: true`. A failed verification stays in
+the reconnect loop instead of exposing a connection that cannot receive replies.
+
+Firmware and memory requests wait for both the GATT write and the corresponding
+response before the next queued operation runs. Device-info response listeners
+expire after three seconds; failed requests still wait for their native write
+to settle before releasing the queue. Disconnect clears a stuck queue. The demo clears stale
+readings on disconnect and reloads firmware, memory, and sensors on reconnect.
+
 #### Events
 
 `thymio-connected` - event that tells if the robot is connected or not/
@@ -112,6 +156,11 @@ The API checks the connected ESP32 firmware version against the compatibility ra
 `thymio.startSecondarySensorStreaming()` - starts secondary sensor streaming\
 `thymio.startAllSensorStreaming()` - starts all sensor streaming\
 `thymio.stopSensorStreaming()` - stops sensor streaming
+
+Incomplete or oversized sensor notifications are discarded. A warning reports
+the packet ID and expected/received lengths once per affected stream until a
+valid sample arrives. Notification parsing respects the `DataView` boundaries,
+including views into larger buffers.
 
 #### Events
 

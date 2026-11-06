@@ -145,7 +145,7 @@ async function connectRobot() {
     const info = new TextEncoder().encode(JSON.stringify({ esp32_ver: 'v1.10.1', stm32_ver: 'v2.0.0' }));
     const response = new Uint8Array(3 + info.length);
     response[0] = 1;
-    new DataView(response.buffer).setUint16(1, info.length, true);
+    new DataView(response.buffer).setUint16(1, info.length);
     response.set(info, 3);
     characteristic.emitValue(response);
   };

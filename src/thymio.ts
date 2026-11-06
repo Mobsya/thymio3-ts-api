@@ -16,10 +16,13 @@ import type { FileListing } from "./files";
 import type { FirmwareInfo, MemoryInfo } from "./device-info";
 import { handleStdOutResponse } from "./std-out";
 import { checkFirmwareCompatibility } from "./firmware-compatibility";
-import { runPriorityBluetoothCall } from "./bluetooth-queue";
+import { queueBluetoothCall, queuePriorityBluetoothCall, resetBluetoothQueue, runPriorityBluetoothCall } from "./bluetooth-queue";
 import { negotiateMTU } from "./mtu";
 
-let reconnecting = false;
+let connectionGeneration = 0;
+let connectionReady = false;
+let notificationsNeedReset = false;
+const NOTIFICATION_CLEANUP_TIMEOUT_MS = 1000;
 
 let device: BluetoothDevice | undefined;
 let server: BluetoothRemoteGATTServer | undefined;
@@ -31,31 +34,37 @@ let audioCharacteristic: BluetoothRemoteGATTCharacteristic;
 let fileCharacteristic: BluetoothRemoteGATTCharacteristic;
 let deviceInfoCharacteristic: BluetoothRemoteGATTCharacteristic;
 
+function getDeviceRequestOptions(): RequestDeviceOptions {
+  // Bluefy requires service filters; name filters with optionalServices failed there.
+  if (/Bluefy/i.test(navigator.userAgent ?? '')) {
+    return {
+      filters: [
+        { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID] }
+      ]
+    };
+  }
+
+  // Discover by name on Chromium, while authorizing both services for GATT access.
+  return {
+    filters: [
+      { namePrefix: 'THYMIO' },
+      { namePrefix: 'T3' }
+    ],
+    optionalServices: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID]
+  };
+}
+
 /**
  * Request a bluetooth device and connect to it.
  */
 export async function requestAndConnect(): Promise<void> {
+  const generation = ++connectionGeneration;
   try {
     if (!navigator.bluetooth) {
       throw new Error("Web Bluetooth not supported");
     }
 
-    // For Chromium-based browsers
-    /*
-    device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: 'THYMIO' }],
-      optionalServices: [
-        MAIN_SERVICE_UUID,
-        OTA_SERVICE_UUID
-      ]
-    });
-    */
-
-    device = await navigator.bluetooth.requestDevice({
-      filters: [
-        { services: [MAIN_SERVICE_UUID, OTA_SERVICE_UUID]}
-      ]
-    });
+    device = await navigator.bluetooth.requestDevice(getDeviceRequestOptions());
 
     // Remove the T3 prefix upon 1.0 release
     if (!device.name?.startsWith('THYMIO') && !device.name?.startsWith('T3')) {
@@ -66,10 +75,10 @@ export async function requestAndConnect(): Promise<void> {
     // To handle the reconnects
     device.addEventListener('gattserverdisconnected', onDisconnected);
 
-    await connect();
-
-    dispatchConnectedEvent(true);
+    await connect(generation);
   } catch (error) {
+    if (generation !== connectionGeneration) return;
+    connectionReady = false;
     console.error(`Could not connect to the Thymio device`, error);
     dispatchConnectedEvent(false);
   }
@@ -77,7 +86,7 @@ export async function requestAndConnect(): Promise<void> {
 
 export function isConnected(): boolean {
   if(device && device.gatt) {
-    return device.gatt.connected;
+    return connectionReady && device.gatt.connected;
   } else {
     return false;
   }
@@ -85,10 +94,18 @@ export function isConnected(): boolean {
 
 export async function disconnect(): Promise<void> {
   if (device) {
+    connectionGeneration++;
+    connectionReady = false;
+    detachCharacteristicListeners();
     device.removeEventListener('gattserverdisconnected', onDisconnected);
-    await device.gatt?.disconnect();
-
+    // Let clients stop polling while the old GATT connection is torn down.
     dispatchConnectedEvent(false);
+    if (device.gatt) {
+      const gatt = device.gatt;
+      await stopNotificationsBeforeDisconnect(gatt);
+      gatt.disconnect();
+      resetBluetoothQueue();
+    }
 
     console.log("✅ Disconnected from Thymio 3.");
   } else {
@@ -97,44 +114,135 @@ export async function disconnect(): Promise<void> {
 }
 
 /**
+ * Cached characteristic objects may still deliver events after disconnection.
+ */
+function detachCharacteristicListeners(): void {
+  if (deviceInfoCharacteristic) deviceInfo.cancelDeviceInfoRequests(deviceInfoCharacteristic);
+  sensorStreamCharacteristic?.removeEventListener('characteristicvaluechanged', sensorStream.handleStreamResponse);
+  pythonCharacteristic?.removeEventListener('characteristicvaluechanged', python.handlePythonResponse);
+  stdOutCharacteristic?.removeEventListener('characteristicvaluechanged', handleStdOutResponse);
+  audioCharacteristic?.removeEventListener('characteristicvaluechanged', audio.handleAudioResponse);
+}
+
+async function stopNotificationsBeforeDisconnect(gatt: BluetoothRemoteGATTServer): Promise<void> {
+  if (!gatt.connected) return;
+  const characteristics = [sensorStreamCharacteristic, pythonCharacteristic, stdOutCharacteristic,
+    audioCharacteristic, fileCharacteristic, deviceInfoCharacteristic];
+  let active = true;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const cleanup = (async () => {
+    try {
+      // Cancel pending application writes, and stop firmware streaming while the
+      // link still exists so the next connection starts without a packet flood.
+      await runPriorityBluetoothCall(() => {
+        if (active && gatt.connected && sensorStreamCharacteristic) {
+          return sensorStreamCharacteristic.writeValueWithResponse(new Uint8Array([0x01, 0x00]));
+        }
+      });
+    } catch (error) {
+      console.debug('[Thymio 3 API] Could not stop streaming before disconnect:', error);
+    }
+    for (const characteristic of characteristics) {
+      if (!active || !gatt.connected) return;
+      if (!characteristic) continue;
+      try {
+        await queuePriorityBluetoothCall(() => {
+          // A queued cleanup must not touch a later connection after the timeout.
+          if (active && gatt.connected) return characteristic.stopNotifications();
+        });
+      } catch (error) {
+        console.debug('[Thymio 3 API] Could not stop notifications before disconnect:', error);
+      }
+    }
+  })();
+
+  try {
+    // Explicitly release subscriptions on platforms that retain them across
+    // reconnects, without waiting indefinitely behind a stuck GATT operation.
+    await Promise.race([
+      cleanup,
+      new Promise<void>(resolve => { timeoutId = setTimeout(resolve, NOTIFICATION_CLEANUP_TIMEOUT_MS); })
+    ]);
+  } finally {
+    active = false;
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
+/**
  * Connect to the device and to all of the exposed services and characteristics.
  */
-async function connect() {
+async function connect(generation = connectionGeneration) {
+  const resetNotifications = notificationsNeedReset;
+  const ensureCurrentConnection = () => {
+    if (generation !== connectionGeneration) throw new Error('Bluetooth connection was superseded');
+  };
+  const gattCall = <T>(operation: () => Promise<T>) => queueBluetoothCall(async () => {
+    ensureCurrentConnection();
+    const result = await operation();
+    ensureCurrentConnection();
+    return result;
+  });
+  const startNotifications = async (characteristic: BluetoothRemoteGATTCharacteristic) => {
+    // After link loss, Chromium can retain an active native subscription routed
+    // to the previous characteristic object. Reacquiring the characteristic and
+    // calling startNotifications alone can succeed without replacing that route.
+    // Stop through the fresh object first; disconnected objects are invalid.
+    if (resetNotifications) await gattCall(() => characteristic.stopNotifications());
+    await gattCall(() => characteristic.startNotifications());
+  };
+  connectionReady = false;
   if (device && device.gatt) {
-    server = await connectGattWithTimeout(device.gatt);
-    const mainService = await server.getPrimaryService(MAIN_SERVICE_UUID);
+    detachCharacteristicListeners();
+    const gatt = device.gatt;
+    server = await gattCall(() => connectGattWithTimeout(gatt));
+    const connectedServer = server;
+    const mainService = await gattCall(() => connectedServer.getPrimaryService(MAIN_SERVICE_UUID));
 
-    commandCharacteristic = await mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID);
+    commandCharacteristic = await gattCall(() => mainService.getCharacteristic(COMMAND_CHARACTERISTIC_UUID));
 
-    sensorStreamCharacteristic = await mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID);
-    await sensorStreamCharacteristic.startNotifications();
-    sensorStreamCharacteristic.addEventListener('characteristicvaluechanged', sensorStream.handleStreamResponse);
+    sensorStreamCharacteristic = await gattCall(() => mainService.getCharacteristic(SENSOR_STREAM_CHARACTERISTIC_UUID));
+    // The firmware retains streaming flags across disconnects. Stop it before
+    // subscribing so it cannot resume sending truncated packets during setup.
+    await sensorStream.stopSensorStreaming(sensorStreamCharacteristic);
 
-    pythonCharacteristic = await mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID);
-    await pythonCharacteristic.startNotifications();
-    pythonCharacteristic.addEventListener('characteristicvaluechanged', python.handlePythonResponse);
-
-    stdOutCharacteristic = await mainService.getCharacteristic(STD_OUT_CHARACTERISTIC_UUID);
-    await stdOutCharacteristic.startNotifications();
-    stdOutCharacteristic.addEventListener('characteristicvaluechanged', handleStdOutResponse);
-
-    audioCharacteristic = await mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID);
-    await audioCharacteristic.startNotifications();
-    audioCharacteristic.addEventListener('characteristicvaluechanged', audio.handleAudioResponse);
-
-    fileCharacteristic = await mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID);
-    await fileCharacteristic.startNotifications();
-
-    deviceInfoCharacteristic = await mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID);
-    await deviceInfoCharacteristic.startNotifications();
-
+    deviceInfoCharacteristic = await gattCall(() => mainService.getCharacteristic(DEVICE_INFO_CHARACTERISTIC_UUID));
+    await startNotifications(deviceInfoCharacteristic);
     await negotiateMTU(deviceInfoCharacteristic);
 
+    pythonCharacteristic = await gattCall(() => mainService.getCharacteristic(PYTHON_CHARACTERISTIC_UUID));
+    pythonCharacteristic.addEventListener('characteristicvaluechanged', python.handlePythonResponse);
+    await startNotifications(pythonCharacteristic);
+
+    stdOutCharacteristic = await gattCall(() => mainService.getCharacteristic(STD_OUT_CHARACTERISTIC_UUID));
+    stdOutCharacteristic.addEventListener('characteristicvaluechanged', handleStdOutResponse);
+    await startNotifications(stdOutCharacteristic);
+
+    audioCharacteristic = await gattCall(() => mainService.getCharacteristic(AUDIO_CHARACTERISTIC_UUID));
+    audioCharacteristic.addEventListener('characteristicvaluechanged', audio.handleAudioResponse);
+    await startNotifications(audioCharacteristic);
+
+    fileCharacteristic = await gattCall(() => mainService.getCharacteristic(FILE_CHARACTERISTIC_UUID));
+    await startNotifications(fileCharacteristic);
+
+    sensorStreamCharacteristic.addEventListener('characteristicvaluechanged', sensorStream.handleStreamResponse);
+    await startNotifications(sensorStreamCharacteristic);
+
+    // A successful native connect/subscribe is insufficient after link loss.
+    // Confirm that request/reply traffic reaches the new objects before clients
+    // resume polling or streaming. A failed check stays in the reconnect loop.
+    const firmwareInfo = resetNotifications
+      ? await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)
+      : undefined;
+
+    ensureCurrentConnection();
+    notificationsNeedReset = false;
+    connectionReady = true;
     dispatchConnectedEvent(true);
 
     console.log("✅ Connected to Thymio 3 !");
 
-    checkFirmwareCompatibilityInBackground(deviceInfoCharacteristic);
+    checkFirmwareCompatibilityInBackground(deviceInfoCharacteristic, firmwareInfo);
   } else {
     throw new Error("Bluetooth GATT is not available.")
   }
@@ -174,10 +282,13 @@ async function connectGattWithTimeout(gatt: BluetoothRemoteGATTServer): Promise<
   }
 }
 
-function checkFirmwareCompatibilityInBackground(deviceInfoChar: BluetoothRemoteGATTCharacteristic): void {
+function checkFirmwareCompatibilityInBackground(
+  deviceInfoChar: BluetoothRemoteGATTCharacteristic,
+  knownFirmwareInfo?: FirmwareInfo
+): void {
   void (async () => {
     try {
-      const firmwareInfo = await deviceInfo.getFirmwareInfo(deviceInfoChar);
+      const firmwareInfo = knownFirmwareInfo ?? await deviceInfo.getFirmwareInfo(deviceInfoChar);
       await checkFirmwareCompatibility(firmwareInfo.esp32_ver);
     } catch (error) {
       console.warn("[Thymio 3 API] Firmware compatibility check failed:", error);
@@ -186,21 +297,23 @@ function checkFirmwareCompatibilityInBackground(deviceInfoChar: BluetoothRemoteG
 }
 
 function onDisconnected() {
+  connectionReady = false;
+  notificationsNeedReset = true;
+  connectionGeneration++;
+  resetBluetoothQueue();
+  detachCharacteristicListeners();
   dispatchConnectedEvent(false);
 
   console.log('⚠️ Disconnected. Attempting to reconnect...');
 
-  if (!reconnecting) {
-    reconnecting = true;
-    retryConnection();
-  }
+  void retryConnection(connectionGeneration);
 }
 
 // The automatic BT re-connection fails for devices that have not been manually connected
 // for more than three minutes.
 // We can remove this mitigation as soon as https://chromestatus.com/feature/4797798639730688 is implemented
 // See also https://stackoverflow.com/questions/60603666/web-bluetooth-bypass-pairing-screen-for-a-known-device-id
-async function retryConnection() {
+async function retryConnection(generation: number) {
   if (!device) {
     throw new Error('Bluetooth device is undefined');
   }
@@ -213,24 +326,21 @@ async function retryConnection() {
       // Wait three seconds before each retry to give the Bluetooth stack time
       // to settle after the disconnection event.
       await delay(3000);
+      if (generation !== connectionGeneration) return;
 
       // Always run the full connection setup. A timed-out gatt.connect() call
       // can still complete later in the browser, leaving device.gatt.connected
       // true while services and characteristics still need to be reinitialized.
-      await connect();
-      reconnecting = false;
+      await connect(generation);
       return;
     } catch (e) {
+      if (generation !== connectionGeneration) return;
       console.warn(`Retry ${attempts + 1} failed:`, e);
     }
     attempts++;
   }
 
   console.log(`❌ Failed to reconnect after ${attempts} attempts`);
-
-  // Automatic retries are finished, so allow a future disconnect event after
-  // manual reconnection to start a fresh retry cycle.
-  reconnecting = false;
 
   // Disconnect and prompt for manual reconnection if automatic reconnection fails.
   await disconnect();

@@ -102,6 +102,10 @@ export default function DeviceMemoryStatus({ isConnected, pollIntervalMs = 1000,
   const [lastUpdated, setLastUpdated] = useState(null);
 
   useEffect(() => {
+    setMemoryInfo(null);
+    setSamples([]);
+    setError("");
+    setLastUpdated(null);
     if (!isConnected) return undefined;
 
     let cancelled = false;

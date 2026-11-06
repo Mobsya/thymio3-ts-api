@@ -1,5 +1,5 @@
 import { DEFAULT_MTU } from "./constants";
-import { queueBluetoothCall } from "./bluetooth-queue";
+import { isBluetoothBusyError, queueBluetoothCall } from "./bluetooth-queue";
 
 const MINIMUM_BLE_WRITE_SIZE = 20;
 // Characteristic-value payload lengths, capped at the firmware's 500-byte buffer.
@@ -31,6 +31,9 @@ export async function negotiateMTU(
       console.log(`[Thymio 3 API] BLE write payload size accepted: ${acceptedWritePayloadSize} bytes`);
       return acceptedWritePayloadSize;
     } catch (error) {
+      // The queue already retried transient busy errors. A persistently busy
+      // connection is not evidence that the payload is too large.
+      if (isBluetoothBusyError(error)) throw error;
       lastError = error;
       console.debug(
         `[Thymio 3 API] BLE write payload size probe of ${size} bytes using writeValueWithResponse failed:`,

@@ -128,32 +128,48 @@ export async function stopSensorStreaming(
   return await queuePriorityBluetoothCall(() => sensorStreamCharacteristic.writeValueWithResponse(payload));
 }
 
+const malformedSensorStreams = new WeakMap<BluetoothRemoteGATTCharacteristic, Set<number>>();
+
 /**
  * Handler for the stream response. Captures the event data, transforms it into the appropriate
  * object and fires the appropriate event with the transformed data.
  */
 export async function handleStreamResponse(event: Event): Promise<void> {
-	const value = (event.target! as BluetoothRemoteGATTCharacteristic).value;
+  const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+  const value = characteristic.value;
 
-  if (value) {
-    const id = value.getUint8(0);
-    const data = new Uint8Array(value.buffer.slice(1));
+  if (!value || value.byteLength === 0) return;
 
-    if (id === 0x01) {
-      const sensorsData = parseSensorsData(data);
+  const id = value.getUint8(0);
+  const expectedLength = id === 0x01 ? 39 : id === 0x02 ? 31 : undefined;
+  if (expectedLength === undefined) return;
 
-      const mostValuesEvent = new CustomEvent(THYMIO_SENSOR_VALUES_EVENT_ID, {
-        detail: sensorsData
-      });
-      document.dispatchEvent(mostValuesEvent);
-    } else if(id === 0x02) {
-      const otherSensorData = parseOtherSensorData(data);
-
-      const otherValueEvent = new CustomEvent(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, {
-        detail: otherSensorData
-      });
-      document.dispatchEvent(otherValueEvent);
+  if (value.byteLength !== expectedLength) {
+    // A reconnect can briefly deliver ATT notifications truncated to 20 bytes.
+    // Each notification is a sample, not a fragment; wait for the next full one.
+    let reported = malformedSensorStreams.get(characteristic);
+    if (!reported) {
+      reported = new Set();
+      malformedSensorStreams.set(characteristic, reported);
     }
+    if (!reported.has(id)) {
+      reported.add(id);
+      console.warn(`[Thymio 3 API] Ignoring malformed sensor packet 0x${id.toString(16).padStart(2, '0')}: expected ${expectedLength} bytes, received ${value.byteLength} (including packet ID).`);
+    }
+    return;
+  }
+
+  malformedSensorStreams.get(characteristic)?.delete(id);
+  const data = new Uint8Array(value.buffer, value.byteOffset + 1, value.byteLength - 1);
+
+  if (id === 0x01) {
+    document.dispatchEvent(new CustomEvent(THYMIO_SENSOR_VALUES_EVENT_ID, {
+      detail: parseSensorsData(data)
+    }));
+  } else {
+    document.dispatchEvent(new CustomEvent(THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, {
+      detail: parseOtherSensorData(data)
+    }));
   }
 }
 
@@ -167,7 +183,7 @@ function parseSensorsData(bytes: Uint8Array): SensorsData {
     throw new Error("Invalid byte array length. Expected 38 bytes.");
   }
 
-  const dv = new DataView(bytes.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let offset = 0;
 
   const h = dv.getUint16(offset, true); offset += 2;
