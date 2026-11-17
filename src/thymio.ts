@@ -9,6 +9,9 @@ import * as ota from './ota';
 import * as audio from './audio';
 import * as files from './files';
 import * as deviceInfo from './device-info';
+import * as uploadDiagnostics from './upload-diagnostics';
+import type { DiagnosticsInfo, DiagnosticsStart, FirmwareSnapshot } from './upload-diagnostics';
+export type { DiagnosticsInfo, DiagnosticsStart, FirmwareSnapshot, FirmwareUpload, FirmwareEvent } from './upload-diagnostics';
 import packageJson from '../package.json';
 import { delay } from "./utils";
 import { MAIN_SERVICE_UUID, OTA_SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID, SENSOR_STREAM_CHARACTERISTIC_UUID, PYTHON_CHARACTERISTIC_UUID, AUDIO_CHARACTERISTIC_UUID, FILE_CHARACTERISTIC_UUID, DEVICE_INFO_CHARACTERISTIC_UUID, STD_OUT_CHARACTERISTIC_UUID, THYMIO_CONNECTED_EVENT_ID, THYMIO_PROMPT_MANUAL_RECONNECTION_EVENT_ID, GATT_CONNECT_TIMEOUT_MS } from "./constants";
@@ -637,4 +640,27 @@ async function stopMainBluetoothServices(): Promise<void> {
       console.warn(`[Thymio 3 API] Could not stop ${label} notifications before OTA:`, error);
     }
   }
+}
+
+// Discovered only when explicitly requested, so older firmware remains compatible.
+async function diagnosticCharacteristic(): Promise<BluetoothRemoteGATTCharacteristic> {
+  if (!isConnected() || !server) throw new Error('Connect before accessing upload diagnostics');
+  const gatt = server;
+  return queueBluetoothCall(async () => {
+    const service = await gatt.getPrimaryService(MAIN_SERVICE_UUID);
+    return service.getCharacteristic(uploadDiagnostics.UPLOAD_DIAGNOSTICS_UUID);
+  });
+}
+export async function getUploadDiagnosticsInfo(): Promise<DiagnosticsInfo | null> {
+  try { return await uploadDiagnostics.getDiagnosticsInfo(await diagnosticCharacteristic()); }
+  catch (error) {
+    if (error instanceof Error && error.name === 'NotFoundError') return null;
+    throw error;
+  }
+}
+export async function startUploadDiagnostics(runId: number): Promise<DiagnosticsStart> {
+  return uploadDiagnostics.startDiagnostics(await diagnosticCharacteristic(), runId);
+}
+export async function readUploadDiagnostics(expected: DiagnosticsInfo): Promise<FirmwareSnapshot> {
+  return uploadDiagnostics.readDiagnostics(await diagnosticCharacteristic(), expected);
 }

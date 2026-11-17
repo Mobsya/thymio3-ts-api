@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createTestFile, runUploadStressTest, validateSettings, type Report, type Settings } from '../tools/upload-stress-runner';
+import { createTestFile, runUploadStressTest, recoverFirmwareDiagnostics, validateSettings, type Report, type Settings } from '../tools/upload-stress-runner';
 import { createDeferred, FakeBluetoothCharacteristic } from './helpers/fake-bluetooth';
 import { THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, THYMIO_OTHER_SENSOR_VALUES_EVENT_ID, THYMIO_SENSOR_VALUES_EVENT_ID } from '../src/constants';
 import { uploadFile } from '../src/files';
@@ -99,7 +99,7 @@ describe('standalone upload stress runner', () => {
       diagnostic(file, 'complete', 'Upload complete');
     });
     const report = await runUploadStressTest(robot, { ...settings, sensorStreaming: mode, freeMemory: true }, new AbortController().signal);
-    expect(report).toMatchObject({ schemaVersion: 5, outcome: 'completed', passed: 3, sensorStreaming: { mode, confirmed: true } });
+    expect(report).toMatchObject({ schemaVersion: 6, outcome: 'completed', passed: 3, sensorStreaming: { mode, confirmed: true } });
     expect(robot.startMainSensorStreaming).toHaveBeenCalledTimes(mode === 'main' ? 1 : 0);
     expect(robot.startSecondarySensorStreaming).toHaveBeenCalledTimes(mode === 'secondary' ? 1 : 0);
     expect(robot.startAllSensorStreaming).toHaveBeenCalledTimes(mode === 'all' ? 1 : 0);
@@ -812,5 +812,72 @@ describe('standalone upload stress runner', () => {
     { memoryPollIntervalMs: 0 }, { memoryPollTimeoutMs: 99 }, { memoryPollTimeoutMs: Infinity },
   ])('rejects invalid settings before contacting the robot: %j', (invalid) => {
     expect(() => validateSettings({ ...settings, ...invalid })).toThrow();
+  });
+});
+
+
+describe('firmware evidence collection', () => {
+  function diagnosticRobot() {
+    const robot = fakeRobot();
+    return Object.assign(robot, {
+      getUploadDiagnosticsInfo: vi.fn(async () => ({ bootId: 123, runId: 0, snapshotId: 1, state: 0, version: 1, bytes: 8416 })),
+      startUploadDiagnostics: vi.fn(async (runId: number) => ({ bootId: 123, runId, snapshotId: 1, state: 1, version: 1, bytes: 8416, before: Date.now(), after: Date.now() })),
+      readUploadDiagnostics: vi.fn(async () => { throw new Error('simulated collection failure'); }),
+    });
+  }
+  const captureSettings: Settings = { ...settings, count: 1, sizes: [43000], seed: 2, firmwareDiagnostics: true,
+    sensorStreaming: 'all', trafficStart: 'first-packet', freeMemory: true, timeoutMs: 30000 };
+  beforeEach(() => vi.spyOn(console, 'debug').mockImplementation(() => {}));
+  it('starts recording before uploads and collects only after stopping the streams', async () => {
+    const robot = diagnosticRobot();
+    robot.uploadFile.mockImplementation(async () => { emitProgress(); expect(robot.readUploadDiagnostics).not.toHaveBeenCalled(); });
+    const result = await runUploadStressTest(robot, captureSettings, new AbortController().signal);
+    expect(robot.startUploadDiagnostics.mock.invocationCallOrder[0]).toBeLessThan(robot.uploadFile.mock.invocationCallOrder[0]);
+    expect(robot.stopSensorStreaming.mock.invocationCallOrder.at(-1)).toBeLessThan(robot.readUploadDiagnostics.mock.invocationCallOrder[0]);
+    expect(result.outcome).toBe('completed'); expect(result.attempts[0].outcome).toBe('passed');
+    expect(result.firmwareDiagnostics).toMatchObject({status:'error',error:expect.stringContaining('collection failure')});
+  });
+  it('requires diagnostic firmware before sending test files', async () => {
+    const robot=diagnosticRobot(); robot.getUploadDiagnosticsInfo.mockResolvedValue(null as never);
+    const result=await runUploadStressTest(robot,captureSettings,new AbortController().signal);
+    expect(result.reason).toContain('ABF8'); expect(robot.uploadFile).not.toHaveBeenCalled();
+  });
+  it('observes until 35 seconds from the final write without inflating upload duration', async () => {
+    vi.useFakeTimers(); const robot=diagnosticRobot();
+    robot.uploadFile.mockImplementation(async()=>{
+      emitProgress(87,87);
+      await new Promise(resolve=>setTimeout(resolve,15000));
+      throw new Error('File upload: No acknowledgement from the robot within 15 seconds.');
+    });
+    const operation=runUploadStressTest(robot,captureSettings,new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(15001);
+    expect(robot.readUploadDiagnostics).not.toHaveBeenCalled();
+    expect(robot.stopSensorStreaming).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(20000);
+    const result=await operation;
+    expect(result.attempts[0].uploadDurationMs).toBe(15000);
+    expect(result.firmwareDiagnostics?.observationUntil).toBeDefined();
+    expect(robot.readUploadDiagnostics).toHaveBeenCalledTimes(1);
+    expect(result.reason).toContain('No acknowledgement');
+  });
+  it('never queues capture retrieval behind a stalled upload', async () => {
+    vi.useFakeTimers(); const robot=diagnosticRobot();
+    robot.uploadFile.mockImplementation(()=>new Promise(()=>{}));
+    const operation=runUploadStressTest(robot,{...captureSettings,timeoutMs:1000},new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(1001);
+    const result=await operation;
+    expect(result.requiresReload).toBe(true); expect(result.firmwareDiagnostics?.status).toBe('pending');
+    expect(robot.readUploadDiagnostics).not.toHaveBeenCalled(); expect(robot.disconnect).toHaveBeenCalled();
+  });
+  it('recovers without resetting capture and leaves the upload failure unchanged', async () => {
+    const robot=diagnosticRobot();
+    const result=await runUploadStressTest(robot,captureSettings,new AbortController().signal);
+    result.outcome='failed'; result.reason='original upload failure'; result.requiresReload=true;
+    const previousStarts=robot.startUploadDiagnostics.mock.calls.length;
+    robot.readUploadDiagnostics.mockRejectedValue(new Error('Robot rebooted: firmware evidence was lost'));
+    const recovered=await recoverFirmwareDiagnostics(robot,result);
+    expect(recovered.reason).toBe('original upload failure'); expect(recovered.outcome).toBe('failed');
+    expect(recovered.firmwareDiagnostics?.error).toContain('rebooted');
+    expect(robot.startUploadDiagnostics).toHaveBeenCalledTimes(previousStarts);
   });
 });

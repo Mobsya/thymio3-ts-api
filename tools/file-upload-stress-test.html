@@ -87,12 +87,16 @@
         <div class="grid">
           <label class="wide">43,000-byte reproduction preset<select id="reproduction-preset" aria-describedby="reproduction-help">
             <option value="custom">Custom settings</option>
+            <option value="diag-all">Diagnostics: both streams</option>
+            <option value="diag-off">Diagnostics: streams off</option>
+            <option value="diag-main">Diagnostics: main only</option>
+            <option value="diag-secondary">Diagnostics: secondary only</option>
             <option value="baseline">Upload only (baseline)</option>
             <option value="sensors">Sensors only</option>
             <option value="memory">Memory reads only</option>
             <option value="combined">Sensors + memory reads (reported failure)</option>
           </select></label>
-          <small id="reproduction-help" class="wide">Each preset uses 10 × 43,000-byte uploads, RAM cleanup, a 30-second upload inactivity timeout, and stops on the first upload failure. Enabled background traffic starts after the first packet. For comparable runs, restart the robot and reload this page between scenarios, then connect and select a preset. No console commands are needed.</small>
+          <small id="reproduction-help" class="wide">Diagnostic presets use 30 × 43,000 bytes, seed 2, and capture firmware evidence. Other presets use 10 × 43,000-byte uploads, RAM cleanup, a 30-second upload inactivity timeout, and stops on the first upload failure. Enabled background traffic starts after the first packet. For comparable runs, restart the robot and reload this page between scenarios, then connect and select a preset. No console commands are needed.</small>
           <label>Number of uploads<input id="count" type="number" min="1" max="10000" value="100" required></label>
           <label>Delay between uploads (ms)<input id="delay" type="number" min="0" max="60000" value="0" required></label>
           <label>Inactivity timeout (seconds)<input id="timeout" type="number" min="1" max="600" value="30" required aria-describedby="timeout-help"></label>
@@ -116,6 +120,7 @@
           <label>Memory read timeout (seconds)<input id="memory-timeout" type="number" min="0.1" max="600" step="0.1" value="4" required aria-describedby="memory-help"></label>
           <small id="memory-help" class="wide">Each memory read waits for a response or its timeout, then waits the configured delay before the next read. Like the reproduction script, polling continues after errors and timeouts; a timed-out API request may still be pending. The initial firmware/memory snapshot is separate from polling. Any requests still pending at shutdown require disconnection and a page reload.</small>
           <div class="wide">
+            <label class="check"><input id="firmware-diagnostics" type="checkbox">Capture firmware diagnostics after the run (diagnostic firmware required)</label>
             <label class="check"><input id="free-memory" type="checkbox">Release uploaded-file RAM before each attempt</label>
             <label class="check"><input id="stop-on-failure" type="checkbox" checked>Stop on the first failure</label>
           </div>
@@ -144,6 +149,9 @@
     <progress id="run-progress" value="0" max="100" aria-label="Completed uploads"></progress>
     <p id="current" class="muted">No upload in progress.</p>
     <p id="sensor-status" class="muted" role="status">Sensor streaming: no run yet.</p>
+    <p id="firmware-diagnostics-status" class="muted" role="status">Firmware diagnostics: off.</p>
+    <button id="recover-diagnostics" class="secondary" disabled>Recover diagnostics from previous run</button>
+    <pre id="firmware-diagnostics-analysis" style="white-space:pre-wrap"></pre>
     <p id="memory-status" class="muted" role="status">Memory polling: no run yet.</p>
     <p id="packet-status" class="muted">Packet progress: no run yet.</p>
     <div class="speed-panel">
@@ -279,10 +287,16 @@
     $('stop').disabled = !busy || controller?.signal.aborted;
     $('settings').disabled = busy || connecting || requiresReload;
     $('download').disabled = !report;
+    $('recover-diagnostics').disabled = busy || connecting || !connected || requiresReload || !report?.firmwareDiagnostics?.start;
   }
   function render(next) {
     report = next;
     requiresReload = next.requiresReload;
+    const capture = next.firmwareDiagnostics;
+    $('firmware-diagnostics-status').textContent = `Firmware diagnostics: ${capture?.status ?? 'disabled'}.${capture?.error ? ' ' + capture.error : ''}`;
+    $('firmware-diagnostics-analysis').textContent = (capture?.analysis ?? []).map(f => `Upload ${f.attempt}: ${f.classification} — ${f.explanation}`).join('\n');
+    if (next.settings.firmwareDiagnostics && !runner.saveDiagnosticReport(next))
+      $('firmware-diagnostics-status').textContent += ' Browser storage unavailable: export JSON before reloading.';
     $('attempted').textContent = `${next.passed + next.failed} / ${next.settings.count}`;
     $('passed').textContent = next.passed;
     $('failed').textContent = next.failed;
@@ -364,6 +378,19 @@
       controls();
     }
   });
+  $('recover-diagnostics').addEventListener('click', async () => {
+    if (busy || !report) return;
+    busy = true; controls(); notice('Recovering the previous firmware capture…');
+    try { render(await runner.recoverFirmwareDiagnostics(api, report)); }
+    catch (error) { notice(error.message || String(error), true); }
+    finally { busy = false; controls(); }
+  });
+  const previous = runner?.loadDiagnosticReport();
+  if (previous?.schemaVersion === 6 && previous.firmwareDiagnostics?.start && Array.isArray(previous.attempts)) {
+    // Restore evidence without reviving the old connection's blocked-operation state.
+    render(previous); requiresReload = false;
+    notice('Previous diagnostic report restored. Reconnect and recover before restarting the robot or beginning another run.');
+  }
   $('disconnect').addEventListener('click', async () => {
     try { await api.disconnect(); notice('Robot disconnected.'); }
     catch (error) { notice(error.message || String(error), true); }
@@ -372,15 +399,17 @@
   $('reproduction-preset').addEventListener('change', () => {
     const preset = $('reproduction-preset').value;
     if (preset === 'custom') return;
-    $('count').value = '10';
+    const diagnostic = preset.startsWith('diag-');
+    $('firmware-diagnostics').checked = diagnostic;
+    $('count').value = diagnostic ? '30' : '10';
     $('sizes').value = '43000';
-    $('seed').value = '1';
+    $('seed').value = diagnostic ? '2' : '1';
     $('delay').value = '0';
     $('timeout').value = '30';
     $('free-memory').checked = true;
     $('stop-on-failure').checked = true;
     $('traffic-start').value = 'first-packet';
-    $('sensor-streaming').value = ['sensors', 'combined'].includes(preset) ? 'all' : 'off';
+    $('sensor-streaming').value = diagnostic ? preset.slice(5) : ['sensors', 'combined'].includes(preset) ? 'all' : 'off';
     $('memory-polling').checked = ['memory', 'combined'].includes(preset);
     $('memory-interval').value = '1000';
     $('memory-timeout').value = '4';
@@ -392,6 +421,7 @@
     event.preventDefault();
     if (busy || connecting || requiresReload) return;
     const settings = {
+      firmwareDiagnostics: $('firmware-diagnostics').checked,
       count: Number($('count').value), delayMs: Number($('delay').value),
       timeoutMs: Number($('timeout').value) * 1000, seed: Number($('seed').value),
       sizes: $('sizes').value.trim().split(/[\s,]+/).filter(Boolean).map(Number),

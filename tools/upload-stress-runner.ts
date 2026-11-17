@@ -5,10 +5,14 @@ import {
 } from '../src/constants';
 import type { UploadProgress } from '../src/utils';
 import { createMemoryPoller, type MemoryPollingReport } from './upload-stress-memory';
+import { DiagnosticsTimeout, type DiagnosticsInfo, type DiagnosticsStart, type FirmwareSnapshot } from '../src/upload-diagnostics';
+import { analyzeDiagnostics, saveDiagnosticReport, type DiagnosticCapture } from './upload-stress-diagnostics';
+export { analyzeDiagnostics, saveDiagnosticReport, loadDiagnosticReport } from './upload-stress-diagnostics';
 
 export type SensorStreamingMode = 'off' | 'main' | 'secondary' | 'all';
 
 export type Settings = {
+  firmwareDiagnostics?: boolean;
   count: number;
   sizes: number[];
   seed: number;
@@ -24,6 +28,9 @@ export type Settings = {
 };
 
 type RobotAPI = {
+  getUploadDiagnosticsInfo?(): Promise<DiagnosticsInfo | null>;
+  startUploadDiagnostics?(runId: number): Promise<DiagnosticsStart>;
+  readUploadDiagnostics?(expected: DiagnosticsInfo): Promise<FirmwareSnapshot>;
   isConnected(): boolean;
   getAPIVersion(): string;
   getDeviceName(): string;
@@ -78,6 +85,7 @@ export type Attempt = {
   outcome: 'running' | 'passed' | 'failed';
   error?: string;
   preparation?: string;
+  expectedCrc?: number;
   uploadedPackets: number;
   totalPackets: number;
   uploadedBytes: number;
@@ -87,6 +95,7 @@ export type Attempt = {
 };
 
 export type Report = {
+  firmwareDiagnostics?: DiagnosticCapture;
   schemaVersion: number;
   uploadTimeoutMode: 'inactivity';
   startedAt: string;
@@ -184,6 +193,8 @@ export function validateSettings(settings: Settings): void {
     }
   };
   integer(settings.count, 1, 10000, 'Upload count');
+  if (settings.firmwareDiagnostics && (settings.count > 64 || settings.memoryPolling || !settings.stopOnFailure))
+    throw new Error('Diagnostic capture requires at most 64 uploads, memory polling off, and stop on first failure.');
   integer(settings.seed, 1, 0xffffffff, 'Seed');
   integer(settings.delayMs, 0, 60000, 'Delay');
   integer(settings.timeoutMs, 1000, 600000, 'Inactivity timeout');
@@ -276,7 +287,8 @@ export async function runUploadStressTest(
 
   const runStarted = performance.now();
   const report: Report = {
-    schemaVersion: 5,
+    schemaVersion: 6,
+    firmwareDiagnostics: { status: settings.firmwareDiagnostics ? 'preparing' : 'disabled' },
     uploadTimeoutMode: 'inactivity',
     startedAt: new Date().toISOString(),
     outcome: 'running', reason: '', requiresReload: false,
@@ -305,6 +317,7 @@ export async function runUploadStressTest(
   let finishing = false;
   let lastPacketTime = runStarted;
   let trafficStartTask: Promise<void> | undefined;
+  let measurementsFinishedAt: string | undefined;
   const event = (message: string) => report.events.push({ at: new Date().toISOString(), message });
   const memoryPoller = createMemoryPoller(
     () => api.getMemoryInfo(), () => api.isConnected(),
@@ -390,7 +403,11 @@ export async function runUploadStressTest(
     active.uploadedPackets = entry.uploadedPackets;
     active.totalPackets = entry.totalPackets;
     active.uploadedBytes = entry.uploadedBytes;
-    if (entry.message.startsWith('Prepared ')) active.preparation = entry.message;
+    if (entry.message.startsWith('Prepared ')) {
+      active.preparation = entry.message;
+      const crc = entry.message.match(/CRC32 0x([0-9a-f]+)/i)?.[1];
+      if (crc) active.expectedCrc = parseInt(crc, 16);
+    }
     active.diagnostics.push(entry);
     if (active.diagnostics.length > 100) {
       active.diagnostics.shift();
@@ -413,6 +430,16 @@ export async function runUploadStressTest(
     if (!signal.aborted && !disconnected && api.isConnected()) {
       event('Stopping sensor streaming to establish the selected mode.');
       await withTimeout(() => api.stopSensorStreaming(), settings.timeoutMs, 'Stopping sensor streaming');
+      if (settings.firmwareDiagnostics) {
+        if (!api.getUploadDiagnosticsInfo || !api.startUploadDiagnostics || !api.readUploadDiagnostics)
+          throw new Error('This API does not support firmware diagnostics');
+        const capability = await withTimeout(() => api.getUploadDiagnosticsInfo!(), 10000, 'Discovering firmware diagnostics');
+        if (!capability) throw new Error('Diagnostic firmware required: characteristic ABF8 is unavailable');
+        const runId = crypto.getRandomValues(new Uint32Array(1))[0] || 1;
+        report.firmwareDiagnostics!.start = await withTimeout(() => api.startUploadDiagnostics!(runId), 10000, 'Starting firmware capture');
+        report.firmwareDiagnostics!.status = 'capturing';
+        saveDiagnosticReport(report);
+      }
       observingSensors = true;
       if (settings.trafficStart === 'before-uploads' && !signal.aborted && !disconnected && api.isConnected()) {
         event('Starting background traffic before uploads.');
@@ -511,12 +538,26 @@ export async function runUploadStressTest(
   } finally {
     active = undefined;
     finishing = true;
+    measurementsFinishedAt = new Date().toISOString();
+    if (settings.firmwareDiagnostics) saveDiagnosticReport(report);
     document.removeEventListener(THYMIO_FILE_UPLOAD_PROGRESS_EVENT_ID, onProgress);
     await memoryPoller.stop(report.requiresReload || disconnected || !api.isConnected());
     await trafficStartTask;
     if (report.memoryPolling.pending > 0) {
       report.requiresReload = true;
       event(`${report.memoryPolling.pending} memory request(s) still pending at shutdown. Reload before another run.`);
+    }
+    const last = report.attempts.at(-1);
+    if (report.firmwareDiagnostics?.start && !report.requiresReload && !disconnected &&
+        last?.error?.includes('No acknowledgement') && last.lastProgressAt) {
+      const until = Date.parse(last.lastProgressAt) + 35000;
+      report.firmwareDiagnostics.status = 'observing';
+      report.firmwareDiagnostics.observationUntil = new Date(until).toISOString();
+      event('Preserving BLE confirmation observation until 35 seconds after the last completed write.');
+      onUpdate(report);
+      while (Date.now() < until && !disconnected && api.isConnected()) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(250, until - Date.now())));
+      }
     }
     observingSensors = false;
     document.removeEventListener(THYMIO_SENSOR_VALUES_EVENT_ID, onSensor);
@@ -529,17 +570,26 @@ export async function runUploadStressTest(
       } catch (error) {
         report.sensorStreaming.cleanupError = describeError(error);
         event(report.sensorStreaming.cleanupError);
-        if (report.outcome !== 'failed') {
+        if (!settings.firmwareDiagnostics && report.outcome !== 'failed') {
           report.outcome = 'failed';
           report.reason = report.sensorStreaming.cleanupError;
         }
         if (error instanceof OperationTimeout) report.requiresReload = true;
       }
     }
+    if (report.firmwareDiagnostics?.start) {
+      if (!report.requiresReload && !disconnected && api.isConnected()) {
+        await collectFirmwareDiagnostics(api, report);
+      } else report.firmwareDiagnostics.status = 'pending';
+      saveDiagnosticReport(report);
+    } else if (settings.firmwareDiagnostics) {
+      report.firmwareDiagnostics!.status = 'error';
+      report.firmwareDiagnostics!.error = report.reason;
+    }
     if (console.debug === captureDebug) console.debug = originalDebug;
     document.removeEventListener('thymio-connected', onConnection);
     document.removeEventListener('visibilitychange', onVisibility);
-    report.finishedAt = new Date().toISOString();
+    report.finishedAt = measurementsFinishedAt ?? new Date().toISOString();
     event(report.reason);
     // Do not wait for a stuck Bluetooth operation, or start another upload behind it.
     if (report.requiresReload) {
@@ -550,7 +600,41 @@ export async function runUploadStressTest(
       console.debug(`[Upload stress test] ${message}`);
       void api.disconnect().catch(() => {});
     }
+    if (settings.firmwareDiagnostics) saveDiagnosticReport(report);
     onUpdate(report);
   }
+  return report;
+}
+
+async function collectFirmwareDiagnostics(api: RobotAPI, report: Report): Promise<void> {
+  const capture = report.firmwareDiagnostics;
+  if (!capture?.start || !api.readUploadDiagnostics) return;
+  capture.collectionStartedAt = new Date().toISOString();
+  try {
+    capture.snapshot = await withTimeout(() => api.readUploadDiagnostics!(capture.start!), 30000, 'Reading firmware diagnostics');
+    capture.status = 'collected';
+    delete capture.error;
+    capture.analysis = analyzeDiagnostics(report.attempts, capture);
+  } catch (error) {
+    capture.status = 'error';
+    capture.error = describeError(error);
+    if (error instanceof OperationTimeout || error instanceof DiagnosticsTimeout) report.requiresReload = true;
+  } finally { capture.collectionFinishedAt = new Date().toISOString(); }
+}
+export async function recoverFirmwareDiagnostics(api: RobotAPI, report: Report): Promise<Report> {
+  if (!api.isConnected()) throw new Error('Reconnect to the robot before recovering diagnostics');
+  if (!report.firmwareDiagnostics?.start) throw new Error('No saved diagnostic capture to recover');
+  // This is an explicit action on a fresh connection, never queued behind a stalled upload.
+  report.requiresReload = false;
+  try {
+    await withTimeout(() => api.stopSensorStreaming(), 10000, 'Stopping sensors for recovery');
+    await collectFirmwareDiagnostics(api, report);
+  } catch (error) {
+    report.firmwareDiagnostics.status = 'error';
+    report.firmwareDiagnostics.error = describeError(error);
+    if (error instanceof OperationTimeout || error instanceof DiagnosticsTimeout) report.requiresReload = true;
+  }
+  if (report.requiresReload) void api.disconnect().catch(() => {});
+  saveDiagnosticReport(report);
   return report;
 }
