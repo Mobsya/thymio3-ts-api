@@ -1,88 +1,56 @@
-import { useState } from "react";
-import StdoutConsole from "./stdout-console";
-import "./stdout-panel.css";
-
-function getStdOutText(entries) {
-  return entries.map((entry) => String(entry.value ?? "")).join("");
-}
-
-async function copyTextToClipboard(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textArea = document.createElement("textarea");
-  textArea.value = text;
-  textArea.setAttribute("readonly", "");
-  textArea.style.position = "fixed";
-  textArea.style.top = "-1000px";
-  document.body.appendChild(textArea);
-  textArea.select();
-
-  const copied = document.execCommand("copy");
-  document.body.removeChild(textArea);
-
-  if (!copied) {
-    throw new Error("Clipboard copy failed");
-  }
-}
-
-export default function StdoutPanel({ entries, onClear }) {
-  const [copyStatus, setCopyStatus] = useState("idle");
-  const hasEntries = entries.length > 0;
-
-  async function copyStdOutToClipboard() {
-    if (!hasEntries) return;
-
+import { useEffect, useRef, useState } from 'react';
+import { session } from './use-session';
+export default function StdoutPanel({
+  entries,
+  onClear,
+  expandedByDefault
+}) {
+  const [override, setOverride] = useState(null);
+  const [height, setHeight] = useState(220);
+  const [follow, setFollow] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const box = useRef(null);
+  const open = override?.tab === expandedByDefault ? override.open : expandedByDefault;
+  const text = entries.map(e => e.value).join('');
+  useEffect(() => {
+    if (follow && open && box.current) box.current.scrollTop = box.current.scrollHeight;
+  }, [text, follow, open]);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const resize = value => setHeight(Math.max(120, Math.min(480, value)));
+  async function copy() {
     try {
-      await copyTextToClipboard(getStdOutText(entries));
-      setCopyStatus("copied");
-      window.setTimeout(() => setCopyStatus("idle"), 1200);
-    } catch (err) {
-      console.warn("Failed to copy STD OUT", err);
-      alert("Unable to copy STD OUT to the clipboard");
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      session.notify('Could not copy console output. Select the text and copy it manually.', true);
     }
   }
-
-  function clearStdOut() {
-    onClear();
-    setCopyStatus("idle");
-  }
-
-  return (
-    <section className="dashboard-panel telemetry-panel stdout-panel">
-      <div className="panel-header">
-        <h3>STD OUT</h3>
-        <div className="actions">
-          <div className="stdout-actions" aria-label="STD OUT actions">
-            <button
-              type="button"
-              title="Copy all STD OUT"
-              aria-label="Copy all STD OUT to clipboard"
-              onClick={copyStdOutToClipboard}
-              disabled={!hasEntries}
-            >
-              {copyStatus === "copied" ? "Copied" : "Copy"}
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              title="Clear STD OUT"
-              aria-label="Clear STD OUT console"
-              onClick={clearStdOut}
-              disabled={!hasEntries}
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      </div>
-      <div className="panel-body">
-        <div className="panel-scroll stdout-panel-scroll">
-          <StdoutConsole entries={entries} />
-        </div>
-      </div>
-    </section>
-  );
+  return <section className="console-panel" aria-label="Console">
+    {open && <div role="separator" className="console-resizer" tabIndex="0" aria-label="Console height" aria-orientation="horizontal" aria-valuemin={120} aria-valuemax={480} aria-valuenow={height} onKeyDown={e => {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        resize(height + (e.key === 'ArrowUp' ? 20 : -20));
+      }
+    }} onPointerDown={e => {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.currentTarget.dataset.startY = e.clientY;
+      e.currentTarget.dataset.startHeight = height;
+    }} onPointerMove={e => {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) resize(Number(e.currentTarget.dataset.startHeight) + Number(e.currentTarget.dataset.startY) - e.clientY);
+    }} onPointerUp={e => e.currentTarget.releasePointerCapture(e.pointerId)} />}
+    <div className="console-toolbar"><button className="console-toggle" aria-expanded={open} aria-controls="console-output" onClick={() => setOverride({
+        tab: expandedByDefault,
+        open: !open
+      })}>{open ? '▾' : '▸'} Console <span className="muted">{entries.length ? `${entries.length} messages` : 'No output'}</span></button><div className="row"><button className="secondary" aria-pressed={follow} onClick={() => setFollow(!follow)}>{follow ? 'Following' : 'Follow output'}</button><button className="secondary" disabled={!entries.length} onClick={copy}>{copied ? 'Copied' : 'Copy'}</button><button className="secondary" disabled={!entries.length} onClick={onClear}>Clear</button></div></div>
+    <pre id="console-output" hidden={!open} ref={box} className="console-output" style={{
+      height
+    }} tabIndex="0" onScroll={e => {
+      const el = e.currentTarget;
+      if (el.scrollHeight - el.scrollTop - el.clientHeight > 24) setFollow(false);
+    }}>{text || 'Run a script to see its output here.'}</pre>
+  </section>;
 }

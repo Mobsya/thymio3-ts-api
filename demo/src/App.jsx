@@ -1,276 +1,95 @@
-import React, { useEffect, useRef, useState } from "react";
-import ActuatorPanel from "./actuator-panel";
-import DeviceMemoryStatus from "./device-memory-status";
-import FilesAndFirmwarePanel from "./files-and-firmware-panel";
-import PythonEditor from "./python-editor";
-import RobotStatusCard from "./robot-status-card";
-import SensorPanel from "./sensor-panel";
-import StdoutPanel from "./stdout-panel";
-
-/**
- * Assumes thymio.iife.js exposes `window.thymio`.
- * We keep this app defensive in case the script isn't loaded yet.
- */
-function getThymio() {
-  return window.thymio;
-}
-
-const DEFAULT_CODE = `
-import thymio
-import time
-
-mot = thymio.MOTORS()
-mot.set_speed(200, -200)
-rgb_fl = thymio.LEDS_RGB(0)
-
-while True:
-    rgb_fl.set_intensity(1, 0, 0)
-    time.sleep(0.2)
-    rgb_fl.set_intensity(0, 1, 0)
-    time.sleep(0.2)
-    rgb_fl.set_intensity(0, 0, 1)
-    time.sleep(0.2)
-`;
-
-function Panel({ title, children, actions, className = "" }) {
-  return (
-    <section className={`dashboard-panel ${className}`.trim()}>
-      <div className="panel-header">
-        <h3>{title}</h3>
-        {actions ? <div className="actions">{actions}</div> : null}
-      </div>
-      <div className="panel-body">{children}</div>
-    </section>
-  );
-}
-
-function TabButton({ id, activeTab, onSelect, children }) {
-  const isSelected = activeTab === id;
-
-  return (
-    <button
-      aria-controls={`dashboard-tab-${id}`}
-      aria-selected={isSelected}
-      className={`tab-button ${isSelected ? "selected" : ""}`}
-      onClick={() => onSelect(id)}
-      role="tab"
-      type="button"
-    >
-      {children}
-    </button>
-  );
-}
-
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import ActuatorPanel from './actuator-panel';
+import DeviceMemoryStatus from './device-memory-status';
+import FirmwareUpdatePanel from './firmware-update-panel';
+import FilesPanel from './files-panel';
+import PythonEditor from './python-editor';
+import SensorPanel from './sensor-panel';
+import StdoutPanel from './stdout-panel';
+import { session, useSession } from './use-session';
+import { Tabs, Confirm } from './ui';
+const EXAMPLES = {
+  blink: `import thymio\nimport time\n\nled = thymio.LEDS_RGB(0)\nwhile True:\n    led.set_intensity(15, 0, 0)\n    time.sleep(0.5)\n    led.set_intensity(0, 0, 0)\n    time.sleep(0.5)\n`,
+  sensors: `import thymio\nimport time\n\nbuttons = thymio.BUTTONS()\nwhile True:\n    print(buttons.get_status())\n    time.sleep(0.2)\n`
+};
+const TABS = [['controls', 'Controls'], ['python', 'Python'], ['files', 'Files'], ['device', 'Device']];
 export default function App() {
-  const [connectionStatus, setConnectionStatus] = useState("disconnected");
-  const [deviceName, setDeviceName] = useState("");
-  // possible values: "disconnected" | "connecting" | "connected"
-  const [promptManualReconnection, setPromptManualReconnection] = useState(false);
-
-  // Code + exec
-  const [code, setCode] = useState(DEFAULT_CODE);
-  const [scriptIdToSave, setScriptIdToSave] = useState("");
-  const [isExecuting, setIsExecuting] = useState(false);
-
-  // Streams / output
-  const [stdOut, setStdOut] = useState([]);
-
-  const stdOutEntryId = useRef(0);
-
-  // Device info
-  const [firmwareInfo, setFirmwareInfo] = useState(null);
-  const [firmwareInfoError, setFirmwareInfoError] = useState("");
-  const [activeTab, setActiveTab] = useState("actuators");
-
-  // --- Event listeners from thymio.global.js ---
-  useEffect(() => {
-    let connectionGeneration = 0;
-    const onStdOut = (event) => {
-      const value = String(event.detail ?? "");
-      setStdOut((entries) => [
-        ...entries,
-        { id: ++stdOutEntryId.current, value },
-      ]);
-    };
-    const onConnected = (event) => {
-      const generation = ++connectionGeneration;
-      const isConnected = Boolean(event.detail);
-
-      if (isConnected) {
-        setConnectionStatus("connected");
-        setDeviceName(getThymio()?.getDeviceName?.() ?? "Unknown device");
-        setPromptManualReconnection(false);
-        setFirmwareInfo(null);
-        setFirmwareInfoError("");
-
-        void (async () => {
-          try {
-            const info = await getThymio()?.getFirmwareInfo?.();
-            if (generation === connectionGeneration && info) setFirmwareInfo(info);
-          } catch (err) {
-            if (generation === connectionGeneration) {
-              setFirmwareInfoError(err?.message ?? "Failed to read firmware info");
-            }
-          }
-        })();
-      } else {
-        // If connection drops and library tries to auto-reconnect
-        setConnectionStatus("connecting");
-        setDeviceName("");
-        setFirmwareInfo(null);
-        setFirmwareInfoError("");
-      }
-    };
-
-    const onManualReconn = () => {
-      setPromptManualReconnection(true);
-      setConnectionStatus("disconnected");
-      setDeviceName("");
-      setFirmwareInfo(null);
-      setFirmwareInfoError("");
-    };
-
-    const onPythonExecStatus = (event) => {
-      //console.log(event);
-      const isExecuting = Boolean(event.detail);
-      setIsExecuting(isExecuting);
-    };
-
-    document.addEventListener("thymio-connected", onConnected);
-    document.addEventListener("thymio-prompt-manual-reconnection", onManualReconn);
-    document.addEventListener("thymio-python-execution-status", onPythonExecStatus);
-    document.addEventListener("thymio-std-out-values", onStdOut);
-
-    return () => {
-      connectionGeneration++;
-      document.removeEventListener("thymio-connected", onConnected);
-      document.removeEventListener("thymio-prompt-manual-reconnection", onManualReconn);
-      document.removeEventListener("thymio-python-execution-status", onPythonExecStatus);
-      document.removeEventListener("thymio-std-out-values", onStdOut);
-
-    };
+  const s = useSession();
+  const header = useRef(null);
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const measure = () => root.style.setProperty('--app-header-height', `${header.current.getBoundingClientRect().height}px`);
+    const observer = new ResizeObserver(measure);
+    measure();
+    observer.observe(header.current);
+    return () => { observer.disconnect(); root.style.removeProperty('--app-header-height'); };
   }, []);
-
-  // --- Actions ---
-  async function connect() {
-    if (!getThymio()?.requestAndConnect) return alert("thymio not loaded");
-    setConnectionStatus("connecting");
-    await getThymio().requestAndConnect();
+  const [tab, setTab] = useState('controls');
+  const [code, setCode] = useState(EXAMPLES.blink);
+  const [dirty, setDirty] = useState(false);
+  const [example, setExample] = useState(null);
+  const [slot, setSlot] = useState('1');
+  const [apiReady, setApiReady] = useState(Boolean(window.thymio));
+  useEffect(() => session.start(), []);
+  useEffect(() => {
+    if (apiReady) return;
+    const id = setInterval(() => {
+      if (window.thymio) setApiReady(true);
+    }, 250);
+    return () => clearInterval(id);
+  }, [apiReady]);
+  const connected = s.connection === 'connected';
+  const robotName = connected ? s.deviceName : s.connection === 'reconnecting' ? s.lastDeviceName : '';
+  const connectionLabel = {
+    connected: 'Connected', connecting: 'Connecting…',
+    reconnecting: 'Reconnecting…', disconnected: 'Disconnected',
+  }[s.connection];
+  const disabled = !connected || Boolean(s.busy) || s.stopping || s.ota;
+  const reason = !connected ? '' : s.ota ? 'Firmware transfer in progress. Hardware controls and telemetry are suspended.' : s.stopping ? 'Sending stop commands…' : s.busy ? `${s.busy}…` : '';
+  function loadExample(key) {
+    setCode(EXAMPLES[key]);
+    setDirty(false);
   }
-
-  async function disconnect() {
-    if (!getThymio()?.disconnect) return;
-    await getThymio().disconnect();
-    setConnectionStatus("disconnected");
-    setDeviceName("");
-  }
-
-  async function executeCode() {
-    const t = getThymio();
-    if (!t?.sendPythonScript || !t?.executeLoadedScript) return alert("thymio not loaded");
-    await t.sendPythonScript(code);
-    await t.executeLoadedScript();
-  }
-
-  async function stopCode() {
-    const t = getThymio();
-    if (!t?.stopScriptExecution) return;
-
-    await t.stopScriptExecution();
-  }
-
-  async function saveToPartition() {
-    const t = getThymio();
-    if (!t?.saveScriptToPartition) return;
-    await t.saveScriptToPartition(scriptIdToSave);
-  }
-
-  async function resetInterpreter() {
-    const t = getThymio();
-    if (!t?.softResetPythonInterpreter) return;
-    await t.softResetPythonInterpreter();
-  }
-
-  return (
-    <div className="page">
-      <main className="dashboard-grid">
-        <div className="telemetry-stack">
-          <SensorPanel />
-
-          <StdoutPanel entries={stdOut} onClear={() => setStdOut([])} />
+  return <div className="app-shell">
+    <header ref={header} className="app-header">
+      <div className={`robot-panel ${s.connection}`}>
+        <div className="robot-identity" role="status" aria-live="polite">
+          <div className="robot-connection"><span className="status-dot" aria-hidden="true" />{connectionLabel}</div>
+          <div className="robot-name">{robotName ? <><span>Robot: </span><strong>{robotName}</strong></> : <strong>{s.connection === 'connecting' ? 'Connecting to robot' : 'No robot connected'}</strong>}</div>
         </div>
-
-        <Panel title="Device & Memory" className="telemetry-panel memory-panel">
-          <div className="panel-scroll memory-panel-scroll">
-            <RobotStatusCard
-              connectionStatus={connectionStatus}
-              deviceName={deviceName}
-              firmwareInfo={firmwareInfo}
-              firmwareInfoError={firmwareInfoError}
-              promptManualReconnection={promptManualReconnection}
-              onConnect={connect}
-              onDisconnect={disconnect}
-            />
-            <DeviceMemoryStatus isConnected={connectionStatus === "connected"} />
-          </div>
-        </Panel>
-
-        <Panel title="Controls" className="workbench-panel">
-          <div className="tab-list" role="tablist" aria-label="Demo controls">
-            <TabButton id="actuators" activeTab={activeTab} onSelect={setActiveTab}>
-              Actuators
-            </TabButton>
-            <TabButton id="python" activeTab={activeTab} onSelect={setActiveTab}>
-              Python
-            </TabButton>
-            <TabButton id="files" activeTab={activeTab} onSelect={setActiveTab}>
-              Files & Firmware
-            </TabButton>
-          </div>
-
-          <div className="tab-panel panel-scroll" id={`dashboard-tab-${activeTab}`} role="tabpanel">
-            {activeTab === "actuators" ? <ActuatorPanel /> : null}
-
-            {activeTab === "python" ? (
-              <div className="tab-stack python-tab-stack">
-                <div className="row wrap python-actions">
-                  <div className={`exec-pill ${isExecuting ? "running" : "idle"}`}>
-                    <span className="dot" />
-                    {isExecuting ? "Executing…" : "Idle"}
-                  </div>
-
-                  <button onClick={executeCode}>Execute code</button>
-                  <button className="secondary" onClick={stopCode}>
-                    Stop code execution
-                  </button>
-                </div>
-
-                <div className="python-editor-region">
-                  <PythonEditor
-                    value={code}
-                    onChange={setCode}
-                  />
-                </div>
-
-                <div className="row wrap">
-                  <input
-                    type="number"
-                    placeholder="script id"
-                    value={scriptIdToSave}
-                    onChange={(e) => setScriptIdToSave(e.target.value)}
-                  />
-                  <button onClick={saveToPartition}>Save to partition</button>
-                  <button className="secondary" onClick={resetInterpreter}>
-                    Reset interpreter
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {activeTab === "files" ? <FilesAndFirmwarePanel /> : null}
-          </div>
-        </Panel>
-      </main>
-    </div>
-  );
+        <button className={`robot-connect-button ${connected ? 'secondary' : ''}`} disabled={!apiReady || !navigator.bluetooth || s.ota || s.stopping || ['connecting', 'reconnecting'].includes(s.connection)} onClick={connected ? session.disconnect : session.connect}>{connected ? 'Disconnect' : s.connection === 'connecting' ? 'Connecting…' : 'Connect robot'}</button>
+      </div>
+      <DeviceMemoryStatus key={s.connection} isConnected={connected} isActive={!s.ota && !s.busy && !s.stopping} />
+    </header>
+    {!navigator.bluetooth && <div className="banner error-box">This browser does not expose Web Bluetooth. Open this demo in a browser with Web Bluetooth support over HTTPS or localhost.</div>}
+    {!apiReady && <div className="banner" role="status">Loading the robot API… If this persists, reload the page.</div>}
+    {s.notice && <div className={`banner ${s.notice.error ? 'error-box' : 'notice'}`} role={s.notice.error ? 'alert' : 'status'}>{s.notice.text}</div>}
+    <main className="workbench-layout">
+      <section className="workspace surface" aria-label="Robot workspace">
+        <Tabs items={TABS} value={tab} onChange={setTab} label="Workspace" prefix="workspace" />
+        {reason && <p className="hardware-help" role="status">{reason}</p>}
+        <div className={`workspace-content ${tab === 'controls' ? 'workspace-controls' : ''}`}>
+          <section role="tabpanel" id="workspace-panel-controls" aria-labelledby="workspace-controls" hidden={tab !== 'controls'}><ActuatorPanel disabled={disabled} /></section>
+          <section role="tabpanel" id="workspace-panel-python" aria-labelledby="workspace-python" hidden={tab !== 'python'}>
+            <div className="section-heading"><div><h2>Python</h2></div><span className="status-badge">{s.execution}</span></div>
+            <div className="toolbar"><label>Example<select value="" onChange={e => dirty ? setExample(e.target.value) : loadExample(e.target.value)}><option value="" disabled>Load an example</option><option value="blink">Blink LEDs</option><option value="sensors">Read sensors</option></select></label><div className="row"><button disabled={disabled} onClick={() => session.runCode(code)}>▶ Run</button><button className="secondary" disabled={!connected || s.ota || s.stopping} onClick={session.stopCode}>■ Stop</button></div></div>
+            <div className="editor-frame">{tab === 'python' && <PythonEditor value={code} onChange={value => {
+                setCode(value ?? '');
+                setDirty(true);
+              }} />}</div>
+            <details className="advanced"><summary>Script storage & interpreter</summary><div className="row wrap"><label>Script slot<input type="number" min="1" max="255" step="1" value={slot} onChange={e => setSlot(e.target.value)} /></label><button disabled={disabled || !Number.isInteger(Number(slot)) || Number(slot) < 1 || Number(slot) > 255} onClick={() => session.perform('Save script', api => api.saveScriptToPartition(Number(slot)))}>Save loaded script</button><button className="secondary" disabled={disabled} onClick={() => session.perform('Reset interpreter', api => api.softResetPythonInterpreter())}>Reset interpreter</button></div><p className="muted">Saves the script already loaded on the robot. Run your edited code before saving.</p></details>
+          </section>
+          <section role="tabpanel" id="workspace-panel-files" aria-labelledby="workspace-files" hidden={tab !== 'files'}><FilesPanel disabled={disabled} active={tab === 'files'} /></section>
+          <section role="tabpanel" id="workspace-panel-device" aria-labelledby="workspace-device" hidden={tab !== 'device'}>
+            <div className="section-heading"><div><h2>Device</h2></div></div>
+            <dl className="device-facts"><div><dt>Robot</dt><dd>{s.deviceName || 'Not connected'}</dd></div><div><dt>ESP32 firmware</dt><dd>{s.firmware?.esp32_ver || '—'}</dd></div><div><dt>STM32 firmware</dt><dd>{s.firmware?.stm32_ver || '—'}</dd></div></dl>
+            <FirmwareUpdatePanel disabled={disabled} />
+          </section>
+        </div>
+        <StdoutPanel entries={s.output} onClear={session.clearOutput} expandedByDefault={tab === 'python'} />
+      </section>
+      <aside className="telemetry surface"><SensorPanel /></aside>
+    </main>
+    {example && <Confirm title="Replace edited code?" destructive={false} onClose={() => setExample(null)} onConfirm={() => loadExample(example)}>Your current edits will be replaced with the selected example.</Confirm>}
+  </div>;
 }

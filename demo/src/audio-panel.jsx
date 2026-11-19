@@ -1,115 +1,56 @@
-import { useEffect, useRef, useState } from "react";
-import ProgressBar from "./progress-bar";
-import { clampInt } from "./utils";
-import "./audio-panel.css";
-
-function getThymio() {
-  return window.thymio;
-}
-
-export default function AudioPanel() {
-  const audioFileRef = useRef(null);
-  const [audioFreq, setAudioFreq] = useState(0);
-  const [audioFreqDuration, setAudioFreqDuration] = useState(0);
-  const [audioUploadProgress, setAudioUploadProgress] = useState(0);
-
+import { useEffect, useState } from 'react';
+import { session } from './use-session';
+export default function AudioPanel({
+  disabled
+}) {
+  const [file, setFile] = useState(null);
+  const [frequency, setFrequency] = useState(440);
+  const [duration, setDuration] = useState(1);
+  const [progress, setProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
   useEffect(() => {
-    const onAudioProgress = (event) => setAudioUploadProgress(clampInt(event.detail?.percentage ?? 0, 0, 100));
-
-    document.addEventListener("thymio-audio-upload-progress", onAudioProgress);
-
-    return () => {
-      document.removeEventListener("thymio-audio-upload-progress", onAudioProgress);
+    const update = e => {
+      if (uploading) setProgress(Math.min(100, Math.max(0, e.detail?.percentage ?? 0)));
     };
-  }, []);
-
-  async function uploadAudioFile() {
-    const t = getThymio();
-    const file = audioFileRef.current?.files?.[0];
-    if (!t?.uploadAudioFile) return;
-    if (!file) return alert("Pick an audio file first");
-    setAudioUploadProgress(0);
-    await t.uploadAudioFile(file);
+    document.addEventListener('thymio-audio-upload-progress', update);
+    return () => document.removeEventListener('thymio-audio-upload-progress', update);
+  }, [uploading]);
+  async function upload() {
+    if (!file) return;
+    setProgress(0);
+    setUploading(true);
+    const result = await session.perform('Upload audio', api => api.uploadAudioFile(file));
+    if (result.ok) setProgress(100);
+    setUploading(false);
   }
-
-  async function playFrequency() {
-    const t = getThymio();
-    if (!t?.playFrequency) return;
-    await t.playFrequency(clampInt(audioFreq, 0, 3000), clampInt(audioFreqDuration, 0, 1000));
-  }
-
   return (
-    <div className="compact-group audio-panel">
-      <div className="grid-title">Audio</div>
-
-      <div className="audio-subpanel-grid">
-        <div className="audio-subpanel">
-          <div className="subhead">Audio file upload</div>
-          <div className="audio-upload-controls">
-            <div className="row wrap">
-              <input ref={audioFileRef} type="file" accept="audio/wav,audio/mpeg,.wav,.mp3" />
-              <button onClick={uploadAudioFile}>Upload audio file</button>
-            </div>
-            <ProgressBar value={audioUploadProgress} />
-          </div>
-        </div>
-
-        <div className="audio-subpanel">
-          <div className="subhead">Audio actions</div>
-          <div className="audio-transport-group" aria-label="Audio playback controls">
-            <button className="secondary audio-transport-button" onClick={() => getThymio()?.playAudioFile?.()}>
-              <span className="audio-transport-icon" aria-hidden="true">▶</span>
-              <span>Play</span>
-            </button>
-            <button className="secondary audio-transport-button" onClick={() => getThymio()?.stopAudioFile?.()}>
-              <span className="audio-transport-icon" aria-hidden="true">■</span>
-              <span>Stop</span>
-            </button>
-            <button className="secondary audio-transport-button" onClick={() => getThymio()?.recordAudio?.(3)}>
-              <span className="audio-transport-icon record" aria-hidden="true">●</span>
-              <span>Record (3s)</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="audio-subpanel audio-frequency-panel">
-          <div className="subhead">Frequency play</div>
-          <div className="audio-frequency-controls">
-            <label className="audio-slider-field">
-              <span className="audio-slider-header">
-                <span>Frequency</span>
-                <strong>{audioFreq} Hz</strong>
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={3000}
-                step={10}
-                value={audioFreq}
-                onChange={(e) => setAudioFreq(parseInt(e.target.value, 10) || 0)}
-              />
-              <span className="audio-frequency-help">0 to 3 KHz</span>
-            </label>
-            <label className="audio-slider-field">
-              <span className="audio-slider-header">
-                <span>Duration</span>
-                <strong>{audioFreqDuration === 0 ? "Forever" : `${audioFreqDuration} tenths`}</strong>
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={1000}
-                value={audioFreqDuration}
-                onChange={(e) => setAudioFreqDuration(parseInt(e.target.value, 10) || 0)}
-              />
-              <span className="audio-frequency-help">0 plays forever</span>
-            </label>
-            <button className="audio-play-frequency-button" onClick={playFrequency}>
-              Play Frequency
-            </button>
-          </div>
-        </div>
+    <div className="audio-panel">
+      <div className="audio-upload-row">
+        <label className="file-field">Audio file
+          <input disabled={disabled} type="file" accept=".wav,.mp3,audio/wav,audio/mpeg" onChange={e => setFile(e.target.files[0] || null)} />
+        </label>
+        <button disabled={disabled || !file} onClick={upload}>Upload</button>
       </div>
+      <p className="muted audio-format">WAV / MP3 · mono · 12 kHz</p>
+      {(uploading || progress > 0) && (
+        <label className="progress-label">Audio upload · {Math.round(progress)}%<progress value={progress} max="100" /></label>
+      )}
+      <fieldset disabled={disabled} className="row wrap audio-transport">
+        <button className="secondary" onClick={() => session.perform('Play audio', api => api.playAudioFile())}>▶ Play</button>
+        <button className="secondary" onClick={() => session.perform('Stop audio', api => api.stopAudioFile())}>■ Stop audio</button>
+        <button className="secondary" onClick={() => session.perform('Record audio', api => api.recordAudio(3))}>● Record 3s</button>
+      </fieldset>
+      <h3 className="spaced-heading">Frequency generator</h3>
+      <fieldset disabled={disabled} className="frequency-grid">
+        <label className="frequency-field">Frequency · {frequency} Hz
+          <input type="range" min="0" max="3000" step="10" value={frequency} onChange={e => setFrequency(Number(e.target.value))} />
+        </label>
+        <label className="duration-field">Duration (s)
+          <input type="number" min="0" max="100" step="0.1" value={duration} aria-describedby="duration-help" onChange={e => setDuration(Math.min(100, Math.max(0, Number(e.target.value))))} />
+        </label>
+        <button onClick={() => session.perform('Play frequency', api => api.playFrequency(frequency, Math.round(duration * 10)))}>Play tone</button>
+      </fieldset>
+      <p id="duration-help" className="muted duration-help">0 seconds = continuous</p>
     </div>
   );
 }

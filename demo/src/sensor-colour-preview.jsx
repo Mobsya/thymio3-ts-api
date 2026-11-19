@@ -15,7 +15,7 @@ function colorRawToRgbCss(colorRaw) {
   return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
 }
 
-export default function SensorColourPreview({ mode, value, children }) {
+export default function SensorColourPreview({ mode, value, children, compact = false }) {
   let backgroundColor;
   let label;
   let previewLabel;
@@ -34,9 +34,9 @@ export default function SensorColourPreview({ mode, value, children }) {
   }
 
   return (
-    <div className="sensor-colour-preview-container">
+    <div className={`sensor-colour-preview-container${compact ? " compact" : ""}`}>
       <div className="sensor-colour-preview-header">
-        <span className="sensor-colour-preview-label">{previewLabel}</span>
+        <span className="sensor-colour-preview-label">{compact ? (mode === "detected" ? `Detected · ${value == null ? "Waiting" : getDetectedColour(value)?.name ?? "Unknown"}` : "HSV") : previewLabel}</span>
         {children}
       </div>
       <span

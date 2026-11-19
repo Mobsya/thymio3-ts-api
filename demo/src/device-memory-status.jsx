@@ -1,191 +1,108 @@
-import { useEffect, useState } from "react";
-import "./device-memory-status.css";
+import { useEffect, useRef, useState } from 'react';
+import './device-memory-status.css';
 
 function formatBytes(bytes) {
-  if (!Number.isFinite(bytes)) return "Unknown";
-
-  const units = ["B", "KB", "MB", "GB"];
+  if (!Number.isFinite(bytes)) return '—';
+  const units = ['B', 'KB', 'MB', 'GB'];
   let value = bytes;
-  let unitIndex = 0;
-
-  while (value >= 1024 && unitIndex < units.length - 1) {
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
     value /= 1024;
-    unitIndex += 1;
+    unit++;
   }
-
-  const digits = unitIndex === 0 ? 0 : 1;
-  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
-function getThymio() {
-  return window.thymio;
-}
-
-function withTimeout(promise, timeoutMs, message) {
-  let timeoutId;
-
+function withTimeout(promise, timeoutMs) {
+  let timer;
   const timeout = new Promise((_, reject) => {
-    timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    timer = setTimeout(() => reject(new Error('Memory request timed out')), timeoutMs);
   });
-
-  return Promise.race([promise, timeout]).finally(() => {
-    window.clearTimeout(timeoutId);
-  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function getChartY(value, minValue, maxValue, height, padding) {
-  const drawableHeight = height - padding.top - padding.bottom;
-  const valueRange = Math.max(1, maxValue - minValue);
-  const normalized = (value - minValue) / valueRange;
-  return padding.top + drawableHeight - normalized * drawableHeight;
-}
-
-function buildPolylinePoints(samples, key, minValue, maxValue, width, height, padding) {
-  if (samples.length === 0) return "";
-
-  const drawableWidth = width - padding.left - padding.right;
-  const xStep = samples.length > 1 ? drawableWidth / (samples.length - 1) : 0;
-
-  return samples
-    .map((sample, index) => {
-      const x = padding.left + index * xStep;
-      const y = getChartY(sample[key], minValue, maxValue, height, padding);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-}
-
-function MemorySparkline({ samples, keyName, label, colorClass, value }) {
-  const width = 320;
-  const height = 110;
-  const padding = { top: 14, right: 8, bottom: 8, left: 46 };
-  const values = samples.map((sample) => sample[keyName]);
-  const minValue = 0;
-  const maxValue = values.length ? Math.max(...values) : 1;
-  const points = buildPolylinePoints(samples, keyName, minValue, maxValue, width, height, padding);
-  const tickValues = [maxValue, (minValue + maxValue) / 2, minValue];
+function MemorySparkline({ samples, field, label, state, error, lastUpdated }) {
+  const values = samples.map(sample => sample[field]);
+  const latest = values.at(-1);
+  const max = values.length ? Math.max(...values) : 0;
+  const points = values.map((value, index) => {
+    const x = 3 + index / Math.max(1, values.length - 1) * 194;
+    const y = 24 - (max > 0 ? value / max : 0) * 20;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const detail = [
+    `${label}: ${formatBytes(latest)}`,
+    state,
+    values.length ? `${values.length} samples; scale 0 to ${formatBytes(max)}` : 'No samples',
+    lastUpdated ? `Last received ${new Date(lastUpdated).toLocaleTimeString()}` : '',
+    error,
+  ].filter(Boolean).join('. ');
 
   return (
-    <div className="device-memory-chart">
-      <div className="device-memory-graph-label">
-        <span>{label}</span>
-        <strong>{formatBytes(value)}</strong>
+    <div className={`device-memory-chart ${field}`} title={detail} data-sample-count={samples.length}>
+      <div className="device-memory-graph-label"><span>{label}</span><strong>{formatBytes(latest)}</strong></div>
+      <div className="device-memory-plot">
+        <svg role="img" aria-label={`${label} history. ${detail}`} viewBox="0 0 200 28" preserveAspectRatio="none">
+          <title>{detail}</title>
+          {values.length > 0 && <line className="device-memory-baseline" x1="3" y1="24" x2="197" y2="24" />}
+          {values.length === 1 && <circle className="device-memory-point" cx="3" cy={max > 0 ? 4 : 24} r="2" />}
+          {values.length > 1 && <polyline className="device-memory-line" points={points} />}
+        </svg>
+        {state !== 'Live' && <span className="device-memory-state">{state}</span>}
       </div>
-      <svg aria-label={`${label} memory history`} viewBox={`0 0 ${width} ${height}`} role="img">
-        {tickValues.map((value, index) => {
-          const y = getChartY(value, minValue, maxValue, height, padding);
-
-          return (
-            <g key={`${label}-${index}`}>
-              <line className="device-memory-grid-line" x1={padding.left} y1={y} x2={width - padding.right} y2={y} />
-              <text className="device-memory-tick-label" x={padding.left - 5} y={y} textAnchor="end" dominantBaseline="middle">
-                {formatBytes(value)}
-              </text>
-            </g>
-          );
-        })}
-        {samples.length > 1 ? (
-          <polyline className={`device-memory-line ${colorClass}`} points={points} />
-        ) : null}
-      </svg>
-      {samples.length < 2 ? (
-        <div className="muted device-memory-chart-empty">Waiting for graph samples...</div>
-      ) : null}
     </div>
   );
 }
 
-export default function DeviceMemoryStatus({ isConnected, pollIntervalMs = 1000, requestTimeoutMs = 4000 }) {
-  const [memoryInfo, setMemoryInfo] = useState(null);
+export default function DeviceMemoryStatus({ isConnected, isActive = true, pollIntervalMs = 1000, requestTimeoutMs = 4000 }) {
   const [samples, setSamples] = useState([]);
-  const [error, setError] = useState("");
-  const [lastUpdated, setLastUpdated] = useState(null);
+  const [error, setError] = useState('');
+  const inFlight = useRef(false);
+  const lastRequest = useRef(0);
 
   useEffect(() => {
-    setMemoryInfo(null);
-    setSamples([]);
-    setError("");
-    setLastUpdated(null);
-    if (!isConnected) return undefined;
-
+    if (!isConnected || !isActive) return;
     let cancelled = false;
-    let timeoutId;
+    let timer;
 
-    async function pollMemory() {
+    async function poll() {
+      // An operation may pause and resume the component while a request settles.
+      // Keep only one request in flight and never restart faster than the interval.
+      if (inFlight.current) {
+        timer = setTimeout(poll, pollIntervalMs);
+        return;
+      }
+      inFlight.current = true;
+      lastRequest.current = Date.now();
       try {
-        const t = getThymio();
-        if (!t?.getMemoryInfo) throw new Error("Memory API unavailable");
-
-        const nextMemoryInfo = await withTimeout(
-          t.getMemoryInfo(),
-          requestTimeoutMs,
-          "Memory polling timed out"
-        );
+        const api = window.thymio;
+        if (!api?.getMemoryInfo) throw new Error('Memory API unavailable');
+        const info = await withTimeout(api.getMemoryInfo(), requestTimeoutMs);
         if (cancelled) return;
-
-        setMemoryInfo(nextMemoryInfo);
-        setSamples((current) => [
-          ...current.slice(-29),
-          {
-            time: Date.now(),
-            ram: nextMemoryInfo.ram_bytes_free,
-            flash: nextMemoryInfo.flash_bytes_free,
-          },
-        ]);
-        setError("");
-        setLastUpdated(new Date());
-      } catch (err) {
-        if (!cancelled) setError(err?.message ?? "Failed to read memory info");
+        if (![info?.ram_bytes_free, info?.flash_bytes_free].every(value => Number.isFinite(value) && value >= 0)) {
+          throw new Error('Invalid memory reading');
+        }
+        setSamples(current => [...current.slice(-29), { time: Date.now(), ram: info.ram_bytes_free, flash: info.flash_bytes_free }]);
+        setError('');
+      } catch (error) {
+        if (!cancelled) setError(error instanceof Error ? error.message : String(error));
       } finally {
-        if (!cancelled) timeoutId = window.setTimeout(pollMemory, pollIntervalMs);
+        inFlight.current = false;
+        if (!cancelled) timer = setTimeout(poll, pollIntervalMs);
       }
     }
 
-    void pollMemory();
+    // Deferring also prevents duplicate requests during React Strict Mode setup.
+    timer = setTimeout(poll, Math.max(0, pollIntervalMs - (Date.now() - lastRequest.current)));
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [isConnected, isActive, pollIntervalMs, requestTimeoutMs]);
 
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [isConnected, pollIntervalMs, requestTimeoutMs]);
-
+  const state = !isConnected ? 'Disconnected' : !isActive ? 'Paused' : error ? 'Unavailable' : samples.length ? 'Live' : 'Waiting';
   return (
-    <div className="device-memory-status">
-      <div className="device-memory-header">
-        <div className="grid-title">Memory</div>
-        <span className={`device-memory-state ${isConnected ? "connected" : "disconnected"}`}>
-          {isConnected ? "Polling" : "Disconnected"}
-        </span>
-      </div>
-
-      <div className="device-memory-chart-grid">
-        <MemorySparkline
-          samples={samples}
-          keyName="ram"
-          label="RAM"
-          colorClass="ram"
-          value={memoryInfo?.ram_bytes_free}
-        />
-        <MemorySparkline
-          samples={samples}
-          keyName="flash"
-          label="Flash"
-          colorClass="flash"
-          value={memoryInfo?.flash_bytes_free}
-        />
-      </div>
-
-      {lastUpdated ? (
-        <div className="muted device-memory-footnote">
-          Updated {lastUpdated.toLocaleTimeString()}
-        </div>
-      ) : (
-        <div className="muted device-memory-footnote">
-          {isConnected ? "Waiting for first memory sample..." : "Connect to poll memory."}
-        </div>
-      )}
-
-      {error ? <div className="error-box device-memory-error">{error}</div> : null}
-    </div>
+    <section className="device-memory-status" aria-label="Robot memory">
+      {[["ram", "RAM free"], ["flash", "Flash free"]].map(([field, label]) => (
+        <MemorySparkline key={field} samples={samples} field={field} label={label} state={state} error={error} lastUpdated={samples.at(-1)?.time} />
+      ))}
+    </section>
   );
 }

@@ -32,6 +32,30 @@ npm run demo:run
 
 And open the `localhost:5173` in your browser.
 
+The demo has four workspaces: Controls (Movement, Lights, and Sound), Python,
+Files, and Device. Hardware actions require a connected robot; Python can be
+edited offline. Sensors remain available alongside the workspace on desktop and
+below it on smaller screens. The console expands beneath the Python editor.
+
+**Stop robot** sends stop commands for Python, motors, and audio and preserves
+the LED settings last selected in the demo. It cannot read back LED changes made
+by a Python script, and it requires a working Bluetooth link. **All Off** remains
+a separate actuator preset. Firmware transfer temporarily locks incompatible
+controls and pauses telemetry polling.
+
+To check the demo without a robot, start the local demo server and run:
+
+```sh
+npm run demo:test:browser
+```
+
+The browser checks use a simulated API and cover connection gating, Stop during
+script upload, file transfers, firmware locking, keyboard navigation, and phone,
+tablet, and desktop layouts. Set `DEMO_URL` for a different server URL,
+`PLAYWRIGHT_EXECUTABLE_PATH` for a custom Chromium executable, or
+`DEMO_SCREENSHOT_DIR` to save screenshots. Controller regression tests also run
+as part of `npm test`. Simulated checks do not replace hardware verification.
+
 ## Bluetooth browsers and discovery
 
 Use a browser that exposes `navigator.bluetooth`, a Bluetooth Low Energy adapter,
