@@ -1,0 +1,51 @@
+.workspace-content.workspace-python { padding: 10px; min-height: 0; }
+.python-ide { min-width: 0; }
+.ide-toolbar, .ide-run, .python-editor-status { display: flex; align-items: center; gap: 6px; }
+.ide-toolbar { flex-wrap: wrap; padding-bottom: 8px; }
+.ide-run { margin-left: auto; flex-wrap: wrap; }
+.ide-run button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.ide-toolbar button, .ide-library button { min-height: 32px; padding: 5px 9px; font-size: 12px; }
+.ide-library-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.ide-library-toggle[aria-expanded=true] { color: var(--primary); background: var(--panel-soft); }
+.execution-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 3px 12px; border: 1px solid #bac7d6; border-radius: 100px; background: #eef2f7; color: #35465b; font-size: 13px; font-weight: 700; }
+.execution-light { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.execution-pill[data-state="Running"] { color: #096046; background: #def6e9; border-color: #90ceb1; }
+.execution-pill[data-state="Running"] .execution-light { animation: script-running 1.6s ease-out infinite; }
+.execution-pill[data-state="Uploading…"] { background: #fff3d9; color: #7a4c06; }
+.execution-pill[data-state="Error"], .execution-pill[data-state="Unknown"] { background: #fff0ed; color: #993728; }
+@keyframes script-running {
+  from { box-shadow: 0 0 0 0 #16926388; }
+  75%, to { box-shadow: 0 0 0 5px transparent; }
+}
+.ide-body { container-type: inline-size; display: flex; height: clamp(340px, 52vh, 620px); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.ide-editor, .python-editor-region { min-width: 0; flex: 1; }
+.ide-editor { padding-top: 6px; }
+.python-editor-status { justify-content: space-between; flex-wrap: wrap; padding: 4px 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; opacity: 1; }
+.ide-library { min-width: 0; flex: 0 0 clamp(200px, 26%, 280px); padding: 10px; overflow: auto; background: var(--panel-soft); color: var(--text); border-right: 1px solid var(--border); }
+.ide-library .tabs { padding: 4px 0 0; }
+.ide-library input, .ide-library select { width: 100%; margin: 6px 0; }
+.ide-library summary { padding: 6px 0; overflow-wrap: anywhere; }
+.ide-library details { border-bottom: 1px solid var(--border); font-size: 12px; }
+.ide-library .api-link { width: 100%; text-align: left; background: transparent; border: none; color: var(--primary); font: 12px ui-monospace, monospace; overflow-wrap: anywhere; }
+.api-doc { padding: 4px 6px 8px; }
+.api-doc p { margin: 4px 0; }
+.ide-library pre { white-space: pre-wrap; overflow-wrap: anywhere; background: white; padding: 8px; margin: 6px 0; border: 1px solid var(--border); font: 12px/1.5 ui-monospace, monospace; }
+.ide-drawer { margin: auto; width: min(360px, 92vw); max-height: 80dvh; border: 1px solid var(--border); border-radius: 8px; }
+.ide-drawer::backdrop { background: #18273666; }
+.ide-tools { margin: 8px 12px; }
+@media(pointer: coarse) { .ide-toolbar button, .ide-library button { min-height: 44px; } }
+
+.ide-library-track { --pane-width: clamp(200px, 26cqw, 280px); flex: none; width: var(--pane-width); overflow: hidden; transition: width 200ms ease; }
+.ide-library-track[data-open=false] { width: 0; }
+.ide-library-track > aside { width: var(--pane-width); height: 100%; transition: transform 200ms ease, opacity 160ms ease; }
+.ide-library-track[data-open=false] > aside { transform: translateX(-20px); opacity: 0; }
+.ide-drawer {
+  margin: 0 auto 0 0; height: 100dvh; max-height: 100dvh; border-radius: 0 10px 10px 0;
+  transform: translateX(-100%);
+  transition: transform 200ms ease, overlay 200ms allow-discrete, display 200ms allow-discrete;
+}
+.ide-drawer[open] { transform: translateX(0); }
+@starting-style { .ide-drawer[open] { transform: translateX(-100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .execution-light, .ide-library-track, .ide-library-track > aside, .ide-drawer { animation: none !important; transition: none !important; }
+}

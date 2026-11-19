@@ -100,7 +100,7 @@ const BASIC_LED_METHODS = {
   ),
 };
 
-const THYMIO_MODULE_MEMBERS = {
+export const THYMIO_MODULE_MEMBERS = {
   BUTTONS: constructorApi("BUTTONS", [], "Access the five top buttons."),
   COLOR_SENSOR: constructorApi("COLOR_SENSOR", [], "Access the bottom color sensor."),
   FILESYSTEM: constructorApi("FILESYSTEM", [], "Access the internal file management system."),
@@ -219,7 +219,7 @@ const TIME_MODULE_MEMBERS = {
   ),
 };
 
-const THYMIO_CLASSES = {
+export const THYMIO_CLASSES = {
   BUTTONS: {
     methods: {
       get_status: methodApi(

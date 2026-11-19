@@ -112,7 +112,6 @@ export function createSession(getApi = () => window.thymio, events = document) {
       if (!valid()) return {
         ok: false
       };
-      notify(`${label} complete.`);
       return {
         ok: true,
         value
@@ -254,7 +253,7 @@ export function createSession(getApi = () => window.thymio, events = document) {
         stopping: false,
         execution: failures.some(f => f.startsWith('Python:')) ? 'Unknown' : 'Idle'
       });
-      notify(failures.length ? `Stop incomplete. ${failures.join('; ')}` : 'Stop commands sent. LED settings retained.', failures.length > 0);
+      if (failures.length) notify(`Stop incomplete. ${failures.join('; ')}`, true);
     }
   }
   async function runCode(code) {

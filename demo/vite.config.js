@@ -37,6 +37,11 @@ export default defineConfig({
     viteStaticCopy({
       targets: [
         {
+          src: resolve(demoDir, "node_modules/monaco-editor/min/vs"),
+          dest: "assets/monaco",
+          rename: { stripBase: 3 },
+        },
+        {
           src: resolve(demoDir, "../dist/thymio.iife.js"),
           dest: "libs",
           rename: { stripBase: true },

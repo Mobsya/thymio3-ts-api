@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import Editor from "@monaco-editor/react";
+import Editor, { loader } from "@monaco-editor/react";
 import { registerThymioPythonLanguage } from "./thymio-python-intellisense";
 import "./python-editor.css";
+
+loader.config({ paths: { vs: new URL('./assets/monaco/vs', window.location.href).href } });
 
 let pyodidePromise = null;
 
@@ -24,52 +26,28 @@ async function loadPyodideOnce() {
   return pyodidePromise;
 }
 
-function debounce(fn, ms) {
-  let t;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), ms);
-  };
-}
-
-export default function PythonEditor({ value, onChange, height }) {
-  const monacoRef = useRef(null);
+export default function PythonEditor({ value, onChange, onReady, saveStatus }) {
   const editorRef = useRef(null);
-  const validateRef = useRef(() => {});
-
   const [pyodide, setPyodide] = useState(null);
-  const [pyodideReady, setPyodideReady] = useState(false);
+  const [checkerFailed, setCheckerFailed] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const p = await loadPyodideOnce();
-        if (!cancelled) {
-          setPyodide(p);
-          setPyodideReady(true);
-        }
-      } catch {
-        if (!cancelled) setPyodideReady(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    loadPyodideOnce().then(runtime => {
+      if (!cancelled) setPyodide(runtime);
+    }).catch(() => {
+      if (!cancelled) setCheckerFailed(true);
+    });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    validateRef.current = debounce(async (code) => {
-        const monaco = monacoRef.current;
-        const editor = editorRef.current;
-        const model = editor?.getModel?.();
-        if (!monaco || !model) return;
-
-        if (!pyodide) {
-          monaco.editor.setModelMarkers(model, "python-syntax", []);
-          return;
-        }
-
+    if (!mounted || !pyodide) return;
+    const { editor, monaco } = editorRef.current;
+    const model = editor.getModel();
+    const timer = setTimeout(() => {
+        const code = model.getValue();
         try {
           pyodide.globals.set("___code___", code);
 
@@ -137,31 +115,23 @@ _syntax_check(___code___)
             // Pyodide globals cleanup is best-effort.
           }
         }
-      }, 250);
-  }, [pyodide]);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [pyodide, mounted, value]);
 
   return (
     <div className="python-editor">
-      <div className="python-editor-status">
-        Python syntax check: {pyodideReady ? "ready" : "loading…"}
-      </div>
-
-      <Editor
-        height={height ?? "100%"}
+      <div className="python-editor-region"><Editor
+        height="100%"
         defaultLanguage="python"
         value={value}
-        onChange={(v) => {
-          const next = v ?? "";
-          onChange(next);
-          validateRef.current(next);
-        }}
+        onChange={onChange}
         onMount={(editor, monaco) => {
-          editorRef.current = editor;
-          monacoRef.current = monaco;
-
+          editorRef.current = { editor, monaco };
           registerThymioPythonLanguage(monaco);
+          onReady(editor);
+          setMounted(true);
 
-          // editor polish
           editor.updateOptions({
             minimap: { enabled: false },
             fontSize: 14,
@@ -175,15 +145,13 @@ _syntax_check(___code___)
             suggestOnTriggerCharacters: true,
             snippetSuggestions: "top",
           });
-
-          // run initial validation
-          validateRef.current(value ?? "");
         }}
         options={{
           scrollBeyondLastLine: false,
           renderLineHighlight: "all",
         }}
-      />
+      /></div>
+      <footer className="python-editor-status"><span>{saveStatus}</span><span>Syntax check {checkerFailed ? 'unavailable' : pyodide ? 'ready' : 'loading…'}</span></footer>
     </div>
   );
 }

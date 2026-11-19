@@ -3,15 +3,11 @@ import ActuatorPanel from './actuator-panel';
 import DeviceMemoryStatus from './device-memory-status';
 import FirmwareUpdatePanel from './firmware-update-panel';
 import FilesPanel from './files-panel';
-import PythonEditor from './python-editor';
+import PythonWorkspace, { RobotTools } from './python-workspace';
 import SensorPanel from './sensor-panel';
 import StdoutPanel from './stdout-panel';
 import { session, useSession } from './use-session';
-import { Tabs, Confirm } from './ui';
-const EXAMPLES = {
-  blink: `import thymio\nimport time\n\nled = thymio.LEDS_RGB(0)\nwhile True:\n    led.set_intensity(15, 0, 0)\n    time.sleep(0.5)\n    led.set_intensity(0, 0, 0)\n    time.sleep(0.5)\n`,
-  sensors: `import thymio\nimport time\n\nbuttons = thymio.BUTTONS()\nwhile True:\n    print(buttons.get_status())\n    time.sleep(0.2)\n`
-};
+import { Tabs } from './ui';
 const TABS = [['controls', 'Controls'], ['python', 'Python'], ['files', 'Files'], ['device', 'Device']];
 export default function App() {
   const s = useSession();
@@ -25,10 +21,11 @@ export default function App() {
     return () => { observer.disconnect(); root.style.removeProperty('--app-header-height'); };
   }, []);
   const [tab, setTab] = useState('controls');
-  const [code, setCode] = useState(EXAMPLES.blink);
-  const [dirty, setDirty] = useState(false);
-  const [example, setExample] = useState(null);
-  const [slot, setSlot] = useState('1');
+  const [pythonVisited, setPythonVisited] = useState(false);
+  function changeTab(next) {
+    if (next === 'python') setPythonVisited(true);
+    setTab(next);
+  }
   const [apiReady, setApiReady] = useState(Boolean(window.thymio));
   useEffect(() => session.start(), []);
   useEffect(() => {
@@ -45,11 +42,8 @@ export default function App() {
     reconnecting: 'Reconnecting…', disconnected: 'Disconnected',
   }[s.connection];
   const disabled = !connected || Boolean(s.busy) || s.stopping || s.ota;
-  const reason = !connected ? '' : s.ota ? 'Firmware transfer in progress. Hardware controls and telemetry are suspended.' : s.stopping ? 'Sending stop commands…' : s.busy ? `${s.busy}…` : '';
-  function loadExample(key) {
-    setCode(EXAMPLES[key]);
-    setDirty(false);
-  }
+  const showBusyMessage = s.busy && !['Run script', 'Stop script'].includes(s.busy);
+  const reason = !connected ? '' : s.ota ? 'Firmware transfer in progress. Hardware controls and telemetry are suspended.' : s.stopping ? 'Sending stop commands…' : showBusyMessage ? `${s.busy}…` : '';
   return <div className="app-shell">
     <header ref={header} className="app-header">
       <div className={`robot-panel ${s.connection}`}>
@@ -66,18 +60,12 @@ export default function App() {
     {s.notice && <div className={`banner ${s.notice.error ? 'error-box' : 'notice'}`} role={s.notice.error ? 'alert' : 'status'}>{s.notice.text}</div>}
     <main className="workbench-layout">
       <section className="workspace surface" aria-label="Robot workspace">
-        <Tabs items={TABS} value={tab} onChange={setTab} label="Workspace" prefix="workspace" />
+        <Tabs items={TABS} value={tab} onChange={changeTab} label="Workspace" prefix="workspace" />
         {reason && <p className="hardware-help" role="status">{reason}</p>}
-        <div className={`workspace-content ${tab === 'controls' ? 'workspace-controls' : ''}`}>
+        <div className={`workspace-content ${tab === 'controls' ? 'workspace-controls' : tab === 'python' ? 'workspace-python' : ''}`}>
           <section role="tabpanel" id="workspace-panel-controls" aria-labelledby="workspace-controls" hidden={tab !== 'controls'}><ActuatorPanel disabled={disabled} /></section>
           <section role="tabpanel" id="workspace-panel-python" aria-labelledby="workspace-python" hidden={tab !== 'python'}>
-            <div className="section-heading"><div><h2>Python</h2></div><span className="status-badge">{s.execution}</span></div>
-            <div className="toolbar"><label>Example<select value="" onChange={e => dirty ? setExample(e.target.value) : loadExample(e.target.value)}><option value="" disabled>Load an example</option><option value="blink">Blink LEDs</option><option value="sensors">Read sensors</option></select></label><div className="row"><button disabled={disabled} onClick={() => session.runCode(code)}>▶ Run</button><button className="secondary" disabled={!connected || s.ota || s.stopping} onClick={session.stopCode}>■ Stop</button></div></div>
-            <div className="editor-frame">{tab === 'python' && <PythonEditor value={code} onChange={value => {
-                setCode(value ?? '');
-                setDirty(true);
-              }} />}</div>
-            <details className="advanced"><summary>Script storage & interpreter</summary><div className="row wrap"><label>Script slot<input type="number" min="1" max="255" step="1" value={slot} onChange={e => setSlot(e.target.value)} /></label><button disabled={disabled || !Number.isInteger(Number(slot)) || Number(slot) < 1 || Number(slot) > 255} onClick={() => session.perform('Save script', api => api.saveScriptToPartition(Number(slot)))}>Save loaded script</button><button className="secondary" disabled={disabled} onClick={() => session.perform('Reset interpreter', api => api.softResetPythonInterpreter())}>Reset interpreter</button></div><p className="muted">Saves the script already loaded on the robot. Run your edited code before saving.</p></details>
+            {pythonVisited && <PythonWorkspace active={tab === 'python'} disabled={disabled} />}
           </section>
           <section role="tabpanel" id="workspace-panel-files" aria-labelledby="workspace-files" hidden={tab !== 'files'}><FilesPanel disabled={disabled} active={tab === 'files'} /></section>
           <section role="tabpanel" id="workspace-panel-device" aria-labelledby="workspace-device" hidden={tab !== 'device'}>
@@ -87,9 +75,9 @@ export default function App() {
           </section>
         </div>
         <StdoutPanel entries={s.output} onClear={session.clearOutput} expandedByDefault={tab === 'python'} />
+        <div hidden={tab !== 'python'}><RobotTools disabled={disabled} /></div>
       </section>
       <aside className="telemetry surface"><SensorPanel /></aside>
     </main>
-    {example && <Confirm title="Replace edited code?" destructive={false} onClose={() => setExample(null)} onConfirm={() => loadExample(example)}>Your current edits will be replaced with the selected example.</Confirm>}
   </div>;
 }
