@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { session } from './use-session';
 export default function StdoutPanel({
   entries,
@@ -6,11 +6,34 @@ export default function StdoutPanel({
   expandedByDefault
 }) {
   const [override, setOverride] = useState(null);
-  const [height, setHeight] = useState(220);
+  const [preferredHeight, setPreferredHeight] = useState(220);
+  const [ideLimit, setIdeLimit] = useState(480);
   const [follow, setFollow] = useState(true);
   const [copied, setCopied] = useState(false);
   const box = useRef(null);
   const open = override?.tab === expandedByDefault ? override.open : expandedByDefault;
+  const minHeight = expandedByDefault ? 80 : 120;
+  const maxHeight = expandedByDefault ? ideLimit : 480;
+  const height = Math.max(minHeight, Math.min(preferredHeight, maxHeight));
+
+  useLayoutEffect(() => {
+    if (!expandedByDefault || !open) return;
+    const output = box.current;
+    const workspace = output.closest('.workspace');
+    const editor = workspace.querySelector('.ide-body');
+    if (!editor) return;
+    function measure() {
+      // All space outside the two panes belongs to toolbars, tabs and robot tools.
+      const occupied = Array.from(workspace.children).reduce((sum, child) =>
+        sum + child.getBoundingClientRect().height, 0);
+      const chrome = occupied - editor.offsetHeight - output.offsetHeight;
+      setIdeLimit(Math.max(80, Math.min(480, Math.floor(workspace.clientHeight - chrome - 140))));
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    for (const el of [workspace, ...workspace.children, editor, output]) observer.observe(el);
+    return () => observer.disconnect();
+  }, [expandedByDefault, open]);
   const text = entries.map(e => e.value).join('');
   useEffect(() => {
     if (follow && open && box.current) box.current.scrollTop = box.current.scrollHeight;
@@ -20,7 +43,7 @@ export default function StdoutPanel({
     const timer = setTimeout(() => setCopied(false), 1500);
     return () => clearTimeout(timer);
   }, [copied]);
-  const resize = value => setHeight(Math.max(120, Math.min(480, value)));
+  const resize = value => setPreferredHeight(Math.max(minHeight, Math.min(maxHeight, value)));
   async function copy() {
     try {
       await navigator.clipboard.writeText(text);
@@ -30,7 +53,7 @@ export default function StdoutPanel({
     }
   }
   return <section className="console-panel" aria-label="Console">
-    {open && <div role="separator" className="console-resizer" tabIndex="0" aria-label="Console height" aria-orientation="horizontal" aria-valuemin={120} aria-valuemax={480} aria-valuenow={height} onKeyDown={e => {
+    {open && <div role="separator" className="console-resizer" tabIndex="0" aria-label="Console height" aria-orientation="horizontal" aria-valuemin={minHeight} aria-valuemax={maxHeight} aria-valuenow={height} onKeyDown={e => {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         resize(height + (e.key === 'ArrowUp' ? 20 : -20));

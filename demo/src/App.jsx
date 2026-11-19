@@ -3,7 +3,7 @@ import ActuatorPanel from './actuator-panel';
 import DeviceMemoryStatus from './device-memory-status';
 import FirmwareUpdatePanel from './firmware-update-panel';
 import FilesPanel from './files-panel';
-import PythonWorkspace, { RobotTools } from './python-workspace';
+import PythonWorkspace from './python-workspace';
 import SensorPanel from './sensor-panel';
 import StdoutPanel from './stdout-panel';
 import { session, useSession } from './use-session';
@@ -44,7 +44,7 @@ export default function App() {
   const disabled = !connected || Boolean(s.busy) || s.stopping || s.ota;
   const showBusyMessage = s.busy && !['Run script', 'Stop script'].includes(s.busy);
   const reason = !connected ? '' : s.ota ? 'Firmware transfer in progress. Hardware controls and telemetry are suspended.' : s.stopping ? 'Sending stop commands…' : showBusyMessage ? `${s.busy}…` : '';
-  return <div className="app-shell">
+  return <div className={tab === 'python' ? 'app-shell python-shell' : 'app-shell'}>
     <header ref={header} className="app-header">
       <div className={`robot-panel ${s.connection}`}>
         <div className="robot-identity" role="status" aria-live="polite">
@@ -75,7 +75,6 @@ export default function App() {
           </section>
         </div>
         <StdoutPanel entries={s.output} onClear={session.clearOutput} expandedByDefault={tab === 'python'} />
-        <div hidden={tab !== 'python'}><RobotTools disabled={disabled} /></div>
       </section>
       <aside className="telemetry surface"><SensorPanel /></aside>
     </main>

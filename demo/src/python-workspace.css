@@ -32,7 +32,11 @@
 .ide-library pre { white-space: pre-wrap; overflow-wrap: anywhere; background: white; padding: 8px; margin: 6px 0; border: 1px solid var(--border); font: 12px/1.5 ui-monospace, monospace; }
 .ide-drawer { margin: auto; width: min(360px, 92vw); max-height: 80dvh; border: 1px solid var(--border); border-radius: 8px; }
 .ide-drawer::backdrop { background: #18273666; }
-.ide-tools { margin: 8px 12px; }
+.ide-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-right: auto; }
+.ide-tools label { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; font-size: 12px; }
+.ide-tools input { width: 52px; }
+.ide-tools input, .ide-tools button { min-height: 28px; padding: 3px 6px; font-size: 12px; }
+@media (pointer: coarse) { .ide-tools input, .ide-tools button { min-height: 44px; } }
 @media(pointer: coarse) { .ide-toolbar button, .ide-library button { min-height: 44px; } }
 
 .ide-library-track { --pane-width: clamp(200px, 26cqw, 280px); flex: none; width: var(--pane-width); overflow: hidden; transition: width 200ms ease; }
@@ -48,4 +52,37 @@
 @starting-style { .ide-drawer[open] { transform: translateX(-100%); } }
 @media (prefers-reduced-motion: reduce) {
   .execution-light, .ide-library-track, .ide-library-track > aside, .ide-drawer { animation: none !important; transition: none !important; }
+}
+
+/* The active IDE shares the viewport between the editor and docked output. */
+.python-shell { display: flex; flex-direction: column; height: 100dvh; }
+.python-shell > :not(.workbench-layout) { flex: none; }
+.python-shell .workbench-layout {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 6px;
+  grid-template-rows: 100%;
+}
+.python-shell .workspace {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.python-shell .workspace > :not(.workspace-python) { flex: none; }
+.python-shell .workspace-python { flex: 1 1 0; min-height: 0; }
+.python-shell .workspace-python,
+#workspace-panel-python:not([hidden]),
+.python-shell .python-ide { display: flex; flex-direction: column; }
+#workspace-panel-python, .python-shell .python-ide { flex: 1; min-height: 0; }
+.python-shell .ide-body { flex: 1; height: auto; min-height: 140px; }
+.python-shell .ide-toolbar { flex: none; }
+.python-shell .console-resizer {
+  height: 10px;
+  background-size: 56px 3px;
+}
+.python-shell .console-resizer:hover,
+.python-shell .console-resizer:focus-visible { background-color: var(--panel-soft); }
+@media (max-width: 1100px) {
+  .python-shell .workbench-layout { grid-template-rows: 100% auto; }
 }

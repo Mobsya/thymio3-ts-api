@@ -15,21 +15,20 @@ function restoreDraft() {
   return { filename: 'main.py', code: EXAMPLES[0].code, dirty: false };
 }
 
-export function RobotTools({ disabled }) {
+function RobotTools({ disabled }) {
   const [slot, setSlot] = useState('1');
   const valid = Number.isInteger(Number(slot)) && +slot >= 1 && +slot <= 255;
-  return <details className="advanced ide-tools"><summary>Robot tools</summary>
-    <div className="row wrap"><label>Script slot<input type="number" min="1" max="255" step="1" value={slot} onChange={e => setSlot(e.target.value)} /></label>
-      <button disabled={disabled || !valid} onClick={() => session.perform('Save script', api => api.saveScriptToPartition(Number(slot)))}>Save loaded script to robot</button>
+  return <div className="ide-tools" role="group" aria-label="Robot tools">
+      <label>Script slot<input type="number" min="1" max="255" step="1" value={slot} onChange={e => setSlot(e.target.value)} /></label>
+      <button className="secondary" disabled={disabled || !valid} onClick={() => session.perform('Save script', api => api.saveScriptToPartition(Number(slot)))}>Save loaded script to robot</button>
       <button className="secondary" disabled={disabled} onClick={() => session.perform('Reset interpreter', api => api.softResetPythonInterpreter())}>Reset interpreter</button>
-    </div>
-  </details>;
+  </div>;
 }
 
 export default function PythonWorkspace({ active, disabled }) {
   const s = useSession();
   const [draft, setDraft] = useState(restoreDraft);
-  const [saveStatus, setSaveStatus] = useState('Local draft');
+  const [saveFailed, setSaveFailed] = useState(false);
   const [pending, setPending] = useState(null);
   const [wide, setWide] = useState(false);
   const [pinned, setPinned] = useState(true);
@@ -60,8 +59,8 @@ export default function PythonWorkspace({ active, disabled }) {
     setDraft(next);
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(next));
-      setSaveStatus('Saved in this browser');
-    } catch { setSaveStatus('Browser save unavailable'); }
+      setSaveFailed(false);
+    } catch { setSaveFailed(true); }
   }
 
   function replace(next) {
@@ -130,7 +129,7 @@ export default function PythonWorkspace({ active, disabled }) {
       {wide && <div id="ide-library-pane" className="ide-library-track" data-open={pinned} inert={!pinned} aria-hidden={!pinned}>
         <aside className="ide-library">{library}</aside>
       </div>}
-      <div className="ide-editor"><PythonEditor value={draft.code} onReady={setEditor} saveStatus={saveStatus}
+      <div className="ide-editor"><PythonEditor value={draft.code} onReady={setEditor} saveFailed={saveFailed} footerTools={<RobotTools disabled={disabled} />}
         onChange={value => { if (draft.code !== value) save({ ...draft, code: value ?? '', dirty: true }); }} /></div>
     </div>
     <dialog id="ide-library-drawer" className="ide-library ide-drawer" ref={dialog} aria-label="Thymio library" closedby="any" onCancel={() => setDrawer(false)}>

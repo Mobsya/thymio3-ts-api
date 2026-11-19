@@ -26,7 +26,7 @@ async function loadPyodideOnce() {
   return pyodidePromise;
 }
 
-export default function PythonEditor({ value, onChange, onReady, saveStatus }) {
+export default function PythonEditor({ value, onChange, onReady, saveFailed, footerTools }) {
   const editorRef = useRef(null);
   const [pyodide, setPyodide] = useState(null);
   const [checkerFailed, setCheckerFailed] = useState(false);
@@ -151,7 +151,11 @@ _syntax_check(___code___)
           renderLineHighlight: "all",
         }}
       /></div>
-      <footer className="python-editor-status"><span>{saveStatus}</span><span>Syntax check {checkerFailed ? 'unavailable' : pyodide ? 'ready' : 'loading…'}</span></footer>
+      <footer className="python-editor-status">
+        {footerTools}
+        {saveFailed && <span role="status">Browser save unavailable</span>}
+        <span>Syntax check {checkerFailed ? 'unavailable' : pyodide ? 'ready' : 'loading…'}</span>
+      </footer>
     </div>
   );
 }

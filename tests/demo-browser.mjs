@@ -251,13 +251,24 @@ try {
   await page.evaluate(() => window.demoTest.emit('std-out-values', 'Hello from Thymio\n'));
   await page.getByText('Hello from Thymio', { exact: true }).waitFor();
   const separator = page.getByRole('separator', { name: 'Console height' });
+  const beforeResize = await python.locator('.ide-body').boundingBox();
   await separator.focus(); await page.keyboard.press('ArrowUp');
   assert.equal(await separator.getAttribute('aria-valuenow'), '240');
+  const afterResize = await python.locator('.ide-body').boundingBox();
+  assert(Math.abs(beforeResize.height - afterResize.height - 20) < 2, `Console grows into editor space (${beforeResize.height} to ${afterResize.height})`);
   await screenshot('python');
   for (const [width, height] of [[390, 844], [768, 1024], [1024, 768], [1440, 900]]) {
     await page.setViewportSize({ width, height });
     for (const name of ['Controls', 'Python', 'Files', 'Device']) {
       await tab(name).click();
+      if (name === 'Python') {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.waitForFunction(() => {
+          const editor = document.querySelector('.ide-body').getBoundingClientRect();
+          const output = document.querySelector('#console-output').getBoundingClientRect();
+          return editor.height >= 140 && output.height >= 80 && editor.bottom <= output.top && output.bottom <= innerHeight;
+        }, undefined, { timeout: 4000 });
+      }
       const geometry = await page.evaluate(() => {
         const workspace = document.querySelector('.workspace').getBoundingClientRect();
         const telemetry = document.querySelector('.telemetry').getBoundingClientRect();
