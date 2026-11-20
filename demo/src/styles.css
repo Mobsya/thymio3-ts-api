@@ -397,6 +397,15 @@ progress {
     linear-gradient(120deg, var(--primary-fill), var(--tab-edge));
   text-shadow: var(--tab-text-shadow);
 }
+.workspace > .tabs {
+  padding-top: 3px;
+}
+.workspace > .tabs button {
+  padding-block: 5px;
+}
+.workspace > .tabs button:focus-visible {
+  outline-offset: -3px;
+}
 .hardware-help {
   font-size: 12px;
   color: var(--muted);
