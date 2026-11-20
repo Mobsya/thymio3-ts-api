@@ -45,6 +45,11 @@ export default defineConfig({
           src: resolve(demoDir, "../dist/thymio.iife.js"),
           dest: "libs",
           rename: { stripBase: true },
+        },
+        {
+          src: resolve(demoDir, "src/assets/fonts/OFL.txt"),
+          dest: "assets/fonts",
+          rename: { stripBase: true },
         }
       ]
     })

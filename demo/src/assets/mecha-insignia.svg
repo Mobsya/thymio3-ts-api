@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" fill="none">
+  <!-- Original geometric robot insignia; decorative background only. -->
+  <g stroke="#b58aff" stroke-width="1.5">
+    <path d="M12 50V12h38M190 12h38v38M12 110v38h38M190 148h38v-38" opacity=".7"/>
+    <path d="M24 28h32m128 0h32M24 132h32m128 0h32M120 4v14m0 124v14" opacity=".5"/>
+    <path d="m64 44 24-20h64l24 20v61l-31 29H95l-31-29Z" fill="#29183e"/>
+    <path d="m88 24 32 26 32-26M64 44l25 20-7 37 20 17h36l20-17-7-37 25-20M102 118l18-18 18 18M120 50v50"/>
+    <path d="m42 20 56 39-10 12-24-27Zm156 0-56 39 10 12 24-27Z" fill="#7951b8"/>
+    <path d="m88 76 25 7-4 10-21-7Zm64 0-25 7 4 10 21-7Z" fill="#c6ff47" stroke="#c6ff47"/>
+    <path d="m111 103 9-9 9 9-9 12Z" fill="#b58aff"/>
+    <path d="M54 76H28m158 0h26M54 84H36m150 0h18" opacity=".6"/>
+  </g>
+</svg>

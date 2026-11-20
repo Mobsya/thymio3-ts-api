@@ -5,6 +5,48 @@ import "./python-editor.css";
 
 loader.config({ paths: { vs: new URL('./assets/monaco/vs', window.location.href).href } });
 
+function defineCockpitTheme(monaco) {
+  const styles = getComputedStyle(document.documentElement);
+  const color = name => styles.getPropertyValue(`--${name}`).trim();
+  monaco.editor.defineTheme('thymio-cockpit', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: color('muted').slice(1) },
+      { token: 'keyword', foreground: color('primary').slice(1) },
+      { token: 'string', foreground: color('success').slice(1) },
+      { token: 'number', foreground: color('warning').slice(1) },
+    ],
+    colors: {
+      'editor.background': color('panel-inset'),
+      'editor.foreground': color('text'),
+      'editor.lineHighlightBackground': color('panel-soft'),
+      'editor.selectionBackground': '#60438088',
+      'editor.inactiveSelectionBackground': '#60438044',
+      'editorCursor.foreground': color('success'),
+      'editorLineNumber.foreground': color('muted'),
+      'editorLineNumber.activeForeground': color('success'),
+      'editorIndentGuide.background1': color('border'),
+      'editorIndentGuide.activeBackground1': color('border-strong'),
+      'editorWidget.background': color('panel'),
+      'editorWidget.foreground': color('text'),
+      'editorWidget.border': color('border-strong'),
+      'editorSuggestWidget.background': color('panel'),
+      'editorSuggestWidget.foreground': color('text'),
+      'editorSuggestWidget.border': color('border-strong'),
+      'editorSuggestWidget.selectedBackground': color('primary-soft'),
+      'editorSuggestWidget.highlightForeground': color('success'),
+      'editorSuggestWidget.selectedHighlightForeground': color('success'),
+      'editorHoverWidget.background': color('panel'),
+      'editorHoverWidget.foreground': color('text'),
+      'editorHoverWidget.border': color('border-strong'),
+      'editorError.foreground': color('danger-text'),
+      'editorWarning.foreground': color('warning'),
+      'focusBorder': color('focus'),
+    },
+  });
+}
+
 let pyodidePromise = null;
 
 // Lazy-load pyodide once
@@ -123,6 +165,8 @@ _syntax_check(___code___)
     <div className="python-editor">
       <div className="python-editor-region"><Editor
         height="100%"
+        theme="thymio-cockpit"
+        beforeMount={defineCockpitTheme}
         defaultLanguage="python"
         value={value}
         onChange={onChange}
