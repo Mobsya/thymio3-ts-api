@@ -12,8 +12,8 @@
   border: 1px solid var(--border);
   border-radius: 3px;
   background:
-    linear-gradient(#c5a3ff12 1px, transparent 1px) 0 0 / 100% 14px,
-    linear-gradient(90deg, #c5a3ff12 1px, transparent 1px) 0 0 / 28px 100%,
+    linear-gradient(var(--chart-grid) 1px, transparent 1px) 0 0 / 100% 14px,
+    linear-gradient(90deg, var(--chart-grid) 1px, transparent 1px) 0 0 / 28px 100%,
     var(--panel-inset);
   box-shadow: inset 0 2px var(--primary);
 }

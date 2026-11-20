@@ -9,7 +9,7 @@ function defineCockpitTheme(monaco) {
   const styles = getComputedStyle(document.documentElement);
   const color = name => styles.getPropertyValue(`--${name}`).trim();
   monaco.editor.defineTheme('thymio-cockpit', {
-    base: 'vs-dark',
+    base: document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'vs',
     inherit: true,
     rules: [
       { token: 'comment', foreground: color('muted').slice(1) },
@@ -21,8 +21,8 @@ function defineCockpitTheme(monaco) {
       'editor.background': color('panel-inset'),
       'editor.foreground': color('text'),
       'editor.lineHighlightBackground': color('panel-soft'),
-      'editor.selectionBackground': '#60438088',
-      'editor.inactiveSelectionBackground': '#60438044',
+      'editor.selectionBackground': color('editor-selection'),
+      'editor.inactiveSelectionBackground': color('editor-inactive-selection'),
       'editorCursor.foreground': color('success'),
       'editorLineNumber.foreground': color('muted'),
       'editorLineNumber.activeForeground': color('success'),
@@ -68,11 +68,19 @@ async function loadPyodideOnce() {
   return pyodidePromise;
 }
 
-export default function PythonEditor({ value, onChange, onReady, saveFailed, footerTools }) {
+export default function PythonEditor({ theme, value, onChange, onReady, saveFailed, footerTools }) {
   const editorRef = useRef(null);
   const [pyodide, setPyodide] = useState(null);
   const [checkerFailed, setCheckerFailed] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (mounted) {
+      const { monaco } = editorRef.current;
+      defineCockpitTheme(monaco);
+      monaco.editor.setTheme('thymio-cockpit');
+    }
+  }, [mounted, theme]);
 
   useEffect(() => {
     let cancelled = false;

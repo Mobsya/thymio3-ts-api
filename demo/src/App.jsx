@@ -7,10 +7,12 @@ import PythonWorkspace from './python-workspace';
 import SensorPanel from './sensor-panel';
 import StdoutPanel from './stdout-panel';
 import { session, useSession } from './use-session';
+import { useTheme } from './use-theme';
 import { Tabs } from './ui';
 const TABS = [['controls', 'Controls'], ['python', 'Python'], ['files', 'Files'], ['device', 'Device']];
 export default function App() {
   const s = useSession();
+  const { mode, theme, chooseMode } = useTheme();
   const header = useRef(null);
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -65,11 +67,20 @@ export default function App() {
         <div className={`workspace-content ${tab === 'controls' ? 'workspace-controls' : tab === 'python' ? 'workspace-python' : ''}`}>
           <section role="tabpanel" id="workspace-panel-controls" aria-labelledby="workspace-controls" hidden={tab !== 'controls'}><ActuatorPanel disabled={disabled} /></section>
           <section role="tabpanel" id="workspace-panel-python" aria-labelledby="workspace-python" hidden={tab !== 'python'}>
-            {pythonVisited && <PythonWorkspace active={tab === 'python'} disabled={disabled} />}
+            {pythonVisited && <PythonWorkspace theme={theme} active={tab === 'python'} disabled={disabled} />}
           </section>
           <section role="tabpanel" id="workspace-panel-files" aria-labelledby="workspace-files" hidden={tab !== 'files'}><FilesPanel disabled={disabled} active={tab === 'files'} /></section>
           <section role="tabpanel" id="workspace-panel-device" aria-labelledby="workspace-device" hidden={tab !== 'device'}>
-            <div className="section-heading"><div><h2>Device</h2></div></div>
+            <div className="section-heading">
+              <h2>Device</h2>
+              <label className="row">Theme
+                <select value={mode} onChange={event => chooseMode(event.target.value)}>
+                  <option value="system">System</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </label>
+            </div>
             <dl className="device-facts"><div><dt>Robot</dt><dd>{s.deviceName || 'Not connected'}</dd></div><div><dt>ESP32 firmware</dt><dd>{s.firmware?.esp32_ver || '—'}</dd></div><div><dt>STM32 firmware</dt><dd>{s.firmware?.stm32_ver || '—'}</dd></div></dl>
             <FirmwareUpdatePanel disabled={disabled} />
           </section>

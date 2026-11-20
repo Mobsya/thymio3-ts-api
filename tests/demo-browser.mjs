@@ -51,8 +51,35 @@ await page.addInitScript(() => {
 });
 const tab = name => page.getByRole('tab', { name, exact: true });
 async function screenshot(name) { if (shots) { await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: `${shots}/${name}.png`, fullPage: true }); } }
+async function expectTheme(theme) {
+  await page.waitForFunction(expected => getComputedStyle(document.documentElement).colorScheme === expected, theme);
+}
 try {
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.goto(process.env.DEMO_URL || process.argv[4] || 'http://127.0.0.1:5173', { waitUntil: 'networkidle' });
+  const selector = page.getByRole('combobox', { name: 'Theme', exact: true });
+  await tab('Device').click();
+  assert.equal(await selector.inputValue(), 'system');
+  await expectTheme('light');
+  await selector.focus();
+  await selector.press('d');
+  assert.equal(await selector.inputValue(), 'dark');
+  await expectTheme('dark');
+  await page.reload();
+  await expectTheme('dark');
+  await tab('Device').click();
+  assert.equal(await selector.inputValue(), 'dark');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await selector.selectOption('light');
+  await expectTheme('light');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expectTheme('light');
+  await selector.selectOption('system');
+  await expectTheme('dark');
+  await tab('Controls').click();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expectTheme('light');
   assert(await page.getByRole('button', { name: '■ Stop robot', exact: true }).isDisabled());
   assert.equal(await page.locator('.control-panel').getByRole('button', { name: '■ Stop robot', exact: true }).count(), 1);
   assert.equal(await page.locator('.app-header').getByRole('button', { name: '■ Stop robot', exact: true }).count(), 0);
@@ -210,6 +237,18 @@ try {
   const initial = await modelState();
   await python.getByRole('button', { name: 'Insert at cursor' }).click();
   assert((await modelState()).code.includes('thymio.get_battery_voltage()'));
+  const edited = await modelState();
+  for (const scheme of ['dark', 'light']) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expectTheme(scheme);
+    await page.waitForFunction(() => {
+      const expected = getComputedStyle(document.documentElement).getPropertyValue('--panel-inset').trim();
+      const actual = getComputedStyle(document.querySelector('.monaco-editor-background')).backgroundColor;
+      const rgb = expected.slice(1).match(/../g).map(hex => parseInt(hex, 16));
+      return actual === `rgb(${rgb.join(', ')})`;
+    });
+    assert.deepEqual(await modelState(), edited);
+  }
   await tab('Controls').click(); await tab('Python').click();
   await page.evaluate(() => window.monaco.editor.getEditors()[0].trigger('keyboard', 'undo'));
   assert.equal((await modelState()).code, initial.code);

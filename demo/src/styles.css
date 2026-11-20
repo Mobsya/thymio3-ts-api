@@ -20,6 +20,7 @@
   --danger-text: #ff91a2;
   --danger-soft: #321e29;
   --danger-border: #774052;
+  --tab-mark: #c6ff47;
   --success: #c6ff47;
   --success-soft: #202e12;
   --success-border: #91b941;
@@ -28,9 +29,74 @@
   --warning-border: #866232;
   --focus: #d0baff;
   --backdrop: #09070dcc;
+  --shell-glow: #66339533;
+  --shell-grid: #b69aff0b;
+  --chart-grid: #c5a3ff12;
+  --button-edge: #443052;
+  --tab-strip: #0d0c13;
+  --tab-edge: #45235f;
+  --armor-highlight: #352541;
+  --armor-shade: #1b1822;
+  --armor-seam: #0a080f;
+  --surface-shade: #0006;
+  --header-shadow: #0008;
+  --editor-selection: #60438088;
+  --editor-inactive-selection: #60438044;
+  --insignia: url("./assets/mecha-insignia.svg");
+  --surface-tint: #65358b24;
+  --surface-edge: #b182f255;
+  --corner-line: #9d86b855;
+  --on-primary: #fff;
+  --tab-text-shadow: 0 1px 2px #0008;
   --panel-accent: var(--primary);
   line-height: 1.5;
   font-size: 14px;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #e2e4e2;
+  --panel: #fbfbf6;
+  --panel-soft: #e9ece8;
+  --panel-inset: #fffefa;
+  --text: #21272a;
+  --muted: #505a5c;
+  --border: #9fa7a4;
+  --border-strong: #6a7575;
+  --primary: #805009;
+  --primary-fill: #ffbf2e;
+  --on-primary: #252925;
+  --primary-soft: #ffedbc;
+  --danger-text: #982a29;
+  --danger: #b83332;
+  --danger-soft: #ffebe6;
+  --danger-border: #af6458;
+  --success: #236046;
+  --success-soft: #e3f2e9;
+  --success-border: #678e74;
+  --warning: #864907;
+  --warning-soft: #fff0cb;
+  --warning-border: #a47532;
+  --focus: #00627a;
+  --backdrop: #20292e80;
+  --shell-glow: #ffc94636;
+  --shell-grid: #34464a13;
+  --chart-grid: #42545724;
+  --button-edge: #ffffff;
+  --tab-strip: #dce0dc;
+  --tab-edge: #ed9e18;
+  --tab-mark: #374246;
+  --tab-text-shadow: none;
+  --armor-highlight: #fffdf1;
+  --armor-shade: #f2f3ef;
+  --armor-seam: #dda326;
+  --surface-shade: #2c343322;
+  --header-shadow: #20292b26;
+  --surface-tint: #f3b9211f;
+  --surface-edge: #e2a31c99;
+  --corner-line: #6a757580;
+  --editor-selection: #edb54177;
+  --editor-inactive-selection: #c6ab7055;
+  --insignia: url("./assets/prototype-insignia.svg");
 }
 * {
   box-sizing: border-box;
@@ -39,10 +105,10 @@ body {
   margin: 0;
   min-width: 320px;
   background-image:
-    url("./assets/mecha-insignia.svg"),
-    radial-gradient(ellipse at 5% 0, #66339533, transparent 55%),
-    linear-gradient(#b69aff0b 1px, transparent 1px),
-    linear-gradient(90deg, #b69aff0b 1px, transparent 1px);
+    var(--insignia),
+    radial-gradient(ellipse at 5% 0, var(--shell-glow), transparent 55%),
+    linear-gradient(var(--shell-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--shell-grid) 1px, transparent 1px);
   background-size: 84px 56px, auto, 32px 32px, 32px 32px;
   background-position: left 32px bottom 6px, center, center, center;
   background-repeat: no-repeat, no-repeat, repeat, repeat;
@@ -60,7 +126,7 @@ button {
   border: 1px solid transparent;
   border-radius: 3px;
   background: var(--primary-fill);
-  color: white;
+  color: var(--on-primary);
   font-weight: 600;
   cursor: pointer;
   transition: background .15s;
@@ -74,7 +140,7 @@ button:disabled {
   cursor: not-allowed;
 }
 button.secondary {
-  background: linear-gradient(135deg, #443052, var(--panel-soft));
+  background: linear-gradient(135deg, var(--button-edge), var(--panel-soft));
   color: var(--text);
   border-color: var(--border);
 }
@@ -82,6 +148,7 @@ button.secondary:hover:not(:disabled) {
   border-color: var(--primary);
 }
 button.danger {
+  color: white;
   background: var(--danger);
 }
 button.danger:hover:not(:disabled) {
@@ -294,11 +361,11 @@ progress {
 }
 .surface {
   background:
-    linear-gradient(135deg, #65358b24, transparent 45%),
+    linear-gradient(135deg, var(--surface-tint), transparent 45%),
     var(--panel);
   border: 1px solid var(--border);
   border-radius: 4px;
-  box-shadow: 0 8px 24px #0006, inset 0 2px #b182f255;
+  box-shadow: 0 8px 24px var(--surface-shade), inset 0 2px var(--surface-edge);
   min-width: 0;
 }
 .workspace {
@@ -310,7 +377,7 @@ progress {
   border-bottom: 1px solid var(--border);
   padding: 8px 16px 0;
   overflow-x: auto;
-  background: #0d0c13;
+  background: var(--tab-strip);
 }
 .tabs button {
   flex: 1;
@@ -323,12 +390,12 @@ progress {
   box-shadow: none;
 }
 .tabs button[aria-selected=true] {
-  color: white;
-  border-bottom-color: var(--success);
+  color: var(--on-primary);
+  border-bottom-color: var(--tab-mark);
   background:
-    repeating-linear-gradient(135deg, var(--success) 0 3px, transparent 3px 6px) right 4px top 4px / 24px 3px no-repeat,
-    linear-gradient(120deg, #7939bd, #45235f);
-  text-shadow: 0 1px 2px #0008;
+    repeating-linear-gradient(135deg, var(--tab-mark) 0 3px, transparent 3px 6px) right 4px top 4px / 24px 3px no-repeat,
+    linear-gradient(120deg, var(--primary-fill), var(--tab-edge));
+  text-shadow: var(--tab-text-shadow);
 }
 .hardware-help {
   font-size: 12px;
@@ -934,9 +1001,9 @@ html {
     linear-gradient(var(--panel-accent), var(--panel-accent)) left top / 36px 3px no-repeat,
     linear-gradient(var(--panel-accent), var(--panel-accent)) right 4px bottom 4px / 16px 2px no-repeat,
     linear-gradient(var(--panel-accent), var(--panel-accent)) right 4px bottom 4px / 2px 16px no-repeat,
-    linear-gradient(135deg, transparent 7px, #9d86b855 7px 8px, transparent 8px) right top / 16px 16px no-repeat,
-    linear-gradient(115deg, #352541, #1b1822 65%);
-  box-shadow: inset 3px 0 #0a080f, 0 3px 8px #0004;
+    linear-gradient(135deg, transparent 7px, var(--corner-line) 7px 8px, transparent 8px) right top / 16px 16px no-repeat,
+    linear-gradient(115deg, var(--armor-highlight), var(--armor-shade) 65%);
+  box-shadow: inset 3px 0 var(--armor-seam), 0 3px 8px #0004;
 }
 .movement-section { grid-area: movement; }
 .lights-section { grid-area: lights; --panel-accent: var(--success); }
@@ -1141,7 +1208,7 @@ html {
   padding: 2px 0;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
-  box-shadow: 0 4px 14px #0008;
+  box-shadow: 0 4px 14px var(--header-shadow);
 }
 .robot-panel {
   display: grid;

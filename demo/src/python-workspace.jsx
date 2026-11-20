@@ -25,7 +25,7 @@ function RobotTools({ disabled }) {
   </div>;
 }
 
-export default function PythonWorkspace({ active, disabled }) {
+export default function PythonWorkspace({ active, disabled, theme }) {
   const s = useSession();
   const [draft, setDraft] = useState(restoreDraft);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -129,7 +129,7 @@ export default function PythonWorkspace({ active, disabled }) {
       {wide && <div id="ide-library-pane" className="ide-library-track" data-open={pinned} inert={!pinned} aria-hidden={!pinned}>
         <aside className="ide-library">{library}</aside>
       </div>}
-      <div className="ide-editor"><PythonEditor value={draft.code} onReady={setEditor} saveFailed={saveFailed} footerTools={<RobotTools disabled={disabled} />}
+      <div className="ide-editor"><PythonEditor theme={theme} value={draft.code} onReady={setEditor} saveFailed={saveFailed} footerTools={<RobotTools disabled={disabled} />}
         onChange={value => { if (draft.code !== value) save({ ...draft, code: value ?? '', dirty: true }); }} /></div>
     </div>
     <dialog id="ide-library-drawer" className="ide-library ide-drawer" ref={dialog} aria-label="Thymio library" closedby="any" onCancel={() => setDrawer(false)}>

@@ -3,6 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Resolve the palette before styles and the first frame load.
+      {
+        let mode = 'system';
+        try {
+          const saved = localStorage.getItem('thymio.demo.theme');
+          if (saved === 'light' || saved === 'dark') mode = saved;
+        } catch { /* Storage may be unavailable. */ }
+        const root = document.documentElement;
+        root.dataset.themeMode = mode;
+        root.dataset.theme = mode === 'system'
+          ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : mode;
+        root.style.colorScheme = root.dataset.theme;
+      }
+    </script>
     <title>Thymio 3 Demo</title>
   </head>
   <body>
