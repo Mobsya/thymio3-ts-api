@@ -1,3 +1,15 @@
+export function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) return '—';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
 export function clampInt(n, min, max) {
   const x = Number.isFinite(n) ? Math.trunc(n) : 0;
   return Math.min(max, Math.max(min, x));

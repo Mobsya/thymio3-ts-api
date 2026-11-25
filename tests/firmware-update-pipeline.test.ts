@@ -58,7 +58,9 @@ describe('public firmware update pipeline', () => {
 
     try {
       await expect(thymio.isNewerFirmwareAvailable()).resolves.toBe(true);
-      await thymio.updateFirmware();
+      const version = await thymio.getAvailableFirmwareVersion();
+      expect(version).toBe('v1.10.2');
+      await thymio.updateFirmware({ expectedVersion: version! });
 
       expect(fetchMock).toHaveBeenCalledWith(appUrl, { credentials: 'omit', cache: 'no-cache' });
       const commands = otaCommand.writesWithResponse.map((bytes) => new DataView(bytes.buffer));
@@ -87,6 +89,20 @@ describe('public firmware update pipeline', () => {
     } finally {
       progress.stop();
     }
+  });
+
+  it('requires a fresh check when the selected release changes before installation', async () => {
+    const { thymio, otaCommand } = await connectRobot();
+    const catalog = structuredClone(publishedCatalog);
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => catalog }));
+    vi.stubGlobal('fetch', fetchMock);
+    const version = await thymio.getAvailableFirmwareVersion();
+    expect(version).toBe('v1.10.2');
+    catalog.latest_stable = catalog.releases[0]!.tag = 'v1.10.3';
+    await expect(thymio.updateFirmware({ expectedVersion: version! })).rejects.toThrow('Check for updates again');
+    expect(fetchMock.mock.calls).toEqual(Array(2).fill([releasesUrl, { credentials: 'omit', cache: 'no-cache' }]));
+    expect(otaCommand.writesWithResponse).toEqual([]);
+    await thymio.disconnect();
   });
 
   it.each([

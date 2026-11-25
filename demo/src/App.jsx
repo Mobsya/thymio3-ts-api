@@ -22,6 +22,7 @@ export default function App() {
     observer.observe(header.current);
     return () => { observer.disconnect(); root.style.removeProperty('--app-header-height'); };
   }, []);
+  const [flashFree, setFlashFree] = useState(null);
   const [tab, setTab] = useState('controls');
   const [pythonVisited, setPythonVisited] = useState(false);
   function changeTab(next) {
@@ -45,7 +46,7 @@ export default function App() {
   }[s.connection];
   const disabled = !connected || Boolean(s.busy) || s.stopping || s.ota;
   const showBusyMessage = s.busy && !['Run script', 'Stop script'].includes(s.busy);
-  const reason = !connected ? '' : s.ota ? 'Firmware transfer in progress. Hardware controls and telemetry are suspended.' : s.stopping ? 'Sending stop commands…' : showBusyMessage ? `${s.busy}…` : '';
+  const reason = !connected || s.ota ? '' : s.stopping ? 'Sending stop commands…' : showBusyMessage ? `${s.busy}…` : '';
   return <div className={tab === 'python' ? 'app-shell python-shell' : 'app-shell'}>
     <header ref={header} className="app-header">
       <div className={`robot-panel ${s.connection}`}>
@@ -54,8 +55,13 @@ export default function App() {
           <div className="robot-name">{robotName ? <><span>Robot: </span><strong>{robotName}</strong></> : <strong>{s.connection === 'connecting' ? 'Connecting to robot' : 'No robot connected'}</strong>}</div>
         </div>
         <button className={`robot-connect-button ${connected ? 'secondary' : ''}`} disabled={!apiReady || !navigator.bluetooth || s.ota || s.stopping || ['connecting', 'reconnecting'].includes(s.connection)} onClick={connected ? session.disconnect : session.connect}>{connected ? 'Disconnect' : s.connection === 'connecting' ? 'Connecting…' : 'Connect robot'}</button>
+        <dl className="robot-versions" aria-label="Software versions">
+          <div><dt>API version</dt><dd>{window.thymio?.getAPIVersion?.() || '—'}</dd></div>
+          <div><dt>ESP32 firmware</dt><dd>{s.firmware?.esp32_ver || '—'}</dd></div>
+          <div><dt>STM32 firmware</dt><dd>{s.firmware?.stm32_ver || '—'}</dd></div>
+        </dl>
       </div>
-      <DeviceMemoryStatus key={s.connection} isConnected={connected} isActive={!s.ota && !s.busy && !s.stopping} />
+      <DeviceMemoryStatus onFlashFreeChange={setFlashFree} key={s.connection} isConnected={connected} isActive={!s.ota && !s.busy && !s.stopping} />
     </header>
     {!navigator.bluetooth && <div className="banner error-box">This browser does not expose Web Bluetooth. Open this demo in a browser with Web Bluetooth support over HTTPS or localhost.</div>}
     {!apiReady && <div className="banner" role="status">Loading the robot API… If this persists, reload the page.</div>}
@@ -69,7 +75,7 @@ export default function App() {
           <section role="tabpanel" id="workspace-panel-python" aria-labelledby="workspace-python" hidden={tab !== 'python'}>
             {pythonVisited && <PythonWorkspace theme={theme} active={tab === 'python'} disabled={disabled} />}
           </section>
-          <section role="tabpanel" id="workspace-panel-files" aria-labelledby="workspace-files" hidden={tab !== 'files'}><FilesPanel disabled={disabled} active={tab === 'files'} /></section>
+          <section role="tabpanel" id="workspace-panel-files" aria-labelledby="workspace-files" hidden={tab !== 'files'}><FilesPanel flashFree={connected ? flashFree : null} disabled={disabled} active={tab === 'files'} /></section>
           <section role="tabpanel" id="workspace-panel-device" aria-labelledby="workspace-device" hidden={tab !== 'device'}>
             <div className="section-heading">
               <h2>Device</h2>
@@ -81,8 +87,7 @@ export default function App() {
                 </select>
               </label>
             </div>
-            <dl className="device-facts"><div><dt>Robot</dt><dd>{s.deviceName || 'Not connected'}</dd></div><div><dt>ESP32 firmware</dt><dd>{s.firmware?.esp32_ver || '—'}</dd></div><div><dt>STM32 firmware</dt><dd>{s.firmware?.stm32_ver || '—'}</dd></div></dl>
-            <FirmwareUpdatePanel disabled={disabled} />
+            <FirmwareUpdatePanel key={s.connection} disabled={disabled} />
           </section>
         </div>
         <StdoutPanel entries={s.output} onClear={session.clearOutput} expandedByDefault={tab === 'python'} />

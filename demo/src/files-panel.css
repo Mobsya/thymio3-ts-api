@@ -2,6 +2,43 @@
   min-width: 0;
 }
 
-.file-upload-status {
-  font-size: 12px;
+.flash-usage {
+  display: grid;
+  gap: 6px;
+  margin: 16px 0;
+}
+
+.flash-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  color: var(--muted);
+}
+
+.flash-amounts strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.flash-track {
+  height: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--panel-inset);
+}
+
+.flash-track.measured {
+  background: var(--success-soft);
+}
+
+.flash-used {
+  height: 100%;
+  background: var(--primary);
+}
+
+.pending-file {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }

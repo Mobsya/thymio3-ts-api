@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import publishedCatalog from './fixtures/firmware-catalog.json';
 import {
   fetchFirmwareVersions,
+  getAvailableFirmwareVersion,
   getNewFirmware,
   isNewerFirmwareAvailable,
 } from '../src/updater';
@@ -78,6 +79,8 @@ describe('firmware updater', () => {
     const higher = release({ tag: 'v2.0.0', published_at: '2026-03-01T00:00:00Z' });
     const fetchMock = stubFetch(catalog([higher, selected], selected.tag));
 
+    await expect(getAvailableFirmwareVersion('v1.8.1')).resolves.toBe(selected.tag);
+    await expect(getAvailableFirmwareVersion(selected.tag)).resolves.toBeNull();
     await expect(isNewerFirmwareAvailable('v1.8.1')).resolves.toBe(true);
     await expect(isNewerFirmwareAvailable('v1.9.0')).resolves.toBe(false);
     await expect(getNewFirmware('v1.8.1')).resolves.toEqual(firmwareBytes);

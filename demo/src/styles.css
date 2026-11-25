@@ -504,13 +504,41 @@ progress {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 18px;
-  margin-bottom: 24px;
+  margin: 24px 0 0;
   display: grid;
   gap: 14px;
 }
-.upload-card h3:not(:first-child) {
-  margin-top: 8px;
+.file-drop-zone {
+  display: grid;
+  position: relative;
+  gap: 6px;
+  padding: 20px;
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: 3px;
+  background: var(--panel-inset);
+  overflow-wrap: anywhere;
 }
+
+.file-drop-zone.dragging,
+.file-drop-zone:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.file-drop-zone input[type=file] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-drop-zone input:disabled {
+  cursor: default;
+}
+
 .file-row {
   display: flex;
   gap: 12px;
@@ -551,41 +579,41 @@ progress {
   color: var(--muted);
   margin: 12px 0;
 }
-.device-facts {
-  display: grid;
-  grid-template-columns: repeat(3,minmax(0,1fr));
-  gap: 12px;
-  background: var(--panel-soft);
-  padding: 16px;
-  border-radius: 3px;
-}
-.device-facts dt {
-  font-size: 12px;
-  color: var(--muted);
-}
-.device-facts dd {
-  margin: 4px 0 0;
-  overflow-wrap: anywhere;
-  font-weight: 600;
-}
 .firmware-panel {
   margin-top: 24px;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--primary);
+  border-radius: 4px;
 }
-.firmware-panel>.row {
-  margin: 16px 0;
+.firmware-panel h3 {
+  color: var(--primary);
+  font-size: 1.25rem;
 }
-.firmware-result {
-  padding: 12px;
-  background: var(--panel-soft);
-  border-radius: 3px;
+.firmware-actions {
+  margin-top: 14px;
+}
+.firmware-actions > * {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.firmware-result:not(:empty) {
+  padding: 5px 10px;
+  background: var(--primary-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
   font-size: 13px;
 }
-.drop-zone {
-  border: 1px dashed var(--border-strong);
-  padding: 18px;
-  border-radius: 3px;
-  gap: 12px;
-  margin: 14px 0;
+.firmware-transfer {
+  margin-top: 16px;
+}
+.firmware-transfer progress {
+  width: 100%;
+  accent-color: var(--primary);
+}
+.firmware-transfer p {
+  color: var(--muted);
 }
 .toolbar {
   display: flex;
@@ -906,9 +934,6 @@ progress {
   .file-row>.row {
     align-self: flex-end;
   }
-  .device-facts {
-    grid-template-columns: 1fr;
-  }
   .toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -1224,7 +1249,7 @@ html {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   align-self: stretch;
-  gap: 8px;
+  gap: 2px 8px;
   min-width: 0;
   padding: 4px 8px;
   border-left: 3px solid var(--danger-text);
@@ -1285,6 +1310,23 @@ html {
   display: grid;
   gap: 2px;
   min-width: 0;
+}
+.robot-versions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.robot-versions dt {
+  color: var(--muted);
+}
+.robot-versions dd {
+  margin: 0;
+  font-weight: 600;
 }
 .robot-connect-button {
   white-space: nowrap;

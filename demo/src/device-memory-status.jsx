@@ -1,17 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import './device-memory-status.css';
-
-function formatBytes(bytes) {
-  if (!Number.isFinite(bytes)) return '—';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
-}
+import { formatBytes } from './utils';
 
 function withTimeout(promise, timeoutMs) {
   let timer;
@@ -54,7 +43,7 @@ function MemorySparkline({ samples, field, label, state, error, lastUpdated }) {
   );
 }
 
-export default function DeviceMemoryStatus({ isConnected, isActive = true, pollIntervalMs = 1000, requestTimeoutMs = 4000 }) {
+export default function DeviceMemoryStatus({ isConnected, isActive = true, onFlashFreeChange, pollIntervalMs = 1000, requestTimeoutMs = 4000 }) {
   const [samples, setSamples] = useState([]);
   const [error, setError] = useState('');
   const inFlight = useRef(false);
@@ -96,6 +85,11 @@ export default function DeviceMemoryStatus({ isConnected, isActive = true, pollI
     timer = setTimeout(poll, Math.max(0, pollIntervalMs - (Date.now() - lastRequest.current)));
     return () => { cancelled = true; clearTimeout(timer); };
   }, [isConnected, isActive, pollIntervalMs, requestTimeoutMs]);
+
+  const flashFree = error ? null : samples.at(-1)?.flash ?? null;
+  useEffect(() => {
+    onFlashFreeChange(flashFree);
+  }, [flashFree, onFlashFreeChange]);
 
   const state = !isConnected ? 'Disconnected' : !isActive ? 'Paused' : error ? 'Unavailable' : samples.length ? 'Live' : 'Waiting';
   return (

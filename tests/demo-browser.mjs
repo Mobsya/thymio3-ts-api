@@ -21,6 +21,7 @@ await page.addInitScript(() => {
     requestAndConnect: async () => { test.connected = true; emit('connected', true); },
     disconnect: async () => { test.connected = false; emit('connected', false); },
     getDeviceName: () => test.robotName,
+    getAPIVersion: () => '0.8.0-test',
     getFirmwareInfo: async () => ({ esp32_ver: 'v1.12.0', stm32_ver: 'v1.2.0' }),
     getMemoryInfo: async () => {
       test.memoryCalls.push(Date.now());
@@ -29,7 +30,7 @@ await page.addInitScript(() => {
       try {
         if (test.memoryPending) await new Promise(resolve => { test.finishMemory = resolve; });
         if (test.memoryFails) throw new Error('Memory unavailable in test');
-        return { ram_bytes_free: 245760 - test.memoryCalls.length * 128, flash_bytes_free: 1048576 };
+        return { ram_bytes_free: 245760 - test.memoryCalls.length * 128, flash_bytes_free: 1024 - test.files.reduce((sum, file) => sum + file.size, 0) };
       } finally { test.memoryConcurrent--; }
     },
     startAllSensorStreaming: call('resume'), stopSensorStreaming: call('pause'),
@@ -37,19 +38,48 @@ await page.addInitScript(() => {
     sendPythonScript: async code => { test.calls.push(['uploadScript', code]); if (test.uploadPending) await new Promise(resolve => { test.finishUpload = resolve; }); },
     executeLoadedScript: call('execute'), saveScriptToPartition: call('saveScript'), softResetPythonInterpreter: call('reset'),
     listFiles: async () => test.files,
-    uploadFile: async file => { test.calls.push(['uploadFile', file.name]); emit('file-upload-progress', { percentage: 50 }); },
-    saveFile: async name => { test.files.push({ name, size: 3 }); },
+    uploadFile: async file => {
+      test.calls.push(['uploadFile', file.name]);
+      emit('file-upload-progress', { percentage: 50 });
+      if (test.failUpload) throw new Error('Upload interrupted');
+      test.ramFile = file;
+    },
+    saveFile: async name => {
+      if (test.failSave) throw new Error('Storage busy');
+      test.files.push({ name, size: test.ramFile.size });
+    },
     deleteFile: async name => { test.files = test.files.filter(f => f.name !== name); },
     eraseAllFiles: async () => { test.files = []; }, freeMemory: call('freeMemory'),
     downloadFile: async () => new TextEncoder().encode('hello'),
     uploadAudioFile: call('uploadAudio'), playAudioFile: call('playAudio'), recordAudio: call('record'), playFrequency: call('tone'),
-    isNewerFirmwareAvailable: async () => true,
-    updateFirmware: async () => { emit('ota-upload-progress', { percentage: 50 }); await new Promise(resolve => { test.finishFirmware = resolve; }); },
-    uploadFirmware: call('uploadFirmware'), stopFirmwareUpload: call('cancelFirmware'),
+    getAvailableFirmwareVersion: async () => {
+      if (test.holdCheck) await new Promise(resolve => { test.finishCheck = resolve; });
+      return test.nextVersion ?? null;
+    },
+    updateFirmware: async ({ expectedVersion }) => {
+      test.calls.push(['install', expectedVersion]);
+      if (test.failFirmware) throw new Error('Firmware download failed');
+      emit('ota-upload-progress', { percentage: 50 });
+      await new Promise(resolve => { test.finishFirmware = resolve; });
+    },
+    uploadFirmware: async () => {
+      emit('ota-upload-progress', { percentage: 30 });
+      await new Promise((_, reject) => { test.abortFirmware = () => reject(new Error('Firmware upload cancelled')); });
+    },
+    stopFirmwareUpload: async () => test.abortFirmware(),
   };
   test.emit = emit;
 });
 const tab = name => page.getByRole('tab', { name, exact: true });
+async function dropFile(input, name) {
+  const dataTransfer = await page.evaluateHandle(name => {
+    const data = new DataTransfer();
+    data.items.add(new File(['another'], name));
+    return data;
+  }, name);
+  await input.dispatchEvent('drop', { dataTransfer });
+  await dataTransfer.dispose();
+}
 async function screenshot(name) { if (shots) { await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: `${shots}/${name}.png`, fullPage: true }); } }
 async function expectTheme(theme) {
   await page.waitForFunction(expected => getComputedStyle(document.documentElement).colorScheme === expected, theme);
@@ -59,6 +89,24 @@ try {
   await page.goto(process.env.DEMO_URL || process.argv[4] || 'http://127.0.0.1:5173', { waitUntil: 'networkidle' });
   const selector = page.getByRole('combobox', { name: 'Theme', exact: true });
   await tab('Device').click();
+  const firmware = page.getByRole('region', { name: 'Firmware update', exact: true });
+  const manualFirmware = page.getByRole('region', { name: 'Manual firmware update', exact: true });
+  const manualFile = manualFirmware.getByLabel('Firmware application file');
+  const checkFirmware = firmware.getByRole('button', { name: 'Check for updates', exact: true });
+  const installFirmware = firmware.getByRole('button', { name: 'Install version v1.13.0', exact: true });
+  const firmwareResult = firmware.getByRole('status');
+  const advisory = firmware.getByText('The robot restarts after installation. Keep it powered on and nearby during transfer.');
+  const transfer = firmware.getByRole('progressbar');
+  const versions = page.locator('.robot-panel').getByLabel('Software versions');
+  assert.deepEqual(await versions.getByRole('term').allTextContents(), ['API version', 'ESP32 firmware', 'STM32 firmware']);
+  const versionValues = versions.getByRole('definition');
+  assert.deepEqual(await versionValues.allTextContents(), ['0.8.0-test', '—', '—']);
+  assert(await checkFirmware.isDisabled());
+  assert(await manualFile.isVisible());
+  assert(await manualFile.isDisabled());
+  assert.equal(await firmware.locator('details').count(), 0);
+  assert.equal(await advisory.count(), 0);
+  assert.equal(await transfer.count(), 0);
   assert.equal(await selector.inputValue(), 'system');
   await expectTheme('light');
   await selector.focus();
@@ -97,6 +145,7 @@ try {
   assert.equal(await page.locator('.robot-connection').textContent(), 'Connected');
   assert.equal(await page.locator('.robot-panel').getByRole('button', { name: 'Disconnect', exact: true }).count(), 1);
   await page.waitForFunction(() => Number(document.querySelector('.device-memory-chart').dataset.sampleCount) >= 2);
+  assert.deepEqual(await versionValues.allTextContents(), ['0.8.0-test', 'v1.12.0', 'v1.2.0']);
   assert.equal(await page.locator('.app-header .brand, .app-header .brand-mark').count(), 0);
   assert.equal(await page.getByText('Thymio 3', { exact: true }).count(), 0);
   const headerHeight = await page.locator('.app-header').evaluate(el => el.getBoundingClientRect().height);
@@ -199,14 +248,78 @@ try {
   await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.equal(await page.getByText('main.py', { exact: true }).count(), 1);
-  await page.getByLabel('Local file').setInputFiles({ name: 'new.txt', mimeType: 'text/plain', buffer: Buffer.from('abc') });
-  await page.getByRole('button', { name: 'Upload file', exact: true }).click();
-  await page.getByRole('button', { name: 'Save to storage' }).click();
-  await page.getByText('new.txt', { exact: true }).waitFor();
+  const storedFiles = page.getByRole('region', { name: 'Stored files' });
+  const uploadPanel = page.getByRole('region', { name: 'Upload file' });
+  const storageBar = storedFiles.getByRole('meter');
+  const uploadFile = uploadPanel.getByRole('button', { name: 'Upload file', exact: true });
+  const saveFile = uploadPanel.getByRole('button', { name: 'Save to storage' });
+  const picker = uploadPanel.getByLabel('Local file');
+  assert((await storedFiles.boundingBox()).y < (await uploadPanel.boundingBox()).y);
+  assert.equal(await storageBar.getAttribute('aria-valuenow'), '170');
+  assert.equal(await storageBar.getAttribute('aria-valuemax'), '1024');
+  assert.equal(await storageBar.getAttribute('aria-valuetext'), 'Stored files 170 B, free 854 B');
+  assert(await saveFile.isDisabled());
+  await picker.setInputFiles({ name: 'new.txt', mimeType: 'text/plain', buffer: Buffer.from('abc') });
+  await uploadFile.click();
+  await uploadPanel.getByText('In RAM: new.txt', { exact: true }).waitFor();
+
+  await dropFile(picker, 'second.txt');
+  await uploadPanel.getByText('second.txt', { exact: true }).waitFor();
+  assert.deepEqual(await page.evaluate(() => window.demoTest.calls.filter(c => c[0] === 'uploadFile')), [['uploadFile', 'new.txt']]);
+  await page.evaluate(() => { window.demoTest.failSave = true; });
+  await saveFile.click();
+  await page.getByRole('alert').filter({ hasText: 'Storage busy' }).waitFor();
+  assert(await saveFile.isEnabled());
+  await page.evaluate(() => { window.demoTest.failSave = false; });
+  await saveFile.click();
+  await storedFiles.getByText('new.txt', { exact: true }).waitFor();
+  assert(await saveFile.isDisabled());
+  assert.equal(await storageBar.getAttribute('aria-valuenow'), '173');
   await screenshot('files');
+
+  await uploadFile.click();
+  await uploadPanel.getByText('In RAM: second.txt', { exact: true }).waitFor();
+  await storedFiles.getByRole('button', { name: 'Free RAM' }).click();
+  assert(await saveFile.isDisabled());
+  await uploadFile.click();
+  await page.evaluate(() => { window.demoTest.failUpload = true; });
+  await uploadFile.click();
+  await page.getByRole('alert').filter({ hasText: 'Upload interrupted' }).waitFor();
+  assert(await saveFile.isDisabled());
+  await page.evaluate(() => { window.demoTest.failUpload = false; });
+  await picker.setInputFiles({ name: 'é'.repeat(15), mimeType: 'text/plain', buffer: Buffer.from('x') });
+  await uploadFile.click();
+  await uploadPanel.getByText(/29 UTF-8 bytes/).waitFor();
+  assert(await saveFile.isDisabled());
+
+  await storedFiles.getByRole('button', { name: 'Delete', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+  assert.equal(await storageBar.getAttribute('aria-valuenow'), '45');
+  await storedFiles.getByRole('button', { name: 'Delete all files' }).click();
+  await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+  await storedFiles.getByText('No files in robot storage.').waitFor();
+  await storedFiles.getByText('1.0 KB', { exact: true }).waitFor();
+  assert.equal(await storageBar.getAttribute('aria-valuenow'), '0');
   await tab('Device').click();
-  await page.getByRole('button', { name: 'Check for updates' }).click();
-  await page.getByRole('button', { name: 'Install update', exact: true }).click();
+  await checkFirmware.click();
+  assert.equal(await firmwareResult.textContent(), "You're at the latest version");
+  await tab('Controls').click();
+  await tab('Device').click();
+  assert.equal(await firmwareResult.textContent(), "You're at the latest version");
+  await page.evaluate(() => { window.demoTest.nextVersion = 'v1.13.0'; window.demoTest.holdCheck = true; });
+  await checkFirmware.click();
+  assert(await firmware.getByRole('button', { name: 'Checking…' }).isDisabled());
+  assert.equal(await firmwareResult.textContent(), '');
+  await page.evaluate(() => { window.demoTest.holdCheck = false; window.demoTest.finishCheck(); });
+  await installFirmware.waitFor();
+  assert.equal(await firmwareResult.textContent(), 'A new version v1.13.0 is available');
+  assert.equal(await advisory.count(), 0);
+  await installFirmware.click();
+  assert(await firmware.getByRole('button', { name: 'Installing v1.13.0…' }).isDisabled());
+  assert(await advisory.isVisible());
+  await firmware.getByRole('progressbar', { name: 'Firmware transfer · 50%' }).waitFor();
+  assert.equal(await firmwareResult.textContent(), '');
+  assert.deepEqual(await page.evaluate(() => window.demoTest.calls.filter(c => c[0] === 'install')), [['install', 'v1.13.0']]);
   await tab('Controls').click();
   assert(await page.getByRole('button', { name: '■ Stop robot', exact: true }).isDisabled());
   await tab('Files').click();
@@ -216,8 +329,45 @@ try {
   await page.waitForTimeout(1200);
   assert.equal(await page.evaluate(() => window.demoTest.memoryCalls.length), pausedMemory.calls);
   assert.equal(await page.locator('.device-memory-chart').first().getAttribute('data-sample-count'), pausedMemory.samples);
+  await tab('Device').click();
+  await page.evaluate(() => window.demoTest.emit('ota-upload-progress', { percentage: 100 }));
+  assert.equal(await transfer.getAttribute('value'), '100');
+  assert(await advisory.isVisible());
   await page.evaluate(() => window.demoTest.finishFirmware());
   await page.waitForFunction(() => !document.querySelector('.robot-connect-button').disabled);
+  assert(await checkFirmware.isEnabled());
+  assert.equal(await advisory.count(), 0);
+  assert.equal(await transfer.count(), 0);
+  assert.equal(await firmwareResult.textContent(), '');
+  await page.evaluate(() => { window.demoTest.failFirmware = true; });
+  await checkFirmware.click();
+  await installFirmware.click();
+  await page.getByRole('alert').filter({ hasText: 'Firmware download failed' }).waitFor();
+  assert(await checkFirmware.isEnabled());
+  assert.equal(await transfer.count(), 0);
+  assert.equal(await advisory.count(), 0);
+  const manualInstall = manualFirmware.getByRole('button', { name: 'Install selected firmware' });
+  await dropFile(manualFile, 'notes.txt');
+  assert(await manualFirmware.getByRole('alert').isVisible());
+  assert(await manualInstall.isDisabled());
+  await manualFile.setInputFiles({ name: 'app.bin', mimeType: 'application/octet-stream', buffer: Buffer.from([1, 2]) });
+  await manualFirmware.getByText('app.bin', { exact: true }).waitFor();
+  assert.equal(await manualFirmware.getByRole('alert').count(), 0);
+  await dropFile(manualFile, 'replacement.bin');
+  await manualFirmware.getByText('replacement.bin', { exact: true }).waitFor();
+  assert.equal(await manualFirmware.getByRole('progressbar').count(), 0);
+  await manualInstall.click();
+  await manualFirmware.getByText('Firmware transfer · 30%').waitFor();
+  assert(await manualFirmware.getByText(/The robot restarts after installation/).isVisible());
+  assert.equal(await transfer.count(), 0);
+  assert.equal(await advisory.count(), 0);
+  await manualFirmware.getByRole('button', { name: 'Cancel firmware upload' }).click();
+  await page.getByRole('alert').filter({ hasText: 'Firmware upload cancelled' }).waitFor();
+  assert.equal(await manualFirmware.getByRole('progressbar').count(), 0);
+  assert.equal(await manualFirmware.getByText(/The robot restarts after installation/).count(), 0);
+  assert(await manualFile.isVisible());
+  await checkFirmware.click();
+  await installFirmware.waitFor();
   await tab('Python').click();
   await page.locator('.monaco-editor').first().waitFor({ timeout: 30000 });
   const python = page.getByRole('tabpanel', { name: 'Python', exact: true });
@@ -372,15 +522,26 @@ try {
   assert(!narrowSensors.overflow && narrowSensors.stacked, 'Extra-narrow sensor panel should stack without overflow');
   await page.setViewportSize({ width: 1440, height: 900 });
   // Error recovery, long names, and a reconnect must not retain stale memory.
+  await tab('Files').click();
+  await picker.setInputFiles({ name: 'later.txt', mimeType: 'text/plain', buffer: Buffer.from('later') });
+  await uploadFile.click();
+  assert(await saveFile.isEnabled());
   await page.evaluate(() => { window.demoTest.memoryFails = true; });
   await page.getByText('Unavailable', { exact: true }).first().waitFor();
+  await storedFiles.getByText('—', { exact: true }).waitFor();
+  assert.equal(await storageBar.count(), 0);
+  assert(await storedFiles.getByText('0 B', { exact: true }).isVisible());
   await page.evaluate(() => { window.demoTest.memoryFails = false; });
   await page.waitForFunction(() => document.querySelectorAll('.device-memory-state').length === 0);
   await page.evaluate(() => {
     const test = window.demoTest;
     test.connected = false; test.emit('connected', false);
   });
+  assert(await saveFile.isDisabled());
+  assert.equal(await storageBar.count(), 0);
+  assert.equal(await uploadPanel.getByText('In RAM: later.txt').count(), 0);
   assert.equal(await page.locator('.robot-connection').textContent(), 'Reconnecting…');
+  assert.deepEqual(await versionValues.allTextContents(), ['0.8.0-test', '—', '—']);
   assert((await page.locator('.robot-name').innerText()).includes('THYMIO-42'));
   assert.deepEqual(await page.locator('.device-memory-graph-label strong').allTextContents(), ['—', '—']);
   await page.evaluate(() => {
@@ -389,6 +550,10 @@ try {
     test.memoryPending = true;
     test.connected = true; test.emit('connected', true);
   });
+  await tab('Device').click();
+  assert(await checkFirmware.isEnabled());
+  assert.equal(await firmwareResult.textContent(), '');
+  assert.equal(await advisory.count(), 0);
   await page.getByText('Waiting', { exact: true }).first().waitFor();
   await page.waitForFunction(() => Boolean(window.demoTest.finishMemory));
   for (const width of [390, 768, 1024, 1440]) {
