@@ -220,6 +220,7 @@ including views into larger buffers.
 ### Firmware updates
 
 `thymio.isNewerFirmwareAvailable()` - check if a newer Thymio 3 version is available\
+`thymio.getAvailableFirmwareVersion()` - get the available release tag, or `null` if the robot is up to date\
 `thymio.getNewFirmware()` - download and verify the selected application image as a `Uint8Array`\
 `thymio.updateFirmware()` - update the firmware to the selected version
 
@@ -228,6 +229,7 @@ and its [releases.json catalog](https://mobsya.github.io/thymio3-firmware-esp32/
 By default, these functions use the publisher's `latest_stable` selection, even when another stable release has a higher version number.
 Pass `{ includePrereleases: true }` to select the highest version across stable releases and prereleases instead.
 Downloads and updates require the selected version to be newer than the connected robot's firmware.
+Pass `{ expectedVersion: tag }` to `getNewFirmware()` or `updateFirmware()` to require the release shown by a previous check. If the selected tag has changed, check again before installing.
 
 Bluetooth OTA uses only the catalog asset with `role: "app"`; filenames are not used to guess the application image.
 The `full`, bootloader, partition table, OTA data, and audio-tone roles are not OTA application images.

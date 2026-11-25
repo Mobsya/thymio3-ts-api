@@ -11,6 +11,10 @@ export interface FirmwareUpdateOptions {
   includePrereleases?: boolean;
 }
 
+export interface FirmwareInstallOptions extends FirmwareUpdateOptions {
+  expectedVersion?: string;
+}
+
 interface FirmwareVersion {
   version: string;
   releaseDate: string;
@@ -70,18 +74,26 @@ export async function isNewerFirmwareAvailable(
   localVersion: string,
   options: FirmwareUpdateOptions = {}
 ): Promise<boolean> {
-  const latestRelease = await getLatestRelease(options);
+  return (await getAvailableFirmwareVersion(localVersion, options)) !== null;
+}
 
-  const remoteVersion = latestRelease.version;
-
-  return isNewerVersion(remoteVersion, localVersion);
+export async function getAvailableFirmwareVersion(
+  localVersion: string,
+  options: FirmwareUpdateOptions = {}
+): Promise<string | null> {
+  const { version } = await getLatestRelease(options);
+  return isNewerVersion(version, localVersion) ? version : null;
 }
 
 export async function getNewFirmware(
   localVersion: string,
-  options: FirmwareUpdateOptions = {}
+  options: FirmwareInstallOptions = {}
 ): Promise<Uint8Array<ArrayBuffer>> {
   const latestRelease = await getLatestRelease(options);
+
+  if (options.expectedVersion !== undefined && options.expectedVersion !== latestRelease.version) {
+    throw new Error('The available firmware version changed. Check for updates again.');
+  }
 
   if (isNewerVersion(latestRelease.version, localVersion)) {
     return downloadFirmware(latestRelease.asset);
@@ -95,7 +107,7 @@ export async function getNewFirmware(
 export async function updateFirmware(
   localVersion: string,
   server: BluetoothRemoteGATTServer,
-  options: FirmwareUpdateOptions = {}
+  options: FirmwareInstallOptions = {}
 ): Promise<void> {
   const newFirmware = await getNewFirmware(localVersion, options);
   return await uploadFirmware(server, newFirmware);

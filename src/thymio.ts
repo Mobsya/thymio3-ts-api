@@ -416,19 +416,25 @@ export async function stopSensorStreaming(): Promise<void> {
 export async function isNewerFirmwareAvailable(
   options?: updater.FirmwareUpdateOptions
 ): Promise<boolean> {
+  return (await getAvailableFirmwareVersion(options)) !== null;
+}
+
+export async function getAvailableFirmwareVersion(
+  options?: updater.FirmwareUpdateOptions
+): Promise<string | null> {
   const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
-  return await updater.isNewerFirmwareAvailable(localVersion, options);
+  return await updater.getAvailableFirmwareVersion(localVersion, options);
 }
 
 export async function getNewFirmware(
-  options?: updater.FirmwareUpdateOptions
+  options?: updater.FirmwareInstallOptions
 ): Promise<Uint8Array<ArrayBuffer>> {
   const localVersion = (await deviceInfo.getFirmwareInfo(deviceInfoCharacteristic)).esp32_ver;
   return await updater.getNewFirmware(localVersion, options);
 }
 
 export async function updateFirmware(
-  options?: updater.FirmwareUpdateOptions
+  options?: updater.FirmwareInstallOptions
 ): Promise<void> {
   const firmware = await getNewFirmware(options);
   return await uploadFirmware(firmware);
